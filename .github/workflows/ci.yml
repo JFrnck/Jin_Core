@@ -30,6 +30,10 @@ jobs:
       # EmbeddingProvider solo se instancia al bootstrapear AppModule,
       # nunca se invoca en lint/test/build/e2e.
       OPENAI_API_KEY: ci-not-a-real-key
+      # src/executor-client (Fase 5.2): mismo motivo — ExecutorClientService
+      # solo se instancia al bootstrapear AppModule, ninguna llamada HTTP
+      # real ocurre en lint/test/build/e2e.
+      EXECUTOR_BASE_URL: http://executor.ci.local
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
