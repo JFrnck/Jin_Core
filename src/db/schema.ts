@@ -138,3 +138,24 @@ export const budgetKillSwitch = pgTable('budget_kill_switch', {
 
 export type BudgetKillSwitchRow = typeof budgetKillSwitch.$inferSelect;
 export type NewBudgetKillSwitchRow = typeof budgetKillSwitch.$inferInsert;
+
+/**
+ * Fila singleton (`id` siempre 1) con el estado de refresco del token
+ * de Google OAuth Testing Mode (Fase 4.2). Persistido para calcular con
+ * precisión el aviso 24h antes del vencimiento de 7 días, sobreviviendo
+ * a restarts de pods.
+ */
+export const googleOAuthTokenState = pgTable('google_oauth_token_state', {
+  id: integer('id').primaryKey(),
+  lastRefreshedAt: timestamp('last_refreshed_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type GoogleOAuthTokenStateRow =
+  typeof googleOAuthTokenState.$inferSelect;
+export type NewGoogleOAuthTokenStateRow =
+  typeof googleOAuthTokenState.$inferInsert;

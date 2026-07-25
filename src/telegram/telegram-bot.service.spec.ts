@@ -13,6 +13,7 @@ import {
   PendingApprovalNotFoundError,
   SecondApprovalTooEarlyError,
 } from '../hitl/dual-confirm.service';
+import type { GoogleOAuthService } from '../integrations/google/oauth.service';
 import { TelegramBotService } from './telegram-bot.service';
 
 describe('TelegramBotService', () => {
@@ -24,6 +25,7 @@ describe('TelegramBotService', () => {
   let mockDualConfirm: Partial<DualConfirmService>;
   let mockAuditService: Partial<AuditService>;
   let mockApprovalExecutionService: Partial<ApprovalExecutionService>;
+  let mockGoogleOAuthService: Partial<GoogleOAuthService>;
   let mockDb: Partial<Db>;
 
   const OWNER_CHAT_ID = 123456789;
@@ -92,6 +94,11 @@ describe('TelegramBotService', () => {
       resolveRejection: vi.fn().mockResolvedValue(undefined),
     };
 
+    mockGoogleOAuthService = {
+      updateLastRefreshedAt: vi.fn().mockResolvedValue(undefined),
+      getDaysSinceLastRefresh: vi.fn().mockResolvedValue(2),
+    };
+
     mockDb = {
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockResolvedValue([
@@ -115,6 +122,7 @@ describe('TelegramBotService', () => {
       mockDualConfirm as DualConfirmService,
       mockAuditService as AuditService,
       mockApprovalExecutionService as ApprovalExecutionService,
+      mockGoogleOAuthService as GoogleOAuthService,
       mockDb as Db,
     );
 
@@ -466,6 +474,44 @@ describe('TelegramBotService', () => {
       await service.checkBudgetAlerts();
 
       expect(sentMessages.filter((msg) => msg.includes('80%'))).toHaveLength(1);
+    });
+
+    it('notifica al owner si el token de Google OAuth lleva >= 6 días sin refrescar', async () => {
+      vi.mocked(
+        mockGoogleOAuthService.getDaysSinceLastRefresh!,
+      ).mockResolvedValue(6.2);
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.checkBudgetAlerts();
+
+      expect(
+        sentMessages.some((msg) => msg.includes('ALERTA DE SEGURIDAD OAUTH')),
+      ).toBe(true);
+    });
+  });
+
+  describe('comando /google-oauth-refreshed', () => {
+    it('actualiza lastRefreshedAt en GoogleOAuthService y registra auditoría al invocarse por el owner', async () => {
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      const update = createCommandUpdate(99, '/google-oauth-refreshed');
+
+      await service.handleWebhookUpdate(update);
+
+      expect(mockGoogleOAuthService.updateLastRefreshedAt).toHaveBeenCalled();
+      expect(mockAuditService.recordApproval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolName: 'google-oauth-refresh-ack',
+          approver: 'owner',
+        }),
+      );
+      expect(
+        sentMessages.some((msg) =>
+          msg.includes('Timestamp de refresco de Google OAuth actualizado'),
+        ),
+      ).toBe(true);
     });
   });
 });

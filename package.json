@@ -34,6 +34,7 @@
     "@nestjs/swagger": "^11.4.6",
     "@willsoto/nestjs-prometheus": "^6.1.0",
     "drizzle-orm": "0.45.2",
+    "googleapis": "^173.0.0",
     "grammy": "^1.45.1",
     "js-yaml": "^5.2.1",
     "pg": "8.22.0",

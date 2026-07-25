@@ -43,6 +43,26 @@ export const EnvSchema = z.object({
       1,
       'TELEGRAM_WEBHOOK_SECRET es requerida (Secret token para el webhook)',
     ),
+  // src/integrations/google: requeridas, no opcionales (AGENTS.md 8.4 fail-fast)
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .min(1, 'GOOGLE_CLIENT_ID es requerida (Client ID de Google OAuth)'),
+  GOOGLE_CLIENT_SECRET: z
+    .string()
+    .min(
+      1,
+      'GOOGLE_CLIENT_SECRET es requerida (Client Secret de Google OAuth)',
+    ),
+  GOOGLE_REDIRECT_URI: z
+    .string()
+    .url('GOOGLE_REDIRECT_URI debe ser una URL válida')
+    .default('http://localhost:3000/google/oauth/callback'),
+  GOOGLE_REFRESH_TOKEN: z
+    .string()
+    .min(
+      1,
+      'GOOGLE_REFRESH_TOKEN es requerida (Refresh Token de Google OAuth)',
+    ),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

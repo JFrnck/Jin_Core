@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditService } from '../../audit/audit.service';
+import type { GoogleCalendarToolsService } from '../google/calendar/google-calendar-tools.service';
 import type { CanvasClientService } from './canvas-client.service';
 import { CanvasToolsService } from './canvas-tools.service';
-import { CalendarNotImplementedError } from './errors';
 
 describe('CanvasToolsService', () => {
   let service: CanvasToolsService;
   let mockCanvasClient: Partial<CanvasClientService>;
   let mockAuditService: Partial<AuditService>;
+  let mockGoogleCalendarTools: Partial<GoogleCalendarToolsService>;
 
   beforeEach(() => {
     mockCanvasClient = {
@@ -30,9 +31,17 @@ describe('CanvasToolsService', () => {
       recordToolCall: vi.fn().mockResolvedValue(undefined),
     };
 
+    mockGoogleCalendarTools = {
+      createCalendarEvent: vi.fn().mockResolvedValue({
+        id: 'cal-event-1',
+        summary: 'Estudiar Cálculo',
+      }),
+    };
+
     service = new CanvasToolsService(
       mockCanvasClient as CanvasClientService,
       mockAuditService as AuditService,
+      mockGoogleCalendarTools as GoogleCalendarToolsService,
     );
   });
 
@@ -80,13 +89,23 @@ describe('CanvasToolsService', () => {
     );
   });
 
-  it('executeScheduleStudyBlock debe lanzar CalendarNotImplementedError (501)', async () => {
-    await expect(
-      service.executeScheduleStudyBlock({
-        title: 'Estudiar Cálculo',
-        startTime: '2026-07-24T10:00:00Z',
-        endTime: '2026-07-24T12:00:00Z',
-      }),
-    ).rejects.toThrow(CalendarNotImplementedError);
+  it('executeScheduleStudyBlock debe delegar la creación del evento a GoogleCalendarToolsService', async () => {
+    const result = await service.executeScheduleStudyBlock({
+      title: 'Estudiar Cálculo',
+      startTime: '2026-07-24T10:00:00Z',
+      endTime: '2026-07-24T12:00:00Z',
+    });
+
+    expect(mockGoogleCalendarTools.createCalendarEvent).toHaveBeenCalledWith({
+      summary: 'Estudiar Cálculo',
+      start: new Date('2026-07-24T10:00:00Z'),
+      end: new Date('2026-07-24T12:00:00Z'),
+      description:
+        'Bloque de estudio sugerido por Shadowing Académico (Canvas)',
+    });
+    expect(result).toEqual({
+      id: 'cal-event-1',
+      summary: 'Estudiar Cálculo',
+    });
   });
 });

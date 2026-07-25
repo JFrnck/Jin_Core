@@ -5,8 +5,8 @@ import {
   generateSessionNonce,
   wrapUntrustedContent,
 } from '../../security/injection-sanitizer';
+import { GoogleCalendarToolsService } from '../google/calendar/google-calendar-tools.service';
 import { CanvasClientService } from './canvas-client.service';
-import { CalendarNotImplementedError } from './errors';
 import type { CanvasAnnouncement, CanvasAssignment } from './types';
 
 export interface ListAssignmentsInput {
@@ -39,6 +39,7 @@ export class CanvasToolsService {
   constructor(
     private readonly canvasClient: CanvasClientService,
     private readonly auditService: AuditService,
+    private readonly googleCalendarTools: GoogleCalendarToolsService,
   ) {}
 
   /**
@@ -129,10 +130,16 @@ export class CanvasToolsService {
 
   /**
    * Handler para `canvasScheduleStudyBlock` (`hitlLevel: 'notify'`).
-   * Lanza `CalendarNotImplementedError` (501) como stub explícito
-   * hasta la Fase 4.2 (Google Calendar).
+   * Desbloqueado en la Fase 4.2: Crea un evento de bloque de estudio en
+   * Google Calendar delegando a GoogleCalendarToolsService.
    */
-  executeScheduleStudyBlock(_input: ScheduleStudyBlockInput): Promise<never> {
-    return Promise.reject(new CalendarNotImplementedError());
+  async executeScheduleStudyBlock(input: ScheduleStudyBlockInput) {
+    return this.googleCalendarTools.createCalendarEvent({
+      summary: input.title,
+      start: new Date(input.startTime),
+      end: new Date(input.endTime),
+      description:
+        'Bloque de estudio sugerido por Shadowing Académico (Canvas)',
+    });
   }
 }

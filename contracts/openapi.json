@@ -15,6 +15,20 @@
         ]
       }
     },
+    "/metrics": {
+      "get": {
+        "operationId": "PrometheusController_index",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Prometheus"
+        ]
+      }
+    },
     "/telegram/webhook": {
       "post": {
         "operationId": "TelegramWebhookController_handleWebhook",
