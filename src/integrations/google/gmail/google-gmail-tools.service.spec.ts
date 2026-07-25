@@ -96,6 +96,24 @@ describe('GoogleGmailToolsService', () => {
     );
   });
 
+  it('sendEmail debe rechazar intentos de inyección CRLF en destinatario o asunto', async () => {
+    await expect(
+      service.sendEmail({
+        to: 'peer@example.com\r\nBcc: evil@domain.com',
+        subject: 'Normal',
+        body: 'Cuerpo',
+      }),
+    ).rejects.toThrow('Destinatario (to) contiene caracteres no permitidos');
+
+    await expect(
+      service.sendEmail({
+        to: 'peer@example.com',
+        subject: 'Header\nInjection',
+        body: 'Cuerpo',
+      }),
+    ).rejects.toThrow('Asunto (subject) contiene caracteres no permitidos');
+  });
+
   it('summarizeEmails debe leer correos y llamar a BudgetGuardedModelRouter', async () => {
     const summary = await service.summarizeEmails();
     expect(summary).toContain('Resumen de Correos');

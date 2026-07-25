@@ -92,6 +92,24 @@ describe('GoogleGmailClientService', () => {
     expect(res.id).toBe('msg-sent-1');
   });
 
+  it('debe rechazar inyección de headers CRLF en destinatario o asunto', async () => {
+    await expect(
+      service.sendEmail(
+        'dest@example.com\r\nBcc: evil@attacker.com',
+        'Hola',
+        'Cuerpo',
+      ),
+    ).rejects.toThrow('Destinatario (to) contiene caracteres no permitidos');
+
+    await expect(
+      service.sendEmail(
+        'dest@example.com',
+        'Asunto\nInjected-Header: 123',
+        'Cuerpo',
+      ),
+    ).rejects.toThrow('Asunto (subject) contiene caracteres no permitidos');
+  });
+
   it('debe aplicar rate limiting lanzando GoogleGmailRateLimitError si se superan 60 peticiones/min', async () => {
     for (let i = 0; i < 60; i++) {
       await service.getMessage('msg-1');

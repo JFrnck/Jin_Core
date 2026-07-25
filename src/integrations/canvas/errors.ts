@@ -1,24 +1,6 @@
 import { YormunError } from '../../common/errors/yormun-error';
 
 /**
- * Lanzado por `canvasScheduleStudyBlock` cuando se intenta programar un
- * bloque de estudio. La integración con Google Calendar está prevista para
- * la Fase 4.2 (PROMPTS.md, BLUEPRINT 7.2) — sigue el patrón ModalService
- * (Yormun_Executor/src/modal/errors.ts) con un 501 explícito.
- */
-export class CalendarNotImplementedError extends YormunError {
-  constructor() {
-    super(
-      'La integración con Google Calendar está pendiente para la Fase 4.2',
-      {
-        code: 'CANVAS_CALENDAR_NOT_IMPLEMENTED',
-        httpStatus: 501,
-      },
-    );
-  }
-}
-
-/**
  * Error devuelto por la API REST de Canvas LMS (errores HTTP 4xx/5xx).
  */
 export class CanvasApiError extends YormunError {

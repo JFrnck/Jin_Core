@@ -30,20 +30,27 @@ export class GoogleOAuthService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    // Inicializa la fila singleton en BD si no existe aún
-    const existing = await this.db
-      .select()
-      .from(googleOAuthTokenState)
-      .where(eq(googleOAuthTokenState.id, 1));
+    try {
+      // Inicializa la fila singleton en BD si no existe aún
+      const existing = await this.db
+        .select()
+        .from(googleOAuthTokenState)
+        .where(eq(googleOAuthTokenState.id, 1));
 
-    if (existing.length === 0) {
-      await this.db.insert(googleOAuthTokenState).values({
-        id: 1,
-        lastRefreshedAt: new Date(),
-        updatedAt: new Date(),
-      });
-      this.logger.log(
-        'Fila de estado de Google OAuth inicializada en la base de datos.',
+      if (existing.length === 0) {
+        await this.db.insert(googleOAuthTokenState).values({
+          id: 1,
+          lastRefreshedAt: new Date(),
+          updatedAt: new Date(),
+        });
+        this.logger.log(
+          'Fila de estado de Google OAuth inicializada en la base de datos.',
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        `No se pudo inicializar fila de Google OAuth en BD al arrancar: ${msg}`,
       );
     }
   }

@@ -10,6 +10,7 @@ import {
 } from '../../../security/injection-sanitizer';
 import {
   GoogleGmailClientService,
+  GoogleGmailApiError,
   type GmailMessageSummary,
 } from './google-gmail-client.service';
 
@@ -94,6 +95,17 @@ export class GoogleGmailToolsService {
     body: string;
     threadId?: string;
   }) {
+    if (/[\r\n]/.test(input.to)) {
+      throw new GoogleGmailApiError(
+        'Destinatario (to) contiene caracteres no permitidos (posible inyección de headers)',
+      );
+    }
+    if (/[\r\n]/.test(input.subject)) {
+      throw new GoogleGmailApiError(
+        'Asunto (subject) contiene caracteres no permitidos (posible inyección de headers)',
+      );
+    }
+
     const decision = classifyToolCall('sendEmail', input);
     const inputsHash = computeHash(input);
 

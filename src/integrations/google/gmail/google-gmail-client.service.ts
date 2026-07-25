@@ -33,6 +33,14 @@ export interface GmailMessageSummary {
   body?: string | undefined;
 }
 
+function assertNoHeaderInjection(value: string, field: string): void {
+  if (/[\r\n]/.test(value)) {
+    throw new GoogleGmailApiError(
+      `${field} contiene caracteres no permitidos (posible inyección de headers)`,
+    );
+  }
+}
+
 @Injectable()
 export class GoogleGmailClientService {
   private readonly logger = new Logger(GoogleGmailClientService.name);
@@ -198,6 +206,9 @@ export class GoogleGmailClientService {
     body: string,
     threadId?: string,
   ): Promise<{ id: string; threadId: string }> {
+    assertNoHeaderInjection(to, 'Destinatario (to)');
+    assertNoHeaderInjection(subject, 'Asunto (subject)');
+
     this.checkRateLimit();
     try {
       const gmail = this.getGmailApi();
