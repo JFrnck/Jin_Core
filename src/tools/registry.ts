@@ -257,6 +257,38 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       required: ['eventId'],
     },
   }),
+  // Fase 5.2 (ejecución aislada, BLUEPRINT 4 / PROMPTS.md 5.2). Declaración
+  // únicamente — el handler real (src/executor-client/) llama al Executor
+  // por HTTP, que a su vez decide de forma automática si corre local
+  // (Deno) o escala a Modal según `language` (BLUEPRINT 4.5: "decisión
+  // automática por el Executor", nunca del LLM ni de este registry).
+  Object.freeze({
+    name: 'runCode',
+    hitlLevel: 'confirm',
+    description:
+      'Ejecuta código TypeScript o Python en un entorno aislado (pod Deno local o sandbox de Modal para dependencias científicas como pandas). Requiere 1 aprobación.',
+    // Reversible/informativo (BLUEPRINT 9.4): no aprobar significa que el
+    // código simplemente nunca corre, sin deadline externo que escalar —
+    // mismo criterio que sendEmail/deleteCalendarEventFuture.
+    timeoutBehavior: 'discard',
+    // Deliberadamente NO expone `env` al LLM (defensa en profundidad: el
+    // modelo no necesita ni debe poder inyectar variables de entorno
+    // arbitrarias al pod/sandbox) — src/executor-client/ arma el request
+    // completo al Executor con env fijo.
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'Código fuente a ejecutar.' },
+        language: {
+          type: 'string',
+          enum: ['typescript', 'python'],
+          description:
+            'typescript corre local en un pod Deno aislado; python escala automáticamente a Modal (dependencias científicas).',
+        },
+      },
+      required: ['code', 'language'],
+    },
+  }),
 ] satisfies ToolDefinition[]);
 
 const TOOL_REGISTRY_BY_NAME: ReadonlyMap<string, ToolDefinition> = new Map(

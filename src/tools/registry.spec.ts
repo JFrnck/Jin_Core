@@ -6,9 +6,9 @@ import {
 } from './registry';
 
 describe('registry', () => {
-  it('lista las 10 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar) con su nivel correcto', () => {
+  it('lista las 11 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar + Fase 5.2 runCode) con su nivel correcto', () => {
     const tools = listRegisteredTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     expect(tools.find((t) => t.name === 'readEmails')?.hitlLevel).toBe('auto');
     expect(tools.find((t) => t.name === 'createCalendarEvent')?.hitlLevel).toBe(
       'notify',
@@ -37,9 +37,10 @@ describe('registry', () => {
     expect(
       tools.find((t) => t.name === 'deleteCalendarEventFuture')?.hitlLevel,
     ).toBe('confirm');
+    expect(tools.find((t) => t.name === 'runCode')?.hitlLevel).toBe('confirm');
   });
 
-  it('las 10 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
+  it('las 11 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
     const tools = listRegisteredTools();
     for (const tool of tools) {
       expect(tool.inputSchema).toBeTypeOf('object');
