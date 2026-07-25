@@ -63,6 +63,15 @@ export const EnvSchema = z.object({
       1,
       'GOOGLE_REFRESH_TOKEN es requerida (Refresh Token de Google OAuth)',
     ),
+  // src/memory: requerida, no opcional (AGENTS.md 8.4 fail-fast) —
+  // única API de embeddings del repo (BLUEPRINT 3.3.1/6.4).
+  OPENAI_API_KEY: z
+    .string()
+    .min(1, 'OPENAI_API_KEY es requerida (API key de OpenAI, para embeddings)'),
+  // Ruta operacional con valor sensato por defecto (no un secreto),
+  // mismo criterio que GOOGLE_REDIRECT_URI: en Kubernetes se sobreescribe
+  // apuntando al PersistentVolume real cuando se despliegue yormun-core.
+  MEMORY_DB_PATH: z.string().min(1).default('./data/memory.db'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

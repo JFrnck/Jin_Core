@@ -9,6 +9,7 @@ import { DbModule } from './db/db.module';
 import { HitlModule } from './hitl/hitl.module';
 import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
+import { MemoryModule } from './memory/memory.module';
 import { ModelProviderModule } from './model-provider/model-provider.module';
 import { TelegramModule } from './telegram/telegram.module';
 
@@ -23,6 +24,7 @@ import { TelegramModule } from './telegram/telegram.module';
     BudgetModule,
     CanvasModule,
     GoogleModule,
+    MemoryModule,
     TelegramModule,
   ],
   controllers: [AppController],
