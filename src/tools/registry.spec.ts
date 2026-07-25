@@ -39,6 +39,14 @@ describe('registry', () => {
     ).toBe('confirm');
   });
 
+  it('las 10 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
+    const tools = listRegisteredTools();
+    for (const tool of tools) {
+      expect(tool.inputSchema).toBeTypeOf('object');
+      expect(tool.inputSchema.type).toBe('object');
+    }
+  });
+
   it('getToolDefinition devuelve undefined para una tool no registrada', () => {
     expect(getToolDefinition('deleteEverything')).toBeUndefined();
   });
@@ -49,7 +57,12 @@ describe('registry', () => {
     // realmente congelado en runtime, no solo tipado como tal.
     const tools = listRegisteredTools() as ToolDefinition[];
     expect(() =>
-      tools.push({ name: 'x', hitlLevel: 'auto', description: '' }),
+      tools.push({
+        name: 'x',
+        hitlLevel: 'auto',
+        description: '',
+        inputSchema: { type: 'object', properties: {} },
+      }),
     ).toThrow(TypeError);
   });
 });

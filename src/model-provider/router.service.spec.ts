@@ -86,7 +86,13 @@ const PROFILES: ModelsConfig = {
 };
 
 function fakeResponse(modelId: string): ModelCompletionResponse {
-  return { content: 'ok', modelId, inputTokens: 1, outputTokens: 1 };
+  return {
+    content: 'ok',
+    modelId,
+    inputTokens: 1,
+    outputTokens: 1,
+    stopReason: 'end_turn',
+  };
 }
 
 describe('ModelRouterService.complete', () => {

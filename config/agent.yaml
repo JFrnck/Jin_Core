@@ -1,0 +1,7 @@
+# Guardas duras del agent loop (docs/BLUEPRINT.md §6, Fase 5.1). NO se
+# hardcodea en código — src/agent/ lee este archivo.
+# Red de seguridad global: corta el turno pase lo que pase.
+max_iterations_per_turn: 15
+# Self-correction: fallos consecutivos de la MISMA tool con los MISMOS
+# args antes de marcar ese intento agotado e informarlo al modelo.
+max_consecutive_tool_failures: 3

@@ -58,9 +58,46 @@ export interface SelectedModel {
   readonly tier: 'primary' | 'fallback';
 }
 
+/**
+ * Declaración de una tool para tool-use nativo del vendor (Fase 5.1,
+ * `src/agent/`). `inputSchema` es JSON Schema — mismo shape que
+ * `src/tools/registry.ts` declara por tool, y que cada provider traduce
+ * a su propio formato (`input_schema` de Anthropic, `functionDeclarations`
+ * de Gemini).
+ */
+export interface ModelToolDeclaration {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: Record<string, unknown>;
+}
+
+/** Invocación de tool que el modelo decide hacer — vendor-agnóstico. */
+export interface ModelToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly input: unknown;
+}
+
+/**
+ * Bloques de contenido de un mensaje cuando la conversación incluye
+ * tool-use (Fase 5.1). Un `ModelMessage.content` de texto plano (el caso
+ * de todo caller anterior a esta fase: Telegram, Canvas, Gmail, memoria)
+ * sigue siendo un `string` — este union solo aplica cuando el turno
+ * necesita representar tool_use/tool_result explícitos.
+ */
+export type ModelMessageContentBlock =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'tool_use'; readonly toolCall: ModelToolCall }
+  | {
+      readonly type: 'tool_result';
+      readonly toolCallId: string;
+      readonly output: unknown;
+      readonly isError?: boolean;
+    };
+
 export interface ModelMessage {
   readonly role: 'user' | 'assistant';
-  readonly content: string;
+  readonly content: string | readonly ModelMessageContentBlock[];
 }
 
 /**
@@ -76,13 +113,24 @@ export interface ModelCompletionRequest {
   readonly messages: readonly ModelMessage[];
   readonly maxOutputTokens: number;
   readonly temperature: number;
+  /** Presente solo si el caller quiere tool-use nativo (Fase 5.1). */
+  readonly tools?: readonly ModelToolDeclaration[];
 }
+
+/**
+ * Por qué el modelo dejó de generar. `'tool_use'` es el único caso donde
+ * `toolCalls` viene poblado — el agent loop (`src/agent/`) es el único
+ * consumidor de este campo hoy.
+ */
+export type ModelStopReason = 'end_turn' | 'tool_use' | 'max_tokens';
 
 export interface ModelCompletionResponse {
   readonly content: string;
   readonly modelId: string;
   readonly inputTokens: number;
   readonly outputTokens: number;
+  readonly toolCalls?: readonly ModelToolCall[];
+  readonly stopReason: ModelStopReason;
 }
 
 export interface ModelProviderClient {
