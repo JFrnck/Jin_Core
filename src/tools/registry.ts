@@ -18,6 +18,16 @@ export interface ToolDefinition {
    * 'abandoned' a las 24h. Ausente para tools 'auto'/'notify' (no aplica).
    */
   readonly timeoutBehavior?: 'discard' | 'escalate';
+  /**
+   * JSON Schema de los argumentos que el LLM debe producir para invocar
+   * esta tool (Fase 5.1, `src/agent/`) — `src/model-provider/` lo traduce
+   * al formato nativo de cada vendor (`input_schema` de Anthropic,
+   * `parametersJsonSchema` de Gemini). Refleja los args reales que
+   * consumen los handlers en `src/integrations/**` — no incluye campos de
+   * plomería interna (`sessionNonce`, `requestId`) que el loop resuelve
+   * por su cuenta, nunca el LLM.
+   */
+  readonly inputSchema: Record<string, unknown>;
 }
 
 // `as const` es solo un contrato de tipos — Object.freeze es lo que da la
@@ -30,12 +40,45 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'auto',
     description:
       'Lee correos del usuario. Solo lectura, sin efectos secundarios.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Query de búsqueda estilo Gmail (ej. "is:unread label:INBOX").',
+        },
+        threadId: {
+          type: 'string',
+          description: 'Si se provee, lee un hilo específico en vez de listar.',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Tope de mensajes a devolver.',
+        },
+      },
+    },
   }),
   Object.freeze({
     name: 'createCalendarEvent',
     hitlLevel: 'notify',
     description:
       'Crea un evento en Google Calendar. Se ejecuta y se notifica después.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        summary: { type: 'string', description: 'Título del evento.' },
+        description: { type: 'string' },
+        location: { type: 'string' },
+        start: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601.',
+        },
+        end: { type: 'string', format: 'date-time', description: 'ISO 8601.' },
+      },
+      required: ['summary', 'start', 'end'],
+    },
   }),
   Object.freeze({
     name: 'sendEmail',
@@ -45,6 +88,20 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     // Reversible/informativo (BLUEPRINT 9.4, ejemplo explícito: "responder
     // correo"): al expirar se descarta y se notifica, no se escala.
     timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', format: 'email' },
+        subject: { type: 'string' },
+        body: { type: 'string' },
+        threadId: {
+          type: 'string',
+          description:
+            'Si se provee, responde en ese hilo en vez de crear uno nuevo.',
+        },
+      },
+      required: ['to', 'subject', 'body'],
+    },
   }),
   // Fase 3.1 (Canvas LMS, BLUEPRINT 7.1 / PROMPTS.md 3.1). Declaración
   // únicamente — el handler real (src/integrations/canvas/) lo construye
@@ -55,18 +112,61 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'auto',
     description:
       'Lista tareas/entregables próximos de Canvas. Solo lectura, sin efectos secundarios.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        courseId: {
+          type: 'number',
+          description:
+            'Filtra por curso. Si se omite, lista de todos los cursos.',
+        },
+      },
+    },
   }),
   Object.freeze({
     name: 'canvasGetCourseContent',
     hitlLevel: 'auto',
     description:
       'Lee materiales de un curso de Canvas (anuncios, archivos). Solo lectura.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        courseIds: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'IDs de los cursos a consultar.',
+        },
+        sinceDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Solo contenido publicado desde esta fecha (ISO 8601).',
+        },
+      },
+      required: ['courseIds'],
+    },
   }),
   Object.freeze({
     name: 'canvasScheduleStudyBlock',
     hitlLevel: 'notify',
     description:
       'Crea un bloque de estudio sugerido en Google Calendar a partir de tareas de Canvas. Se ejecuta y se notifica después.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        startTime: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601.',
+        },
+        endTime: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601.',
+        },
+      },
+      required: ['title', 'startTime', 'endTime'],
+    },
   }),
   // Fase 4.2 (Google Calendar + Gmail, BLUEPRINT 7.2 / PROMPTS.md 4.2).
   // Declaración únicamente — el handler real (src/integrations/google/)
@@ -81,6 +181,22 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'auto',
     description:
       'Lista eventos de Google Calendar. Solo lectura, sin efectos secundarios.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        timeMin: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601.',
+        },
+        timeMax: {
+          type: 'string',
+          format: 'date-time',
+          description: 'ISO 8601.',
+        },
+        maxResults: { type: 'number' },
+      },
+    },
   }),
   Object.freeze({
     name: 'updateCalendarEvent',
@@ -90,6 +206,24 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     // después, no requiere aprobación previa.
     description:
       'Actualiza un evento existente en Google Calendar. Se ejecuta y se notifica después.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        eventId: { type: 'string' },
+        eventData: {
+          type: 'object',
+          description: 'Solo los campos a cambiar.',
+          properties: {
+            summary: { type: 'string' },
+            description: { type: 'string' },
+            location: { type: 'string' },
+            start: { type: 'string', format: 'date-time' },
+            end: { type: 'string', format: 'date-time' },
+          },
+        },
+      },
+      required: ['eventId', 'eventData'],
+    },
   }),
   // "Borrar evento pasado: notify. Borrar evento futuro: confirm"
   // (PROMPTS.md 4.2) no se puede expresar como una sola tool: el
@@ -103,6 +237,11 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'notify',
     description:
       'Borra un evento pasado de Google Calendar. Se ejecuta y se notifica después.',
+    inputSchema: {
+      type: 'object',
+      properties: { eventId: { type: 'string' } },
+      required: ['eventId'],
+    },
   }),
   Object.freeze({
     name: 'deleteCalendarEventFuture',
@@ -112,6 +251,11 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     // Reversible/informativo (mismo criterio que sendEmail): al expirar
     // se descarta y se notifica, el evento simplemente no se borra.
     timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: { eventId: { type: 'string' } },
+      required: ['eventId'],
+    },
   }),
 ] satisfies ToolDefinition[]);
 

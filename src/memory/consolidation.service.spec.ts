@@ -28,6 +28,7 @@ describe('ConsolidationService.distill', () => {
         },
       ]),
       modelId: 'claude-haiku-4-5',
+      stopReason: 'end_turn' as const,
       inputTokens: 100,
       outputTokens: 20,
     });
@@ -56,6 +57,7 @@ describe('ConsolidationService.distill', () => {
     const { service } = makeService({
       content: '[]',
       modelId: 'claude-haiku-4-5',
+      stopReason: 'end_turn' as const,
       inputTokens: 50,
       outputTokens: 2,
     });
@@ -72,6 +74,7 @@ describe('ConsolidationService.distill', () => {
     const { service } = makeService({
       content: 'esto no es JSON, es prosa del modelo',
       modelId: 'claude-haiku-4-5',
+      stopReason: 'end_turn' as const,
       inputTokens: 50,
       outputTokens: 10,
     });
@@ -87,6 +90,7 @@ describe('ConsolidationService.distill', () => {
         { content: 'algo', tipo: 'no-es-un-tipo-valido' },
       ]),
       modelId: 'claude-haiku-4-5',
+      stopReason: 'end_turn' as const,
       inputTokens: 50,
       outputTokens: 10,
     });

@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import type {
   ModelCompletionRequest,
   ModelCompletionResponse,
+  ModelMessage,
   SelectModelHints,
   TaskProfile,
 } from '../model-provider/model-provider.types';
@@ -76,9 +77,22 @@ export class BudgetGuardedModelRouter {
       ? estimateTokens(request.systemPrompt)
       : 0;
     const messagesTokens = request.messages.reduce(
-      (sum, message) => sum + estimateTokens(message.content),
+      (sum, message) => sum + estimateTokens(messageContentToText(message)),
       0,
     );
-    return systemPromptTokens + messagesTokens;
+    // Las declaraciones de tools (Fase 5.1) van en cada llamada del
+    // agent loop — sin sumarlas acá, el estimado de presupuesto se
+    // subestima sistemáticamente en cualquier turno con tools.
+    const toolsTokens = request.tools
+      ? estimateTokens(JSON.stringify(request.tools))
+      : 0;
+    return systemPromptTokens + messagesTokens + toolsTokens;
   }
+}
+
+function messageContentToText(message: ModelMessage): string {
+  if (typeof message.content === 'string') {
+    return message.content;
+  }
+  return JSON.stringify(message.content);
 }

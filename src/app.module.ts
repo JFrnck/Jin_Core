@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AgentModule } from './agent/agent.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
@@ -25,6 +26,7 @@ import { TelegramModule } from './telegram/telegram.module';
     CanvasModule,
     GoogleModule,
     MemoryModule,
+    AgentModule,
     TelegramModule,
   ],
   controllers: [AppController],

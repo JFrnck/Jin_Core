@@ -104,6 +104,49 @@ describe('BudgetGuardedModelRouter.complete', () => {
     );
   });
 
+  it('suma el tamaño serializado de tools al estimado de tokens (Fase 5.1)', async () => {
+    const modelRouter = {
+      complete: vi.fn().mockResolvedValue(fakeResponse()),
+    } as unknown as ModelRouterService;
+    const checkBeforeCall = vi.fn().mockResolvedValue({ budgetRemaining: 1 });
+    const budgetService = {
+      checkBeforeCall,
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+    } as unknown as BudgetService;
+    const killSwitchService = {
+      isActive: vi.fn().mockResolvedValue(false),
+    } as unknown as KillSwitchService;
+
+    const guarded = new BudgetGuardedModelRouter(
+      modelRouter,
+      budgetService,
+      killSwitchService,
+    );
+
+    await guarded.complete('chat_conversational', REQUEST);
+    const [{ estimatedInputTokens: withoutTools }] = checkBeforeCall.mock
+      .calls[0] as [{ estimatedInputTokens: number }];
+
+    checkBeforeCall.mockClear();
+    await guarded.complete('chat_conversational', {
+      ...REQUEST,
+      tools: [
+        {
+          name: 'listCalendarEvents',
+          description: 'Lista eventos de Google Calendar en un rango de fechas',
+          inputSchema: {
+            type: 'object',
+            properties: { maxResults: { type: 'number' } },
+          },
+        },
+      ],
+    });
+    const [{ estimatedInputTokens: withTools }] = checkBeforeCall.mock
+      .calls[0] as [{ estimatedInputTokens: number }];
+
+    expect(withTools).toBeGreaterThan(withoutTools);
+  });
+
   it('registra el uso real (tokens de la respuesta, no la estimación) tras una llamada exitosa', async () => {
     const modelRouter = {
       complete: vi.fn().mockResolvedValue(fakeResponse()),

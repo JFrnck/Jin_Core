@@ -5,8 +5,49 @@ import type { AppConfigService } from '../config';
 import type {
   ModelCompletionRequest,
   ModelCompletionResponse,
+  ModelMessage,
   ModelProviderClient,
+  ModelStopReason,
+  ModelToolCall,
 } from './model-provider.types';
+
+function toAnthropicContent(
+  content: ModelMessage['content'],
+): string | Anthropic.ContentBlockParam[] {
+  if (typeof content === 'string') {
+    return content;
+  }
+  return content.map((block): Anthropic.ContentBlockParam => {
+    if (block.type === 'text') {
+      return { type: 'text', text: block.text };
+    }
+    if (block.type === 'tool_use') {
+      return {
+        type: 'tool_use',
+        id: block.toolCall.id,
+        name: block.toolCall.name,
+        input: block.toolCall.input,
+      };
+    }
+    return {
+      type: 'tool_result',
+      tool_use_id: block.toolCallId,
+      content:
+        typeof block.output === 'string'
+          ? block.output
+          : JSON.stringify(block.output),
+      ...(block.isError !== undefined ? { is_error: block.isError } : {}),
+    };
+  });
+}
+
+function toModelStopReason(
+  stopReason: Anthropic.Messages.Message['stop_reason'],
+): ModelStopReason {
+  if (stopReason === 'tool_use') return 'tool_use';
+  if (stopReason === 'max_tokens') return 'max_tokens';
+  return 'end_turn';
+}
 
 @Injectable()
 export class AnthropicProvider implements ModelProviderClient {
@@ -42,19 +83,36 @@ export class AnthropicProvider implements ModelProviderClient {
         : {}),
       messages: request.messages.map((message) => ({
         role: message.role,
-        content: message.content,
+        content: toAnthropicContent(message.content),
       })),
+      ...(request.tools !== undefined
+        ? {
+            tools: request.tools.map((tool) => ({
+              name: tool.name,
+              description: tool.description,
+              input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+            })),
+          }
+        : {}),
     });
 
-    const textBlock = response.content.find(
-      (block): block is Anthropic.TextBlock => block.type === 'text',
-    );
+    const textParts: string[] = [];
+    const toolCalls: ModelToolCall[] = [];
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        textParts.push(block.text);
+      } else if (block.type === 'tool_use') {
+        toolCalls.push({ id: block.id, name: block.name, input: block.input });
+      }
+    }
 
     return {
-      content: textBlock?.text ?? '',
+      content: textParts.join(''),
       modelId: response.model,
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
+      stopReason: toModelStopReason(response.stop_reason),
+      ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
 }
