@@ -25,3 +25,8 @@ pnpm-debug.log*
 
 # Environment
 .env
+
+# Memoria extendida local (BLUEPRINT 3.3.1) — MEMORY_DB_PATH por default
+# apunta acá para dev local; en producción es un PersistentVolume real
+# (fuera de git de cualquier forma).
+/data
