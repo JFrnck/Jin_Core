@@ -17,6 +17,7 @@ import {
   PendingApprovalNotFoundError,
   SecondApprovalTooEarlyError,
 } from '../hitl/dual-confirm.service';
+import { GoogleOAuthService } from '../integrations/google/oauth.service';
 
 // Umbrales de alerta diaria (BLUEPRINT 9.6/10.4): 80% y 100%. Se
 // notifica una vez por cruce, no en cada barrido del cron.
@@ -41,6 +42,7 @@ export class TelegramBotService implements OnModuleInit {
   private lastNotifiedKillSwitchActive = false;
   private readonly notifiedDailyThresholdsToday = new Set<number>();
   private lastDailyThresholdResetDate = '';
+  private lastOAuthAlertNotifiedDate = '';
 
   constructor(
     private readonly configService: ConfigService<Env, true>,
@@ -50,6 +52,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly dualConfirmService: DualConfirmService,
     private readonly auditService: AuditService,
     private readonly approvalExecutionService: ApprovalExecutionService,
+    private readonly googleOAuthService: GoogleOAuthService,
     @Inject(DB_CONNECTION) private readonly db: Db,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -202,6 +205,20 @@ export class TelegramBotService implements OnModuleInit {
 
       await ctx.reply(
         '✅ Kill switch desactivado. El sistema puede operar normalmente.',
+      );
+    });
+
+    // Comando /google-oauth-refreshed
+    this.bot.command('google-oauth-refreshed', async (ctx) => {
+      await this.googleOAuthService.updateLastRefreshedAt();
+      await this.auditService.recordApproval({
+        requestId: randomUUID(),
+        approver: 'owner',
+        toolName: 'google-oauth-refresh-ack',
+        inputsHash: 'n/a',
+      });
+      await ctx.reply(
+        '✅ Timestamp de refresco de Google OAuth actualizado. Contador reiniciado.',
       );
     });
 
@@ -394,9 +411,26 @@ export class TelegramBotService implements OnModuleInit {
     try {
       await this.checkKillSwitchAlert();
       await this.checkDailyBudgetAlert();
+      await this.checkOAuthAlert();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Error chequeando alertas de budget: ${msg}`);
+      this.logger.error(`Error chequeando alertas de budget/oauth: ${msg}`);
+    }
+  }
+
+  private async checkOAuthAlert(): Promise<void> {
+    const days = await this.googleOAuthService.getDaysSinceLastRefresh();
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (days >= 6 && this.lastOAuthAlertNotifiedDate !== today) {
+      this.lastOAuthAlertNotifiedDate = today;
+      await this.bot.api.sendMessage(
+        this.ownerChatId,
+        `⚠️ *ALERTA DE SEGURIDAD OAUTH*: El refresh token de Google OAuth (Testing Mode) ` +
+          `caducará pronto. Transcurridos ${days.toFixed(1)} días desde el último refresco ` +
+          `manual. Usa /google-oauth-refreshed tras actualizar el token.`,
+        { parse_mode: 'Markdown' },
+      );
     }
   }
 

@@ -114,6 +114,15 @@ export class GoogleOAuthService implements OnModuleInit {
   }
 
   /**
+   * Retorna el número de días transcurridos desde el último refresco de token.
+   */
+  public async getDaysSinceLastRefresh(): Promise<number> {
+    const lastRefreshed = await this.getLastRefreshedAt();
+    const diffMs = Date.now() - lastRefreshed.getTime();
+    return diffMs / (1000 * 60 * 60 * 24);
+  }
+
+  /**
    * Cron diario (09:00 AM local) que verifica el tiempo transcurrido desde el último
    * refresco. Si han pasado >= 6 días (24 horas antes de expirar el plazo de 7 días
    * en Testing Mode de Google OAuth), emite alertas ruidosas en logs.
