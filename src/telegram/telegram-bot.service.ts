@@ -401,7 +401,12 @@ export class TelegramBotService implements OnModuleInit {
               lastActivityAt: new Date(),
             })
             .returning();
-          session = created!;
+          if (!created) {
+            throw new Error(
+              'INSERT a telegram_sessions no devolvió la fila creada.',
+            );
+          }
+          session = created;
         }
 
         const currentTranscript =
