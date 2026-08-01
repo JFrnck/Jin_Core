@@ -35,8 +35,8 @@ describe('TelegramBotService', () => {
   const mockBotUser: UserFromGetMe = {
     id: 1000,
     is_bot: true,
-    first_name: 'YormunBot',
-    username: 'yormun_bot',
+    first_name: 'JinBot',
+    username: 'jin_bot',
     can_join_groups: false,
     can_read_all_group_messages: false,
     supports_inline_queries: false,
@@ -54,7 +54,7 @@ describe('TelegramBotService', () => {
         if (key === 'TELEGRAM_BOT_TOKEN') return 'test-bot-token';
         if (key === 'TELEGRAM_OWNER_CHAT_ID') return OWNER_CHAT_ID;
         if (key === 'TELEGRAM_WEBHOOK_URL')
-          return 'https://yormun.test/telegram/webhook';
+          return 'https://jin.test/telegram/webhook';
         if (key === 'TELEGRAM_WEBHOOK_SECRET') return SECRET_TOKEN;
         return undefined;
       },
@@ -212,7 +212,7 @@ describe('TelegramBotService', () => {
     mockSendMessage(sentMessages);
 
     await service.handleWebhookUpdate(createCommandUpdate(2, '/start'));
-    expect(sentMessages.some((msg) => msg.includes('YORMUNGANDER'))).toBe(true);
+    expect(sentMessages.some((msg) => msg.includes('Jin'))).toBe(true);
   });
 
   it('debe reportar el porcentaje diario real y el estado del kill switch en /budget', async () => {
@@ -387,7 +387,7 @@ describe('TelegramBotService', () => {
         date: Math.floor(Date.now() / 1000),
         chat: { id: OWNER_CHAT_ID, type: 'private', first_name: 'Owner' },
         from: { id: OWNER_CHAT_ID, first_name: 'Owner', is_bot: false },
-        text: 'Hola Yormun, ¿cómo estás?',
+        text: 'Hola Jin, ¿cómo estás?',
       },
     };
 
@@ -395,7 +395,7 @@ describe('TelegramBotService', () => {
     expect(mockBudgetGuardedRouter.complete).toHaveBeenCalledWith(
       'chat_conversational',
       expect.objectContaining({
-        messages: [{ role: 'user', content: 'Hola Yormun, ¿cómo estás?' }],
+        messages: [{ role: 'user', content: 'Hola Jin, ¿cómo estás?' }],
         maxOutputTokens: 2000,
         temperature: 0.7,
       }),

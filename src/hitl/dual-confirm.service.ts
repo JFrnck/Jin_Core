@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { pendingApprovals, type PendingApprovalRow } from '../db/schema';
 import {
@@ -11,7 +11,7 @@ import {
 
 const PendingApprovalLevelSchema = z.enum(['confirm', 'dual-confirm']);
 
-export class PendingApprovalNotFoundError extends YormunError {
+export class PendingApprovalNotFoundError extends JinError {
   constructor(requestId: string) {
     super(`No hay aprobación pendiente con requestId "${requestId}"`, {
       code: 'HITL_PENDING_APPROVAL_NOT_FOUND',
@@ -20,7 +20,7 @@ export class PendingApprovalNotFoundError extends YormunError {
   }
 }
 
-export class SecondApprovalTooEarlyError extends YormunError {
+export class SecondApprovalTooEarlyError extends JinError {
   constructor(requestId: string, availableAt: Date) {
     super(
       `La segunda aprobación de "${requestId}" no se acepta antes de ${availableAt.toISOString()}`,

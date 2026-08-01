@@ -19,7 +19,7 @@ describe('MemoryService', () => {
   let service: MemoryService;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'yormun-memory-service-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'jin-memory-service-test-'));
     store = new MemoryStore(join(tmpDir, 'memory.db'));
     mockEmbeddingProvider = { embed: vi.fn() };
     mockConsolidationService = { distill: vi.fn() };

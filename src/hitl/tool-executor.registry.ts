@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 
 export type ToolExecutor = (payload: unknown) => Promise<unknown>;
 
-export class ToolExecutorAlreadyRegisteredError extends YormunError {
+export class ToolExecutorAlreadyRegisteredError extends JinError {
   constructor(toolName: string) {
     super(
       `Ya hay un executor registrado para la tool "${toolName}" — doble registro accidental.`,
@@ -12,7 +12,7 @@ export class ToolExecutorAlreadyRegisteredError extends YormunError {
   }
 }
 
-export class NoExecutorRegisteredError extends YormunError {
+export class NoExecutorRegisteredError extends JinError {
   constructor(toolName: string) {
     super(
       `No hay ningún executor registrado para la tool "${toolName}" — no se puede ejecutar la acción aprobada.`,

@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { google, type calendar_v3 } from 'googleapis';
-import { YormunError } from '../../../common/errors/yormun-error';
+import { JinError } from '../../../common/errors/jin-error';
 import { GoogleOAuthService } from '../oauth.service';
 
-export class GoogleCalendarRateLimitError extends YormunError {
+export class GoogleCalendarRateLimitError extends JinError {
   constructor() {
     super(
       'Límite de tasa (rate limit) de Google Calendar alcanzado (máximo 60 peticiones/minuto).',
@@ -12,7 +12,7 @@ export class GoogleCalendarRateLimitError extends YormunError {
   }
 }
 
-export class GoogleCalendarApiError extends YormunError {
+export class GoogleCalendarApiError extends JinError {
   constructor(message: string, cause?: unknown) {
     super(`Error en Google Calendar API: ${message}`, {
       code: 'GOOGLE_CALENDAR_API_ERROR',
@@ -87,7 +87,7 @@ export class GoogleCalendarClientService {
       const res = await calendar.events.list(listParams);
       return res.data.items ?? [];
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to list calendar events: ${msg}`);
       throw new GoogleCalendarApiError(msg, err);
@@ -120,7 +120,7 @@ export class GoogleCalendarClientService {
 
       return res.data;
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to create calendar event: ${msg}`);
       throw new GoogleCalendarApiError(msg, err);
@@ -155,7 +155,7 @@ export class GoogleCalendarClientService {
 
       return res.data;
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to update calendar event ${eventId}: ${msg}`);
       throw new GoogleCalendarApiError(msg, err);
@@ -171,7 +171,7 @@ export class GoogleCalendarClientService {
         eventId,
       });
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to delete calendar event ${eventId}: ${msg}`);
       throw new GoogleCalendarApiError(msg, err);

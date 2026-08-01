@@ -29,7 +29,7 @@ const runawayDetectedCounter = makeCounterProvider({
 });
 
 /**
- * Expone `/metrics` (Prometheus, ya desplegado en Yormun_Infra —
+ * Expone `/metrics` (Prometheus, ya desplegado en Jin_Infra —
  * Fase 1.1). Solo las 3 métricas que Fase 4.1 exige explícitamente
  * (PROMPTS.md §4.1); otras de BLUEPRINT §10.1 (`tool_latency_seconds`,
  * `hitl_approval_rate`, etc.) quedan fuera de alcance de esta fase.

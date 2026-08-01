@@ -70,7 +70,7 @@ export const EnvSchema = z.object({
     .min(1, 'OPENAI_API_KEY es requerida (API key de OpenAI, para embeddings)'),
   // Ruta operacional con valor sensato por defecto (no un secreto),
   // mismo criterio que GOOGLE_REDIRECT_URI: en Kubernetes se sobreescribe
-  // apuntando al PersistentVolume real cuando se despliegue yormun-core.
+  // apuntando al PersistentVolume real cuando se despliegue jin-core.
   MEMORY_DB_PATH: z.string().min(1).default('./data/memory.db'),
   // src/executor-client: requerida, no opcional (AGENTS.md 8.4
   // fail-fast) — Fase 5.2, BLUEPRINT 4. URL interna del Executor (Service
@@ -79,7 +79,7 @@ export const EnvSchema = z.object({
   EXECUTOR_BASE_URL: z
     .string()
     .url(
-      'EXECUTOR_BASE_URL debe ser una URL válida (ej: http://yormun-executor:3000)',
+      'EXECUTOR_BASE_URL debe ser una URL válida (ej: http://jin-executor:3000)',
     ),
 });
 

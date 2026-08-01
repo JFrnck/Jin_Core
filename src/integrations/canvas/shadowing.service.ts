@@ -87,7 +87,7 @@ export class ShadowingService {
     );
 
     const systemPrompt =
-      'Eres el asistente académico personal de YORMUNGANDER. Analiza la información académica de Canvas LMS recibida ' +
+      'Eres el asistente académico personal de Jin. Analiza la información académica de Canvas LMS recibida ' +
       'dentro de las etiquetas de contenido no confiable. Genera un resumen ejecutivo en formato Markdown con las ' +
       'siguientes secciones:\n' +
       '1. 📌 Anuncios Recientes Relevantes\n' +

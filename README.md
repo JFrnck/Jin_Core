@@ -1,6 +1,6 @@
-# Yormun_Core
+# Jin_Core
 
-Orquestador NestJS de YORMUNGANDER: HITL, audit log, budget, security, memory, telegram, integraciones. Ver `../Yormun_Docs/` para la documentación canónica (BLUEPRINT, AGENTS, WORKFLOW).
+Orquestador NestJS de Jin: HITL, audit log, budget, security, memory, telegram, integraciones. Ver `../Jin_Docs/` para la documentación canónica (BLUEPRINT, AGENTS, WORKFLOW).
 
 ## Setup
 
@@ -10,7 +10,7 @@ pnpm install
 cp .env.example .env   # ajusta DATABASE_URL
 ```
 
-En desarrollo local necesitas un Postgres corriendo (`docker compose -f ../Yormun_Infra/docker-compose.dev.yaml up`, o cualquier Postgres 16 accesible).
+En desarrollo local necesitas un Postgres corriendo (`docker compose -f ../Jin_Infra/docker-compose.dev.yaml up`, o cualquier Postgres 16 accesible).
 
 ```bash
 pnpm db:migrate        # aplica las migraciones de Drizzle
@@ -51,5 +51,5 @@ Los tests de integración levantan su propio contenedor Postgres (imagen pinnead
 ## Contrato OpenAPI
 
 ```bash
-pnpm generate:contract  # emite contracts/openapi.json — lo consumen Yormun_Web/Yormun_CLI
+pnpm generate:contract  # emite contracts/openapi.json — lo consumen Jin_Web/Jin_CLI
 ```

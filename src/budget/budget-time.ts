@@ -2,7 +2,7 @@
  * Fecha local en formato 'YYYY-MM-DD' (BLUEPRINT 9.6: "reset a las 00:00
  * local"). Usa los getters locales de `Date` (no UTC) — asume que la TZ
  * del pod está configurada correctamente; configurar esa TZ es un
- * detalle de despliegue (Yormun_Infra), no de este módulo.
+ * detalle de despliegue (Jin_Infra), no de este módulo.
  */
 export function todayLocalDate(now: Date = new Date()): string {
   const year = now.getFullYear();
