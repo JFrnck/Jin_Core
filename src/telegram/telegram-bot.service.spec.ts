@@ -357,6 +357,22 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
     ).toBe(true);
   });
 
+  it('/unpause no hace nada si el kill switch ya está inactivo', async () => {
+    vi.mocked(mockKillSwitchService.isActive!).mockResolvedValue(false);
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+
+    await service.handleWebhookUpdate(createCommandUpdate(32, '/unpause'));
+
+    expect(mockKillSwitchService.unpause).not.toHaveBeenCalled();
+    expect(mockAuditService.recordApproval).not.toHaveBeenCalled();
+    expect(
+      sentMessages.some((msg) =>
+        msg.includes('El kill switch no está activo — nada que reanudar'),
+      ),
+    ).toBe(true);
+  });
+
   it('debe listar tareas pendientes al recibir /tasks', async () => {
     const sentMessages: string[] = [];
     mockSendMessage(sentMessages);
@@ -571,6 +587,24 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       expect(runTurnCall.objective).toBe('Revisa mis correos de hoy');
       expect(
         sentMessages.includes('Respuesta del agente Jin para Telegram'),
+      ).toBe(true);
+    });
+
+    it('propaga el mensaje de KillSwitchActiveError o error de presupuesto al owner si agentService.runTurn falla', async () => {
+      vi.mocked(mockAgentService.runTurn!).mockRejectedValue(
+        new Error('Kill switch activo: runaway detectado.'),
+      );
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.handleWebhookUpdate(
+        createMessageUpdate(100, 'Revisa mis correos de nuevo'),
+      );
+
+      expect(
+        sentMessages.some((msg) =>
+          msg.includes('Kill switch activo: runaway detectado.'),
+        ),
       ).toBe(true);
     });
 
