@@ -18,6 +18,9 @@ const AGENT_CONFIG_PATH = join(process.cwd(), 'config', 'agent.yaml');
     },
     AgentService,
   ],
-  exports: [AgentService],
+  // AGENT_CONFIG exportado además de AgentService: OrchestratorModule
+  // (Fase 5.4) también lo necesita (max_concurrent_sub_agents), sin
+  // duplicar la carga de config/agent.yaml en dos factories distintas.
+  exports: [AgentService, AGENT_CONFIG],
 })
 export class AgentModule {}

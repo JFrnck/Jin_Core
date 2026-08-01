@@ -5,6 +5,7 @@ import { z } from 'zod';
 export interface AgentConfig {
   readonly maxIterationsPerTurn: number;
   readonly maxConsecutiveToolFailures: number;
+  readonly maxConcurrentSubAgents: number;
 }
 
 // Espejo snake_case de config/agent.yaml — mismo patrón que
@@ -12,6 +13,7 @@ export interface AgentConfig {
 const AgentYamlSchema = z.object({
   max_iterations_per_turn: z.number().int().positive(),
   max_consecutive_tool_failures: z.number().int().positive(),
+  max_concurrent_sub_agents: z.number().int().positive(),
 });
 
 /**
@@ -31,6 +33,7 @@ export function parseAgentConfig(raw: unknown): AgentConfig {
   return {
     maxIterationsPerTurn: data.max_iterations_per_turn,
     maxConsecutiveToolFailures: data.max_consecutive_tool_failures,
+    maxConcurrentSubAgents: data.max_concurrent_sub_agents,
   };
 }
 

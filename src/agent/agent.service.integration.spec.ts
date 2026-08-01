@@ -46,6 +46,7 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
   const config: AgentConfig = {
     maxIterationsPerTurn: 5,
     maxConsecutiveToolFailures: 2,
+    maxConcurrentSubAgents: 3,
   };
 
   beforeAll(async () => {

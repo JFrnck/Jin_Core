@@ -13,6 +13,7 @@ import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
 import { MemoryModule } from './memory/memory.module';
 import { ModelProviderModule } from './model-provider/model-provider.module';
+import { OrchestratorModule } from './agent/orchestrator.module';
 import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { TelegramModule } from './telegram/telegram.module';
     GoogleModule,
     MemoryModule,
     AgentModule,
+    OrchestratorModule,
     TelegramModule,
     ExecutorClientModule,
   ],

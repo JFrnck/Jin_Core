@@ -63,7 +63,11 @@ describe('AgentService.runTurn', () => {
     mockAuditService = {
       recordToolCall: vi.fn().mockResolvedValue(undefined),
     };
-    config = { maxIterationsPerTurn: 5, maxConsecutiveToolFailures: 2 };
+    config = {
+      maxIterationsPerTurn: 5,
+      maxConsecutiveToolFailures: 2,
+      maxConcurrentSubAgents: 3,
+    };
 
     service = new AgentService(
       mockRouter as unknown as BudgetGuardedModelRouter,
@@ -104,6 +108,33 @@ describe('AgentService.runTurn', () => {
       undefined,
       'sess-42',
     );
+  });
+
+  it('sin allowedTools: declara TODAS las tools registradas (comportamiento anterior a Fase 5.4, intacto)', async () => {
+    completeMock.mockResolvedValue(fakeResponse({ content: 'ok' }));
+
+    await service.runTurn({ sessionId: 'sess-1', objective: 'hola' });
+
+    const request = getRequestArg(completeMock, 0);
+    const toolNames = request.tools?.map((t) => t.name) ?? [];
+    expect(toolNames).toContain('declarePlan');
+    expect(toolNames).toContain('updatePlanStep');
+    expect(toolNames).toContain('readEmails');
+    expect(toolNames.length).toBeGreaterThan(3);
+  });
+
+  it('con allowedTools: solo declara el subset pedido (más las meta-tools de plan, siempre presentes)', async () => {
+    completeMock.mockResolvedValue(fakeResponse({ content: 'ok' }));
+
+    await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'hola',
+      allowedTools: ['readEmails'],
+    });
+
+    const request = getRequestArg(completeMock, 0);
+    const toolNames = request.tools?.map((t) => t.name) ?? [];
+    expect(toolNames).toEqual(['declarePlan', 'updatePlanStep', 'readEmails']);
   });
 
   it('declarePlan: registra el plan y sigue el loop hasta la respuesta final', async () => {
@@ -249,6 +280,30 @@ describe('AgentService.runTurn', () => {
       /^<untrusted_content_[0-9a-f]{16} source="listCalendarEvents">/,
     );
     expect(toolResult?.output).toContain('evt-1');
+  });
+
+  it('con actorLabel: se usa en vez de "agent" en el audit log (atribución multi-agente, Fase 5.4)', async () => {
+    const executor = vi.fn().mockResolvedValue({ events: [] });
+    toolExecutorRegistry.register('listCalendarEvents', executor);
+
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [{ id: 'call-1', name: 'listCalendarEvents', input: {} }],
+        }),
+      )
+      .mockResolvedValueOnce(fakeResponse({ content: 'listo' }));
+
+    await service.runTurn({
+      sessionId: 'sess-1:ticket-abc',
+      objective: 'lista mis eventos',
+      actorLabel: 'agent:ticket-abc',
+    });
+
+    expect(mockAuditService.recordToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'agent:ticket-abc' }),
+    );
   });
 
   it('tool notify: ejecuta ya y audita approvalStatus notified', async () => {

@@ -107,6 +107,40 @@ describe('BudgetService (integración, Postgres real)', () => {
     expect(hourlyRow?.inputTokens).toBe(1000);
   });
 
+  it('getSessionUsage: 0/0 para una sesión que nunca registró uso (Fase 5.4, ADR 0005)', () => {
+    expect(service.getSessionUsage('sesion-inexistente')).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
+  it('getSessionUsage: refleja el acumulado en memoria de recordUsage — lo que suma el orquestador multi-agente', async () => {
+    await service.recordUsage({
+      sessionId: 'run-1:ticket-a',
+      modelId: 'test-model',
+      taskProfile: 'test_profile',
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    await service.recordUsage({
+      sessionId: 'run-1:ticket-a',
+      modelId: 'test-model',
+      taskProfile: 'test_profile',
+      inputTokens: 30,
+      outputTokens: 20,
+    });
+
+    expect(service.getSessionUsage('run-1:ticket-a')).toEqual({
+      inputTokens: 130,
+      outputTokens: 70,
+    });
+    // Otra sesión no se ve afectada — cada sub-agente tiene su propio techo.
+    expect(service.getSessionUsage('run-1:ticket-b')).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
   it('recordUsage acumula (no reemplaza) llamadas sucesivas el mismo día/hora', async () => {
     await service.recordUsage({
       sessionId: 'sess-1',
