@@ -1,12 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { desc, sql } from 'drizzle-orm';
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { auditLog, type AuditLogRow, type NewAuditLogRow } from '../db/schema';
 import { ChainVerificationService } from './chain-verification.service';
 import { computeRowHash, GENESIS_HASH, type HashableRow } from './hash-chain';
 
-export class AuditChainLockedError extends YormunError {
+export class AuditChainLockedError extends JinError {
   constructor() {
     super(
       'El audit log está bloqueado tras detectar corrupción en la cadena — requiere intervención manual (BLUEPRINT 9.5).',
@@ -120,7 +120,7 @@ export class AuditService {
       // update (BLUEPRINT 12.2), donde brevemente pueden coexistir 2
       // réplicas escribiendo. Se libera solo al terminar la transacción.
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext('yormun_audit_log_chain'))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext('jin_audit_log_chain'))`,
       );
 
       const [last] = await tx

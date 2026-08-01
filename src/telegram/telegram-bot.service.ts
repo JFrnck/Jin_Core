@@ -127,7 +127,7 @@ export class TelegramBotService implements OnModuleInit {
     // Comando /start
     this.bot.command('start', async (ctx) => {
       await ctx.reply(
-        '🤖 *YORMUNGANDER* — Orquestador de Agentes Personal\n\nSistema activo y listo para procesar instrucciones.',
+        '🤖 *Jin* — Orquestador de Agentes Personal\n\nSistema activo y listo para procesar instrucciones.',
         { parse_mode: 'Markdown' },
       );
     });
@@ -136,7 +136,7 @@ export class TelegramBotService implements OnModuleInit {
     this.bot.command('status', async (ctx) => {
       await ctx.reply(
         '✅ *Estado del Sistema*\n\n' +
-          '- *yormun-core*: En línea\n' +
+          '- *jin-core*: En línea\n' +
           '- *Base de Datos*: Conectada (Postgres + pgvector)\n' +
           '- *Modo Webhook*: Activo',
         { parse_mode: 'Markdown' },
@@ -258,7 +258,7 @@ export class TelegramBotService implements OnModuleInit {
           'chat_conversational',
           {
             systemPrompt:
-              'Eres Yormun, un orquestador de agentes inteligente y conciso.',
+              'Eres Jin, un orquestador de agentes inteligente y conciso.',
             messages: [{ role: 'user', content: text }],
             maxOutputTokens: 2000,
             temperature: 0.7,

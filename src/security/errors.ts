@@ -1,4 +1,4 @@
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 
 /**
  * `sessionNonce` no matchea el formato esperado (16 caracteres hex,
@@ -7,7 +7,7 @@ import { YormunError } from '../common/errors/yormun-error';
  * reconocería como confiable — mejor fallar ruidosamente ahora que dejar
  * pasar un tag roto que ni el propio sistema puede verificar después.
  */
-export class InvalidSessionNonceError extends YormunError {
+export class InvalidSessionNonceError extends JinError {
   constructor(sessionNonce: string) {
     super(
       `sessionNonce inválido: "${sessionNonce}". Se espera un hexadecimal de 16 caracteres generado por generateSessionNonce().`,

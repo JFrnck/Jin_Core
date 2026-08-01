@@ -19,7 +19,7 @@ describe('MemoryStore', () => {
   let store: MemoryStore;
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'yormun-memory-test-'));
+    tmpDir = mkdtempSync(join(tmpdir(), 'jin-memory-test-'));
     dbPath = join(tmpDir, 'nested', 'memory.db');
     store = new MemoryStore(dbPath);
   });

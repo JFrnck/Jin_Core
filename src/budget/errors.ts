@@ -1,4 +1,4 @@
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 
 /**
  * La llamada estimada excedería el presupuesto de la sesión actual
@@ -6,7 +6,7 @@ import { YormunError } from '../common/errors/yormun-error';
  * explícita"). No hay downgrade posible a nivel de sesión: es un corte
  * duro, a diferencia del daily que primero degrada a modelos baratos.
  */
-export class SessionBudgetExceededError extends YormunError {
+export class SessionBudgetExceededError extends JinError {
   constructor(sessionId: string) {
     super(`La sesión "${sessionId}" alcanzó su presupuesto máximo de tokens.`, {
       code: 'BUDGET_SESSION_EXCEEDED',
@@ -21,7 +21,7 @@ export class SessionBudgetExceededError extends YormunError {
  * cuando ni siquiera esa degradación alcanza — ej. la llamada ya usa el
  * modelo más barato del profile y aun así no entra en lo que resta.
  */
-export class DailyBudgetExceededError extends YormunError {
+export class DailyBudgetExceededError extends JinError {
   constructor() {
     super(
       'El presupuesto diario (tokens o USD) se agotó. Reset a las 00:00 hora local.',
@@ -37,7 +37,7 @@ export class DailyBudgetExceededError extends YormunError {
  * solo, ni por reintento, ni por restart del pod (persistido en
  * `budget_kill_switch`).
  */
-export class KillSwitchActiveError extends YormunError {
+export class KillSwitchActiveError extends JinError {
   constructor(reason: string) {
     super(
       `Kill switch activo: ${reason}. Requiere /unpause con aprobación humana.`,

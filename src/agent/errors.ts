@@ -1,6 +1,6 @@
-import { YormunError } from '../common/errors/yormun-error';
+import { JinError } from '../common/errors/jin-error';
 
-export class AgentPlanStepOutOfBoundsError extends YormunError {
+export class AgentPlanStepOutOfBoundsError extends JinError {
   constructor(stepIndex: number, totalSteps: number) {
     super(
       `updatePlanStep: índice ${stepIndex} fuera de rango (el plan tiene ${totalSteps} pasos)`,

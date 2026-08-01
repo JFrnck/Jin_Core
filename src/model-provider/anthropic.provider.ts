@@ -59,7 +59,7 @@ export class AnthropicProvider implements ModelProviderClient {
   // el alias `AppConfigService` (get() estricto por Env) sin romper la
   // resolución de DI de Nest, que de otro modo depende del tipo
   // reflejado del constructor (mismo problema encontrado y documentado
-  // en Yormun_Executor/src/k8s/k8s.service.ts).
+  // en Jin_Executor/src/k8s/k8s.service.ts).
   constructor(@Inject(ConfigService) configService: AppConfigService) {
     this.client = new Anthropic({
       apiKey: configService.get('ANTHROPIC_API_KEY'),

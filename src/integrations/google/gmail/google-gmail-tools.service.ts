@@ -141,7 +141,7 @@ export class GoogleGmailToolsService {
     }
 
     const systemPrompt =
-      'Eres el asistente personal de correo de YORMUNGANDER. Analiza los correos recibidos dentro de las ' +
+      'Eres el asistente personal de correo de Jin. Analiza los correos recibidos dentro de las ' +
       'etiquetas de contenido no confiable. Genera un resumen ejecutivo en formato Markdown estructurado:\n' +
       '1. ✉️ Resumen de Correos Principales (Remitente, Asunto, Puntos Clave)\n' +
       '2. 🚨 Correos que requieren atención o respuesta urgente\n' +

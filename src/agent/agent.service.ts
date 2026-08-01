@@ -86,7 +86,7 @@ const CHAT_TEMPERATURE = 0.7;
 
 function buildSystemPrompt(sessionNonce: string): string {
   return (
-    'Sos Yormun, un agente autónomo orientado a objetivos. Para tareas no ' +
+    'Sos Jin, un agente autónomo orientado a objetivos. Para tareas no ' +
     'triviales, declará primero un plan con la tool declarePlan, y ' +
     'actualizalo con updatePlanStep a medida que avanzás — incluido tras ' +
     'un fallo, ajustando el enfoque (autocorrección). Si un intento se ' +

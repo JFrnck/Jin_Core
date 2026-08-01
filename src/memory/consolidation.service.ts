@@ -5,7 +5,7 @@ import { ConsolidationParseError } from './errors';
 import { MemoryEntryTypeSchema } from './memory.types';
 
 const SYSTEM_PROMPT =
-  'Sos el módulo de consolidación de memoria de YORMUNGANDER. Analizás la ' +
+  'Sos el módulo de consolidación de memoria de Jin. Analizás la ' +
   'transcripción de una sesión de agente recién cerrada y destilás SOLO lo ' +
   'que vale la pena recordar a largo plazo: hechos concretos sobre el ' +
   'owner o su contexto ("tipo": "hecho"), preferencias explícitas o ' +

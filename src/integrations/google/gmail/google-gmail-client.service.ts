@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { google, type gmail_v1 } from 'googleapis';
-import { YormunError } from '../../../common/errors/yormun-error';
+import { JinError } from '../../../common/errors/jin-error';
 import { GoogleOAuthService } from '../oauth.service';
 
-export class GoogleGmailRateLimitError extends YormunError {
+export class GoogleGmailRateLimitError extends JinError {
   constructor() {
     super(
       'Límite de tasa (rate limit) de Gmail alcanzado (máximo 60 peticiones/minuto).',
@@ -12,7 +12,7 @@ export class GoogleGmailRateLimitError extends YormunError {
   }
 }
 
-export class GoogleGmailApiError extends YormunError {
+export class GoogleGmailApiError extends JinError {
   constructor(message: string, cause?: unknown) {
     super(`Error en Gmail API: ${message}`, {
       code: 'GOOGLE_GMAIL_API_ERROR',
@@ -99,7 +99,7 @@ export class GoogleGmailClientService {
 
       return summaries;
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to list Gmail messages: ${msg}`);
       throw new GoogleGmailApiError(msg, err);
@@ -145,7 +145,7 @@ export class GoogleGmailClientService {
         body: bodyText,
       };
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to get Gmail message ${messageId}: ${msg}`);
       throw new GoogleGmailApiError(msg, err);
@@ -193,7 +193,7 @@ export class GoogleGmailClientService {
         };
       });
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to get Gmail thread ${threadId}: ${msg}`);
       throw new GoogleGmailApiError(msg, err);
@@ -250,7 +250,7 @@ export class GoogleGmailClientService {
         threadId: res.data.threadId ?? '',
       };
     } catch (err: unknown) {
-      if (err instanceof YormunError) throw err;
+      if (err instanceof JinError) throw err;
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Failed to send Gmail message: ${msg}`);
       throw new GoogleGmailApiError(msg, err);
