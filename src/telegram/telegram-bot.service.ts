@@ -1,16 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
+import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
 import type { Update } from 'grammy/types';
+import { AgentService } from '../agent/agent.service';
 import { AuditService } from '../audit/audit.service';
 import { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import { BudgetService } from '../budget/budget.service';
 import { KillSwitchService } from '../budget/kill-switch.service';
 import type { Env } from '../config/env.schema';
 import { DB_CONNECTION, type Db } from '../db/db.module';
-import { pendingApprovals } from '../db/schema';
+import {
+  pendingApprovals,
+  telegramSessions,
+  type TelegramSessionRow,
+} from '../db/schema';
 import { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
   DualConfirmService,
@@ -18,10 +24,17 @@ import {
   SecondApprovalTooEarlyError,
 } from '../hitl/dual-confirm.service';
 import { GoogleOAuthService } from '../integrations/google/oauth.service';
+import { MemoryService } from '../memory/memory.service';
+import type { MemoryEntry } from '../memory/memory.types';
+import type { ModelMessage } from '../model-provider/model-provider.types';
 
-// Umbrales de alerta diaria (BLUEPRINT 9.6/10.4): 80% y 100%. Se
-// notifica una vez por cruce, no en cada barrido del cron.
+// Umbrales de alerta diaria (BLUEPRINT 9.6/10.4): 80% y 100%.
 const DAILY_ALERT_THRESHOLDS = [0.8, 1] as const;
+
+// Constantes de ciclo de vida de sesión (Fase 5.3)
+const SESSION_INACTIVITY_MS = 30 * 60 * 1000; // 30 minutos
+const MAX_SESSION_MESSAGES = 30; // Conteo máximo de mensajes en transcript antes de auto-consolidar
+const MAX_WINDOW_MESSAGES = 20; // Tamaño máximo de la ventana deslizante enviada al agente
 
 @Injectable()
 export class TelegramBotService implements OnModuleInit {
@@ -30,15 +43,6 @@ export class TelegramBotService implements OnModuleInit {
   private readonly ownerChatId: number;
   private readonly webhookUrl?: string;
   private readonly webhookSecret: string;
-  // Sesión estable para el chat conversacional (BLUEPRINT 9.6 "per
-  // sesión") — un solo owner, un solo chat, así que toda la
-  // conversación libre comparte presupuesto de sesión en vez de que
-  // cada mensaje sea su propia sesión aislada.
-  private readonly chatSessionId = 'telegram-chat';
-  // Estado en memoria para no repetir alertas — a diferencia del estado
-  // del kill switch (persistido en budget_kill_switch), perder este
-  // flag tras un restart solo produce como mucho una alerta duplicada,
-  // no una omitida silenciosamente.
   private lastNotifiedKillSwitchActive = false;
   private readonly notifiedDailyThresholdsToday = new Set<number>();
   private lastDailyThresholdResetDate = '';
@@ -53,6 +57,8 @@ export class TelegramBotService implements OnModuleInit {
     private readonly auditService: AuditService,
     private readonly approvalExecutionService: ApprovalExecutionService,
     private readonly googleOAuthService: GoogleOAuthService,
+    private readonly agentService: AgentService,
+    private readonly memoryService: MemoryService,
     @Inject(DB_CONNECTION) private readonly db: Db,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -98,10 +104,6 @@ export class TelegramBotService implements OnModuleInit {
     return this.bot;
   }
 
-  /**
-   * Valida si el secret token recibido en los headers del webhook coincide
-   * estrictamente con TELEGRAM_WEBHOOK_SECRET.
-   */
   public validateWebhookSecret(secretTokenHeader?: string): boolean {
     return secretTokenHeader === this.webhookSecret;
   }
@@ -111,7 +113,6 @@ export class TelegramBotService implements OnModuleInit {
   }
 
   private setupMiddleware(): void {
-    // Middleware de autenticación estricta: ignora cualquier mensaje que no venga del owner
     this.bot.use(async (ctx: Context, next) => {
       if (ctx.chat?.id !== this.ownerChatId) {
         this.logger.warn(
@@ -121,6 +122,56 @@ export class TelegramBotService implements OnModuleInit {
       }
       await next();
     });
+  }
+
+  public async getActiveDbSession(): Promise<TelegramSessionRow | null> {
+    const [session] = await this.db
+      .select()
+      .from(telegramSessions)
+      .where(eq(telegramSessions.status, 'active'))
+      .limit(1);
+    return session ?? null;
+  }
+
+  private formatTranscriptForConsolidation(
+    transcript: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ): string {
+    return transcript
+      .map(
+        (turn) =>
+          `${turn.role === 'user' ? 'Usuario' : 'Jin'}: ${turn.content}`,
+      )
+      .join('\n\n');
+  }
+
+  public async consolidateAndCloseSession(
+    session: TelegramSessionRow,
+  ): Promise<readonly MemoryEntry[]> {
+    const fullTranscript = this.formatTranscriptForConsolidation(
+      session.transcript ?? [],
+    );
+
+    let entries: readonly MemoryEntry[] = [];
+    if (fullTranscript.trim().length > 0) {
+      try {
+        entries = await this.memoryService.consolidate(
+          session.id,
+          fullTranscript,
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.logger.error(
+          `Error al consolidar memoria de sesión ${session.id}: ${msg}`,
+        );
+      }
+    }
+
+    await this.db
+      .update(telegramSessions)
+      .set({ status: 'consolidated', lastActivityAt: new Date() })
+      .where(eq(telegramSessions.id, session.id));
+
+    return entries;
   }
 
   private setupHandlers(): void {
@@ -168,7 +219,7 @@ export class TelegramBotService implements OnModuleInit {
       await this.processRejection(ctx, requestId);
     });
 
-    // Comando /budget (Fase 4.1)
+    // Comando /budget
     this.bot.command('budget', async (ctx) => {
       const ratio = await this.budgetService.getDailyUsageRatio();
       const killSwitchActive = await this.killSwitchService.isActive();
@@ -181,11 +232,7 @@ export class TelegramBotService implements OnModuleInit {
       );
     });
 
-    // Comando /unpause (BLUEPRINT 9.6: "requiere unpause manual con
-    // comando /unpause que a su vez es confirm"). El "confirm" HITL acá
-    // lo satisface el propio middleware de auth: solo el owner
-    // autenticado por chat_id llega a este handler — no hay un LLM
-    // proponiendo el unpause que necesite una aprobación separada.
+    // Comando /unpause
     this.bot.command('unpause', async (ctx) => {
       if (!(await this.killSwitchService.isActive())) {
         await ctx.reply(
@@ -222,6 +269,51 @@ export class TelegramBotService implements OnModuleInit {
       );
     });
 
+    // Comando /endsession (Fase 5.3)
+    this.bot.command('endsession', async (ctx) => {
+      const session = await this.getActiveDbSession();
+      if (!session) {
+        await ctx.reply('ℹ️ No hay ninguna sesión activa en este momento.');
+        return;
+      }
+      await this.consolidateAndCloseSession(session);
+      await ctx.reply(
+        '✅ *Sesión cerrada y consolidada en memoria*. Las lecciones y preferencias han sido guardadas.',
+        { parse_mode: 'Markdown' },
+      );
+    });
+
+    // Comando /memory <query> (Fase 5.3)
+    this.bot.command('memory', async (ctx) => {
+      const query = ctx.match?.trim();
+      if (!query) {
+        await ctx.reply('⚠️ Uso: `/memory <búsqueda>`', {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+      try {
+        const memories = await this.memoryService.recall(query, 5);
+        if (memories.length === 0) {
+          await ctx.reply(
+            '🧠 *Memoria de Jin*: No se encontraron recuerdos relevantes para la consulta.',
+            { parse_mode: 'Markdown' },
+          );
+          return;
+        }
+        const formatted = memories
+          .map((m, idx) => `${idx + 1}. 📌 *[${m.tipo}]* ${m.content}`)
+          .join('\n\n');
+        await ctx.reply(
+          `🧠 *Recuerdos Encontrados (${memories.length})*:\n\n${formatted}`,
+          { parse_mode: 'Markdown' },
+        );
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await ctx.reply(`⚠️ Error al consultar memoria: ${msg}`);
+      }
+    });
+
     // Handler para botones inline CallbackQuery
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
@@ -244,33 +336,144 @@ export class TelegramBotService implements OnModuleInit {
       }
     });
 
-    // Handler de mensajes de texto libre (conversacional vía
-    // BudgetGuardedModelRouter — nunca ModelRouterService directo, así
-    // pasa por el chequeo de presupuesto/kill switch, BLUEPRINT 9.6).
+    // Handler de texto libre: agent loop + memoria (Fase 5.3)
     this.bot.on('message:text', async (ctx) => {
       const text = ctx.message.text;
       if (text.startsWith('/')) {
-        return; // Ya procesado por los command handlers
+        return;
       }
 
       try {
-        const response = await this.budgetGuardedRouter.complete(
-          'chat_conversational',
-          {
-            systemPrompt:
-              'Eres Jin, un orquestador de agentes inteligente y conciso.',
-            messages: [{ role: 'user', content: text }],
-            maxOutputTokens: 2000,
-            temperature: 0.7,
-          },
-          undefined,
-          this.chatSessionId,
-        );
+        let session = await this.getActiveDbSession();
+        const now = Date.now();
+        const isInactive =
+          session &&
+          now - new Date(session.lastActivityAt).getTime() >
+            SESSION_INACTIVITY_MS;
+        const isTooLong =
+          session &&
+          Array.isArray(session.transcript) &&
+          session.transcript.length >= MAX_SESSION_MESSAGES;
 
-        await ctx.reply(response.content);
+        if (session && (isInactive || isTooLong)) {
+          await this.consolidateAndCloseSession(session);
+          session = null;
+        }
+
+        if (!session) {
+          const newSessionId = randomUUID();
+          let initialTranscript: Array<{
+            role: 'user' | 'assistant';
+            content: string;
+          }> = [];
+
+          try {
+            const memories = await this.memoryService.recall(text, 5);
+            if (memories.length > 0) {
+              const formattedMemories = memories
+                .map((m) => `- [${m.tipo}] ${m.content}`)
+                .join('\n');
+              initialTranscript = [
+                {
+                  role: 'user',
+                  content: `[CONTEXTO DE MEMORIA REUTILIZABLE]:\n${formattedMemories}`,
+                },
+                {
+                  role: 'assistant',
+                  content:
+                    'Entendido. Utilizaré este contexto de memoria para guiar mis respuestas.',
+                },
+              ];
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logger.warn(
+              `Error al recuperar memoria para el turno: ${msg}`,
+            );
+          }
+
+          const [created] = await this.db
+            .insert(telegramSessions)
+            .values({
+              id: newSessionId,
+              transcript: initialTranscript,
+              status: 'active',
+              lastActivityAt: new Date(),
+            })
+            .returning();
+          if (!created) {
+            throw new Error(
+              'INSERT a telegram_sessions no devolvió la fila creada.',
+            );
+          }
+          session = created;
+        }
+
+        const currentTranscript =
+          (session.transcript as Array<{
+            role: 'user' | 'assistant';
+            content: string;
+          }>) ?? [];
+
+        let hasSyntheticMemory = false;
+        if (
+          currentTranscript.length >= 2 &&
+          currentTranscript[0]?.content.startsWith(
+            '[CONTEXTO DE MEMORIA REUTILIZABLE]',
+          )
+        ) {
+          hasSyntheticMemory = true;
+        }
+
+        let windowTurns = currentTranscript;
+        if (hasSyntheticMemory) {
+          const syntheticPair = currentTranscript.slice(0, 2);
+          const rest = currentTranscript.slice(2);
+          const recentRest = rest.slice(-MAX_WINDOW_MESSAGES);
+          windowTurns = [...syntheticPair, ...recentRest];
+        } else {
+          windowTurns = currentTranscript.slice(-MAX_WINDOW_MESSAGES);
+        }
+
+        const history: ModelMessage[] = windowTurns.map((t) => ({
+          role: t.role,
+          content: t.content,
+        }));
+
+        const turnResult = await this.agentService.runTurn({
+          sessionId: session.id,
+          objective: text,
+          history,
+        });
+
+        const updatedTranscript = [
+          ...currentTranscript,
+          { role: 'user' as const, content: text },
+          { role: 'assistant' as const, content: turnResult.finalResponse },
+        ];
+
+        await this.db
+          .update(telegramSessions)
+          .set({
+            transcript: updatedTranscript,
+            lastActivityAt: new Date(),
+          })
+          .where(eq(telegramSessions.id, session.id));
+
+        await ctx.reply(turnResult.finalResponse);
+
+        if (turnResult.pendingApprovals.length > 0) {
+          const approvalMsg = turnResult.pendingApprovals
+            .map(
+              (pa) =>
+                `⚠️ *Acción diferida*: \`${pa.toolName}\` (requestId: \`${pa.requestId}\`). Usa /approve ${pa.requestId} o /tasks para aprobar.`,
+            )
+            .join('\n');
+          await ctx.reply(approvalMsg, { parse_mode: 'Markdown' });
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        this.logger.error(`Error en respuesta conversacional: ${msg}`);
+        this.logger.error(`Error en respuesta del agente: ${msg}`);
         await ctx.reply(`⚠️ ${msg}`);
       }
     });
@@ -398,14 +601,6 @@ export class TelegramBotService implements OnModuleInit {
     await ctx.reply(details, { parse_mode: 'Markdown' });
   }
 
-  /**
-   * Alertas de kill switch y presupuesto diario (BLUEPRINT 9.6/10.4).
-   * Vive acá (no en src/budget/) para evitar un import circular entre
-   * BudgetModule y TelegramModule — Telegram ya importa Budget (para
-   * `BudgetGuardedModelRouter` y este mismo comando `/unpause`), así que
-   * hacer el polling de este lado es la única dirección sin ciclos. Ver
-   * STATUS.md Fase 4.1 para la decisión completa.
-   */
   @Cron('*/5 * * * *')
   async checkBudgetAlerts(): Promise<void> {
     try {
@@ -415,6 +610,25 @@ export class TelegramBotService implements OnModuleInit {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Error chequeando alertas de budget/oauth: ${msg}`);
+    }
+  }
+
+  @Cron('*/5 * * * *')
+  async checkSessionInactivity(): Promise<void> {
+    try {
+      const session = await this.getActiveDbSession();
+      if (!session) return;
+      const now = Date.now();
+      const inactiveMs = now - new Date(session.lastActivityAt).getTime();
+      if (inactiveMs > SESSION_INACTIVITY_MS) {
+        this.logger.log(
+          `Cerrando sesión inactiva ${session.id} (${Math.round(inactiveMs / 60000)} min de inactividad)`,
+        );
+        await this.consolidateAndCloseSession(session);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error en chequeo de inactividad de sesión: ${msg}`);
     }
   }
 
@@ -444,8 +658,6 @@ export class TelegramBotService implements OnModuleInit {
         { parse_mode: 'Markdown' },
       );
     }
-    // Se actualiza siempre (no solo al notificar) para poder notificar
-    // de nuevo si se reactiva tras un /unpause.
     this.lastNotifiedKillSwitchActive = isActive;
   }
 
