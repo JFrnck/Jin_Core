@@ -159,3 +159,27 @@ export type GoogleOAuthTokenStateRow =
   typeof googleOAuthTokenState.$inferSelect;
 export type NewGoogleOAuthTokenStateRow =
   typeof googleOAuthTokenState.$inferInsert;
+
+/**
+ * Estado persistido de sesiones conversacionales de Telegram (Fase 5.3).
+ * Persistido en Postgres para garantizar cero pérdida de datos ante restarts
+ * de pods o rolling updates (BLUEPRINT 1.3). Guarda el transcript completo
+ * de turnos de la sesión en curso.
+ */
+export const telegramSessions = pgTable('telegram_sessions', {
+  id: uuid('id').primaryKey(),
+  transcript: jsonb('transcript')
+    .$type<Array<{ role: 'user' | 'assistant'; content: string }>>()
+    .notNull()
+    .default([]),
+  status: text('status').notNull().default('active'),
+  lastActivityAt: timestamp('last_activity_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type TelegramSessionRow = typeof telegramSessions.$inferSelect;
+export type NewTelegramSessionRow = typeof telegramSessions.$inferInsert;

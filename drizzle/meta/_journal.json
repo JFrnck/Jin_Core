@@ -29,6 +29,13 @@
       "when": 1784880000000,
       "tag": "0003_google_oauth_state",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784900000000,
+      "tag": "0004_telegram_sessions",
+      "breakpoints": true
     }
   ]
 }
