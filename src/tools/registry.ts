@@ -338,6 +338,65 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       required: ['ticketId', 'branchName'],
     },
   }),
+  // Fase 5.5 (pods de servicio, ADR 0006). `files` llega inline (mapa
+  // ruta->contenido) — ninguna tool existente le da hoy a un agente
+  // acceso a un repo git real, así que "código clonado de su branch"
+  // (texto literal de PROMPTS.md §5.5) queda como extensión futura, ver
+  // el ADR. El Executor empaqueta `files` a tar.gz y lo extrae con un
+  // init container, sin ConfigMap ni shell (mismo criterio de seguridad
+  // que el `data:` URL de `runCode`).
+  Object.freeze({
+    name: 'startPreviewService',
+    hitlLevel: 'confirm',
+    description:
+      'Levanta un pod de servicio de larga vida (ej. npm run dev) expuesto bajo https://<slug>.jinserver.com, con TTL obligatorio. Requiere 1 aprobación: expone código de agentes a internet, aunque sea en el dominio sandbox.',
+    timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Mapa ruta relativa -> contenido del proyecto a servir.',
+        },
+        command: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'argv del proceso principal, ej. ["npm","run","dev"].',
+        },
+        port: { type: 'number', description: 'Puerto que expone el proceso.' },
+        ttlSeconds: {
+          type: 'number',
+          description:
+            'Tiempo de vida antes de que el reaper lo destruya automáticamente (cap duro: 24h).',
+        },
+        slugHint: {
+          type: 'string',
+          description:
+            'Nombre legible cosmético — la entropía real del subdominio la agrega el Executor.',
+        },
+      },
+      required: ['files', 'command', 'port', 'ttlSeconds'],
+    },
+  }),
+  Object.freeze({
+    name: 'stopPreviewService',
+    hitlLevel: 'notify',
+    description:
+      'Detiene y destruye un pod de servicio activo antes de su TTL.',
+    inputSchema: {
+      type: 'object',
+      properties: { serviceId: { type: 'string' } },
+      required: ['serviceId'],
+    },
+  }),
+  Object.freeze({
+    name: 'listPreviewServices',
+    hitlLevel: 'auto',
+    description:
+      'Lista los pods de servicio activos del owner y su TTL restante. Solo lectura.',
+    inputSchema: { type: 'object', properties: {} },
+  }),
 ] satisfies ToolDefinition[]);
 
 const TOOL_REGISTRY_BY_NAME: ReadonlyMap<string, ToolDefinition> = new Map(
