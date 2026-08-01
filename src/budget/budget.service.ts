@@ -157,6 +157,19 @@ export class BudgetService {
   }
 
   /**
+   * Consumo acumulado en memoria de una sesión (Fase 5.4, ADR 0005): el
+   * orquestador lo usa para sumar el presupuesto real de cada sub-agente
+   * (sessionId derivado `{runId}:{ticketId}`) al cerrar un run
+   * multi-agente. `{inputTokens: 0, outputTokens: 0}` si la sesión nunca
+   * llamó a `recordUsage` (ej. no llegó a invocar el modelo).
+   */
+  getSessionUsage(sessionId: string): SessionUsage {
+    return (
+      this.sessionUsage.get(sessionId) ?? { inputTokens: 0, outputTokens: 0 }
+    );
+  }
+
+  /**
    * Ratio 0-1 de cuánto del presupuesto diario ya se consumió. Público
    * — lo usa también el watcher de alertas de Telegram (80%/100%).
    */

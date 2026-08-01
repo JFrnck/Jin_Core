@@ -289,6 +289,55 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       required: ['code', 'language'],
     },
   }),
+  // Fase 5.4 (orquestación multi-agente, ADR 0005). Tool SINTÉTICA: no
+  // ejecuta ninguna acción externa, es el mecanismo por el que el
+  // orquestador escala un conflicto MATERIAL entre sub-agentes al owner
+  // — reusa el HITL/Telegram existente en vez de inventar un canal de
+  // escalamiento nuevo. Aprobar = aceptar la resolución propuesta por el
+  // orquestador y desbloquear el ticket; rechazar = el ticket queda
+  // 'blocked' para revisión manual.
+  Object.freeze({
+    name: 'resolveAgentConflict',
+    hitlLevel: 'confirm',
+    description:
+      'Escala al owner un conflicto material detectado entre sub-agentes durante una orquestación multi-agente, con una resolución propuesta. Requiere 1 aprobación.',
+    // Reversible/informativo: el ticket simplemente queda bloqueado si no
+    // se aprueba, sin deadline externo — mismo criterio que runCode.
+    timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: { type: 'string' },
+        conflictSummary: { type: 'string' },
+        proposedResolution: { type: 'string' },
+      },
+      required: ['ticketId', 'conflictSummary', 'proposedResolution'],
+    },
+  }),
+  // Fase 5.4 (orquestación multi-agente, ADR 0005). Declarada por
+  // completitud del guardrail que pide PROMPTS.md §5.4 (trabajo de
+  // código de un sub-agente SIEMPRE en `feature/agent/<ticket>`, merge a
+  // main solo vía tool confirm) — el executor es un 501 documentado
+  // (`AgentBranchMergeNotImplementedError`, mismo patrón que
+  // `CalendarNotImplementedError`): hoy ningún tool registrado le da a
+  // un sub-agente la capacidad de escribir código o crear una branch
+  // real, así que esta tool no tiene todavía quién la invoque con un
+  // payload real. Se activa cuando exista una tool de edición de código.
+  Object.freeze({
+    name: 'mergeAgentBranch',
+    hitlLevel: 'confirm',
+    description:
+      'Mergea a main la branch feature/agent/<ticket> de un sub-agente. Requiere 1 aprobación. NO IMPLEMENTADA todavía (501) — no existe hoy ninguna tool que le dé a un sub-agente la capacidad de producir una branch real.',
+    timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: { type: 'string' },
+        branchName: { type: 'string' },
+      },
+      required: ['ticketId', 'branchName'],
+    },
+  }),
 ] satisfies ToolDefinition[]);
 
 const TOOL_REGISTRY_BY_NAME: ReadonlyMap<string, ToolDefinition> = new Map(
