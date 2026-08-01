@@ -38,6 +38,19 @@ export interface AgentTurnInput {
   readonly objective: string;
   /** Historial previo del turno/conversación, si lo hay (Fase 5.3 lo arma desde Telegram). */
   readonly history?: readonly ModelMessage[];
+  /**
+   * Subset de nombres de tool a declarar (Fase 5.4, ADR 0005): el
+   * orquestador lo usa para que un sub-agente solo vea las tools de su
+   * ticket. Si se omite, se declaran TODAS las de `listRegisteredTools()`
+   * — comportamiento idéntico al de antes de esta fase (retrocompatible).
+   */
+  readonly allowedTools?: readonly string[];
+  /**
+   * Atribución en `audit_log.actor`/`pendingApprovals.planSummary`
+   * (Fase 5.4, ADR 0005). Default `'agent'` si se omite — mismo valor
+   * hardcodeado que usaba el loop antes de esta fase.
+   */
+  readonly actorLabel?: string;
 }
 
 export interface AgentTurnResult {

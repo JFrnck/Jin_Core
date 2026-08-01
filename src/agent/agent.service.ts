@@ -139,7 +139,8 @@ export class AgentService {
   async runTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
     const sessionNonce = generateSessionNonce();
     const systemPrompt = buildSystemPrompt(sessionNonce);
-    const tools = this.buildToolDeclarations();
+    const tools = this.buildToolDeclarations(input.allowedTools);
+    const actorLabel = input.actorLabel ?? 'agent';
 
     const messages: ModelMessage[] = [
       ...(input.history ?? []),
@@ -205,6 +206,7 @@ export class AgentService {
           call,
           input.sessionId,
           sessionNonce,
+          actorLabel,
           consecutiveFailures,
           pendingApprovals,
           toolResultBlocks,
@@ -223,14 +225,17 @@ export class AgentService {
     };
   }
 
-  private buildToolDeclarations(): readonly ModelToolDeclaration[] {
-    const realTools = listRegisteredTools().map(
-      (tool): ModelToolDeclaration => ({
+  private buildToolDeclarations(
+    allowedTools?: readonly string[],
+  ): readonly ModelToolDeclaration[] {
+    const allowedSet = allowedTools ? new Set(allowedTools) : undefined;
+    const realTools = listRegisteredTools()
+      .filter((tool) => !allowedSet || allowedSet.has(tool.name))
+      .map((tool): ModelToolDeclaration => ({
         name: tool.name,
         description: tool.description,
         inputSchema: tool.inputSchema,
-      }),
-    );
+      }));
     return [DECLARE_PLAN_TOOL, UPDATE_PLAN_STEP_TOOL, ...realTools];
   }
 
@@ -308,6 +313,7 @@ export class AgentService {
     call: ModelToolCall,
     sessionId: string,
     sessionNonce: string,
+    actorLabel: string,
     consecutiveFailures: Map<string, number>,
     pendingApprovals: AgentPendingApproval[],
     toolResultBlocks: ModelMessageContentBlock[],
@@ -336,7 +342,7 @@ export class AgentService {
           toolName: call.name,
           level: decision.level,
           inputsHash,
-          planSummary: `Tool "${call.name}" invocada por el agente (sesión ${sessionId})`,
+          planSummary: `Tool "${call.name}" invocada por ${actorLabel} (sesión ${sessionId})`,
           payload: call.input,
         });
         pendingApprovals.push({
@@ -361,7 +367,7 @@ export class AgentService {
 
       await this.auditService.recordToolCall({
         requestId: decision.requestId,
-        actor: 'agent',
+        actor: actorLabel,
         toolName: call.name,
         inputsHash,
         approvalStatus: decision.level === 'auto' ? 'auto' : 'notified',

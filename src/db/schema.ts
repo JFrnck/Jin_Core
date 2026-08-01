@@ -161,6 +161,82 @@ export type NewGoogleOAuthTokenStateRow =
   typeof googleOAuthTokenState.$inferInsert;
 
 /**
+ * Un objetivo multi-agente descompuesto (Fase 5.4, ADR 0005). Persistido
+ * para que un run pueda quedar días bloqueado esperando HITL y sobrevivir
+ * restarts — mismo criterio que `pendingApprovals`. `status`: 'running' |
+ * 'blocked' | 'done' | 'failed' | 'killed'.
+ */
+export const agentOrchestrationRuns = pgTable('agent_orchestration_runs', {
+  id: uuid('id').primaryKey(),
+  objective: text('objective').notNull(),
+  status: text('status').notNull().default('running'),
+  parentSessionId: text('parent_session_id').notNull(),
+  finalResponse: text('final_response'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+
+export type AgentOrchestrationRunRow =
+  typeof agentOrchestrationRuns.$inferSelect;
+export type NewAgentOrchestrationRunRow =
+  typeof agentOrchestrationRuns.$inferInsert;
+
+/**
+ * Un ticket del task ledger estilo Jira (Fase 5.4, ADR 0005). El board
+ * que renderiza Fase 6. `status`: 'pending' | 'in-progress' | 'done' |
+ * 'failed' | 'blocked'. `dependsOn`/`allowedTools` son arrays de
+ * ids/nombres — sin tabla de join, nadie necesita consultarlos
+ * relacionalmente hoy (mismo criterio que `transcript` en
+ * `telegramSessions`: jsonb tipado en vez de normalizar de más).
+ */
+export const agentTickets = pgTable('agent_tickets', {
+  id: uuid('id').primaryKey(),
+  runId: uuid('run_id')
+    .notNull()
+    .references(() => agentOrchestrationRuns.id),
+  description: text('description').notNull(),
+  status: text('status').notNull().default('pending'),
+  assignedSubAgentId: text('assigned_sub_agent_id'),
+  allowedTools: jsonb('allowed_tools').$type<string[]>().notNull().default([]),
+  dependsOn: jsonb('depends_on').$type<string[]>().notNull().default([]),
+  result: text('result'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type AgentTicketRow = typeof agentTickets.$inferSelect;
+export type NewAgentTicketRow = typeof agentTickets.$inferInsert;
+
+/**
+ * Hilo de comentarios de un ticket (Fase 5.4, ADR 0005) — lo que hace un
+ * conflicto entre sub-agentes VISIBLE en vez de suprimido. `authorType`:
+ * 'orchestrator' | 'sub_agent' | 'owner'. `kind`: 'note' | 'result' |
+ * 'conflict' | 'resolution'.
+ */
+export const agentTicketComments = pgTable('agent_ticket_comments', {
+  id: bigserial('id', { mode: 'bigint' }).primaryKey(),
+  ticketId: uuid('ticket_id')
+    .notNull()
+    .references(() => agentTickets.id),
+  authorType: text('author_type').notNull(),
+  authorId: text('author_id'),
+  kind: text('kind').notNull(),
+  body: text('body').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type AgentTicketCommentRow = typeof agentTicketComments.$inferSelect;
+export type NewAgentTicketCommentRow = typeof agentTicketComments.$inferInsert;
+
+/**
  * Estado persistido de sesiones conversacionales de Telegram (Fase 5.3).
  * Persistido en Postgres para garantizar cero pérdida de datos ante restarts
  * de pods o rolling updates (BLUEPRINT 1.3). Guarda el transcript completo

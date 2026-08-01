@@ -6,6 +6,7 @@ function validRawConfig(overrides: Record<string, unknown> = {}) {
   return {
     max_iterations_per_turn: 15,
     max_consecutive_tool_failures: 3,
+    max_concurrent_sub_agents: 3,
     ...overrides,
   };
 }
@@ -16,6 +17,7 @@ describe('parseAgentConfig', () => {
     expect(config).toEqual({
       maxIterationsPerTurn: 15,
       maxConsecutiveToolFailures: 3,
+      maxConcurrentSubAgents: 3,
     });
   });
 
@@ -36,6 +38,9 @@ describe('parseAgentConfig', () => {
     expect(() =>
       parseAgentConfig(validRawConfig({ max_iterations_per_turn: 1.5 })),
     ).toThrow();
+    expect(() =>
+      parseAgentConfig(validRawConfig({ max_concurrent_sub_agents: 0 })),
+    ).toThrow();
   });
 
   it('lanza si el input no tiene la forma esperada en absoluto', () => {
@@ -51,5 +56,6 @@ describe('loadAgentConfig', () => {
 
     expect(config.maxIterationsPerTurn).toBe(15);
     expect(config.maxConsecutiveToolFailures).toBe(3);
+    expect(config.maxConcurrentSubAgents).toBe(3);
   });
 });

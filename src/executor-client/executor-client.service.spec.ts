@@ -90,4 +90,92 @@ describe('ExecutorClientService', () => {
       service.runCode({ code: 'import pandas', language: 'python' }),
     ).rejects.toThrow(ExecutorApiError);
   });
+
+  it('startPreviewService: POST /services con tool="startPreviewService" + el input completo', async () => {
+    const mockInfo = {
+      id: 'svc-1',
+      slug: 'demo-a1b2c3',
+      url: 'https://demo-a1b2c3.jinserver.com',
+      status: 'running',
+      expiresAt: '2026-08-01T12:00:00.000Z',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockInfo),
+    } as Response);
+
+    const result = await service.startPreviewService({
+      files: { 'index.js': 'console.log(1)' },
+      command: ['node', 'index.js'],
+      port: 3000,
+      ttlSeconds: 3600,
+    });
+
+    expect(result).toEqual(mockInfo);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/services',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tool: 'startPreviewService',
+          files: { 'index.js': 'console.log(1)' },
+          command: ['node', 'index.js'],
+          port: 3000,
+          ttlSeconds: 3600,
+        }),
+      },
+    );
+  });
+
+  it('startPreviewService: lanza ExecutorApiError si el Executor responde 429 (límite de concurrencia)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      text: () => Promise.resolve('límite alcanzado'),
+    } as Response);
+
+    await expect(
+      service.startPreviewService({
+        files: {},
+        command: ['node'],
+        port: 3000,
+        ttlSeconds: 60,
+      }),
+    ).rejects.toThrow(ExecutorApiError);
+  });
+
+  it('stopPreviewService: DELETE /services/:id, sin body', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: true } as Response);
+
+    await service.stopPreviewService('svc-1');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/services/svc-1',
+      { method: 'DELETE' },
+    );
+  });
+
+  it('listPreviewServices: GET /services, devuelve el array tal cual', async () => {
+    const mockList = [
+      {
+        id: 'svc-1',
+        slug: 'demo-a1b2c3',
+        url: 'https://demo-a1b2c3.jinserver.com',
+        status: 'running',
+        expiresAt: '2026-08-01T12:00:00.000Z',
+      },
+    ];
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockList),
+    } as Response);
+
+    const result = await service.listPreviewServices();
+
+    expect(result).toEqual(mockList);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/services',
+    );
+  });
 });

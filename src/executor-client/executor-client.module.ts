@@ -4,6 +4,7 @@ import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import {
   ExecutorClientService,
   type RunCodeInput,
+  type StartPreviewServiceInput,
 } from './executor-client.service';
 
 @Module({
@@ -27,6 +28,30 @@ export class ExecutorClientModule implements OnModuleInit {
     this.toolExecutorRegistry.register('runCode', async (payload) => {
       const { code, language } = payload as RunCodeInput;
       return this.executorClientService.runCode({ code, language });
+    });
+
+    // Fase 5.5 (ADR 0006): mismo patrón — `startPreviewService` es
+    // `confirm` (diferida hasta que el owner apruebe por Telegram, la
+    // ejecuta `ApprovalExecutionService`), `stopPreviewService`/
+    // `listPreviewServices` son `notify`/`auto` (el agent loop las
+    // ejecuta ya, vía este mismo registry).
+    this.toolExecutorRegistry.register(
+      'startPreviewService',
+      async (payload) => {
+        const input = payload as StartPreviewServiceInput;
+        return this.executorClientService.startPreviewService(input);
+      },
+    );
+    this.toolExecutorRegistry.register(
+      'stopPreviewService',
+      async (payload) => {
+        const { serviceId } = payload as { serviceId: string };
+        await this.executorClientService.stopPreviewService(serviceId);
+        return { serviceId, stopped: true };
+      },
+    );
+    this.toolExecutorRegistry.register('listPreviewServices', async () => {
+      return this.executorClientService.listPreviewServices();
     });
   }
 }
