@@ -81,6 +81,22 @@ export const EnvSchema = z.object({
     .url(
       'EXECUTOR_BASE_URL debe ser una URL válida (ej: http://jin-executor:3000)',
     ),
+  // src/auth: requeridas, no opcionales (AGENTS.md 8.4 fail-fast) —
+  // Fase 6.1, frontera de seguridad de la API expuesta a internet.
+  OWNER_PASSWORD_HASH: z
+    .string()
+    .min(
+      1,
+      'OWNER_PASSWORD_HASH es requerida (hash Argon2id, generar con pnpm run hash-password)',
+    ),
+  JWT_SECRET: z
+    .string()
+    .min(32, 'JWT_SECRET debe tener al menos 32 caracteres'),
+  // src/rate-limit: requerida, no opcional (AGENTS.md 8.4 fail-fast) —
+  // Fase 6.1, misma instancia de Redis ya desplegada en Jin_Infra.
+  REDIS_URL: z
+    .string()
+    .min(1, 'REDIS_URL es requerida (ej: redis://jin-redis:6379)'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

@@ -15,6 +15,131 @@
         ]
       }
     },
+    "/api/audit": {
+      "get": {
+        "operationId": "AuditController_list",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Audit log paginado, más reciente primero",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/hitl/pending": {
+      "get": {
+        "operationId": "HitlController_listPending",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lista las aprobaciones pendientes (confirm/dual-confirm)",
+        "tags": [
+          "hitl"
+        ]
+      }
+    },
+    "/api/hitl/{requestId}/approve": {
+      "post": {
+        "operationId": "HitlController_approve",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Aprueba una acción pendiente — ejecuta la tool real igual que /approve en Telegram",
+        "tags": [
+          "hitl"
+        ]
+      }
+    },
+    "/api/hitl/{requestId}/reject": {
+      "post": {
+        "operationId": "HitlController_reject",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Rechaza una acción pendiente",
+        "tags": [
+          "hitl"
+        ]
+      }
+    },
+    "/api/budget": {
+      "get": {
+        "operationId": "BudgetController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Estado actual de presupuesto diario y kill switch",
+        "tags": [
+          "budget"
+        ]
+      }
+    },
+    "/api/budget/unpause": {
+      "post": {
+        "operationId": "BudgetController_unpause",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Desactiva el kill switch manualmente — mismo flujo que /unpause en Telegram",
+        "tags": [
+          "budget"
+        ]
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "PrometheusController_index",
@@ -26,6 +151,21 @@
         },
         "tags": [
           "Prometheus"
+        ]
+      }
+    },
+    "/api/memory/recall": {
+      "post": {
+        "operationId": "MemoryController_recall",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Recall de memoria extendida por similaridad semántica",
+        "tags": [
+          "memory"
         ]
       }
     },
@@ -54,6 +194,54 @@
         "summary": "Endpoint del Webhook de Telegram",
         "tags": [
           "telegram"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Login correcto — setea cookie __Host-jin_session (Web) y devuelve el token en el body (CLI)"
+          },
+          "401": {
+            "description": "Contraseña incorrecta"
+          }
+        },
+        "summary": "Login single-user con la contraseña del owner",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Cookie de sesión borrada"
+          }
+        },
+        "summary": "Logout — borra la cookie del cliente. Sin blocklist: un Bearer token capturado sigue válido hasta expirar (ver ADR 0007).",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/chat": {
+      "post": {
+        "operationId": "ChatController_chat",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Turno de chat contra el agente — sin persistencia de sesión server-side, el caller manda su propio historial",
+        "tags": [
+          "chat"
         ]
       }
     }
