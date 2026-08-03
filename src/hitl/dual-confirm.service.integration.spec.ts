@@ -1,3 +1,4 @@
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -19,6 +20,7 @@ describe('DualConfirmService (integración, Postgres real)', () => {
   beforeAll(async () => {
     testDb = await startTestDb();
     const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
       providers: [
         DualConfirmService,
         { provide: DB_CONNECTION, useValue: testDb.db },

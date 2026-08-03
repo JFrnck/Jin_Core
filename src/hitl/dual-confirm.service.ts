@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
@@ -10,6 +11,18 @@ import {
 } from './dual-confirm.logic';
 
 const PendingApprovalLevelSchema = z.enum(['confirm', 'dual-confirm']);
+
+// Único emit point real (Fase 6.1, ADR 0007 decisión #5) — el WebSocket
+// gateway (`src/realtime/`) escucha esto para empujar `pending-approval:new`
+// sin polling: es el único evento donde la latencia de hasta 5 min de un
+// `@Cron` importaría de verdad (una aprobación nueva debe verse ya).
+export const PENDING_APPROVAL_CREATED_EVENT = 'pending-approval.created';
+
+export interface PendingApprovalCreatedEvent {
+  readonly requestId: string;
+  readonly toolName: string;
+  readonly level: 'confirm' | 'dual-confirm';
+}
 
 export class PendingApprovalNotFoundError extends JinError {
   constructor(requestId: string) {
@@ -53,7 +66,10 @@ export type ApprovalOutcome = 'resolved' | 'awaiting-second';
  */
 @Injectable()
 export class DualConfirmService {
-  constructor(@Inject(DB_CONNECTION) private readonly db: Db) {}
+  constructor(
+    @Inject(DB_CONNECTION) private readonly db: Db,
+    private readonly eventEmitter: EventEmitter2,
+  ) {}
 
   async createPendingApproval(
     input: CreatePendingApprovalInput,
@@ -66,6 +82,20 @@ export class DualConfirmService {
       planSummary: input.planSummary ?? null,
       payload: input.payload ?? null,
     });
+
+    this.eventEmitter.emit(PENDING_APPROVAL_CREATED_EVENT, {
+      requestId: input.requestId,
+      toolName: input.toolName,
+      level: input.level,
+    } satisfies PendingApprovalCreatedEvent);
+  }
+
+  /** Usado por `hitl.controller.ts` (Fase 6.1) — mismo query que armaba Telegram a mano en `/tasks`. */
+  async listPending(): Promise<readonly PendingApprovalRow[]> {
+    return this.db
+      .select()
+      .from(pendingApprovals)
+      .orderBy(desc(pendingApprovals.createdAt));
   }
 
   async getPending(requestId: string): Promise<PendingApprovalRow | undefined> {

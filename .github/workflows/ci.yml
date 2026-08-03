@@ -34,6 +34,15 @@ jobs:
       # solo se instancia al bootstrapear AppModule, ninguna llamada HTTP
       # real ocurre en lint/test/build/e2e.
       EXECUTOR_BASE_URL: http://executor.ci.local
+      # src/auth (Fase 6.1): mismo motivo — hash/secret sintácticamente
+      # válidos, nunca se verifica una contraseña real en lint/build/e2e.
+      OWNER_PASSWORD_HASH: '$argon2id$v=19$m=65536,t=3,p=4$Y2ktZmFrZS1zYWx0$Y2ktZmFrZS1oYXNo'
+      JWT_SECRET: ci-fake-jwt-secret-at-least-32-characters-long
+      # src/rate-limit (Fase 6.1): mismo motivo que DATABASE_URL —
+      # `RedisThrottlerStorage` usa `lazyConnect: true`, no conecta hasta
+      # el primer comando. Los tests de integración de rate-limit usan su
+      # propio Redis real vía testcontainers.
+      REDIS_URL: redis://ci:6379
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js

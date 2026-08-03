@@ -1,10 +1,24 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { desc, sql } from 'drizzle-orm';
+import { desc, lt, sql } from 'drizzle-orm';
 import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { auditLog, type AuditLogRow, type NewAuditLogRow } from '../db/schema';
 import { ChainVerificationService } from './chain-verification.service';
 import { computeRowHash, GENESIS_HASH, type HashableRow } from './hash-chain';
+
+export interface ListRecentInput {
+  readonly limit: number;
+  // No usa `?:` — con exactOptionalPropertyTypes, "opcional" significa
+  // "puede estar ausente", no "puede ser undefined explícito" (mismo
+  // criterio que `JinError.httpStatus`). `id` (bigserial, como string) de
+  // la última fila de la página anterior — más viejo que este cursor.
+  readonly cursor: string | undefined;
+}
+
+export interface ListRecentResult {
+  readonly items: readonly AuditLogRow[];
+  readonly nextCursor: string | null;
+}
 
 export class AuditChainLockedError extends JinError {
   constructor() {
@@ -107,6 +121,30 @@ export class AuditService {
       approver: null,
       externalInputsSummary: null,
     });
+  }
+
+  /**
+   * Lectura paginada del audit log para `audit.controller.ts` (Fase 6.1)
+   * — hasta ahora ningún caller leía el log completo, solo `getPending()`
+   * de `DualConfirmService` para el estado en curso. Cursor por `id`
+   * (bigserial, orden de inserción real — más confiable que `timestamp`
+   * ante dos filas insertadas en el mismo milisegundo).
+   */
+  async listRecent(input: ListRecentInput): Promise<ListRecentResult> {
+    const rows = await this.db
+      .select()
+      .from(auditLog)
+      .where(input.cursor ? lt(auditLog.id, BigInt(input.cursor)) : undefined)
+      .orderBy(desc(auditLog.id))
+      .limit(input.limit + 1);
+
+    const hasMore = rows.length > input.limit;
+    const items = hasMore ? rows.slice(0, input.limit) : rows;
+    const nextCursor = hasMore
+      ? (items[items.length - 1]?.id.toString() ?? null)
+      : null;
+
+    return { items, nextCursor };
   }
 
   private async appendRow(data: AppendableRow): Promise<AuditLogRow> {

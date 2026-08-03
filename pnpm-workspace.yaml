@@ -27,3 +27,4 @@ allowBuilds:
   # paquete extraído no trae carpeta `scripts/`, ni binarios nativos.
   '@google/genai': true
   better-sqlite3: true
+  argon2: true

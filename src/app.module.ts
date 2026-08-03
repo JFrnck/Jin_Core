@@ -1,10 +1,17 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { AgentModule } from './agent/agent.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { BudgetModule } from './budget/budget.module';
+import { ChatModule } from './chat/chat.module';
+import { JinErrorFilter } from './common/filters/jin-error.filter';
 import { ConfigModule } from './config';
 import { DbModule } from './db/db.module';
 import { ExecutorClientModule } from './executor-client/executor-client.module';
@@ -14,6 +21,8 @@ import { GoogleModule } from './integrations/google/google.module';
 import { MemoryModule } from './memory/memory.module';
 import { ModelProviderModule } from './model-provider/model-provider.module';
 import { OrchestratorModule } from './agent/orchestrator.module';
+import { RateLimitModule } from './rate-limit/rate-limit.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
@@ -21,6 +30,8 @@ import { TelegramModule } from './telegram/telegram.module';
     ConfigModule,
     DbModule,
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
+    RateLimitModule,
     AuditModule,
     HitlModule,
     ModelProviderModule,
@@ -32,8 +43,20 @@ import { TelegramModule } from './telegram/telegram.module';
     OrchestratorModule,
     TelegramModule,
     ExecutorClientModule,
+    AuthModule,
+    ChatModule,
+    RealtimeModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // Orden real de ejecución: Nest corre los guards `APP_GUARD` en el
+    // orden en que se registran acá — Throttler antes que JWT, para que
+    // un intento de fuerza bruta contra /api/auth/login se frene por
+    // rate limit incluso antes de evaluarse como no autenticado.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_FILTER, useClass: JinErrorFilter },
+  ],
 })
 export class AppModule {}

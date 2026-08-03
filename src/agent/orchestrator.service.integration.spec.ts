@@ -1,3 +1,4 @@
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { getToken } from '@willsoto/nestjs-prometheus';
 import {
@@ -102,6 +103,7 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
     completeMock = vi.fn<CompleteFn>();
 
     const moduleRef: TestingModule = await Test.createTestingModule({
+      imports: [EventEmitterModule.forRoot()],
       providers: [
         { provide: DB_CONNECTION, useValue: testDb.db },
         { provide: BUDGET_CONFIG, useValue: TEST_BUDGET_CONFIG },

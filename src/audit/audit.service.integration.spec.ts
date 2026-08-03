@@ -212,4 +212,62 @@ describe('AuditService + ChainVerificationService (integración, Postgres real)'
     expect(rows).toHaveLength(10);
     expect(verifyChain(rows).valid).toBe(true);
   });
+
+  describe('listRecent', () => {
+    async function seed(count: number): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        await auditService.recordToolCall({
+          requestId: `dddddddd-dddd-4ddd-8ddd-${i.toString().padStart(12, '0')}`,
+          actor: 'agent',
+          toolName: 'readEmails',
+          inputsHash: `h${i}`,
+          approvalStatus: 'auto',
+        });
+      }
+    }
+
+    it('devuelve las filas más recientes primero, sin cursor', async () => {
+      await seed(3);
+
+      const result = await auditService.listRecent({
+        limit: 10,
+        cursor: undefined,
+      });
+
+      expect(result.items).toHaveLength(3);
+      expect(result.items[0]?.inputsHash).toBe('h2');
+      expect(result.items[2]?.inputsHash).toBe('h0');
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it('pagina con nextCursor cuando hay más filas que el límite', async () => {
+      await seed(5);
+
+      const page1 = await auditService.listRecent({
+        limit: 2,
+        cursor: undefined,
+      });
+      expect(page1.items).toHaveLength(2);
+      expect(page1.items[0]?.inputsHash).toBe('h4');
+      expect(page1.items[1]?.inputsHash).toBe('h3');
+      expect(page1.nextCursor).not.toBeNull();
+
+      const page2 = await auditService.listRecent({
+        limit: 2,
+        cursor: page1.nextCursor ?? undefined,
+      });
+      expect(page2.items).toHaveLength(2);
+      expect(page2.items[0]?.inputsHash).toBe('h2');
+      expect(page2.items[1]?.inputsHash).toBe('h1');
+      expect(page2.nextCursor).not.toBeNull();
+
+      const page3 = await auditService.listRecent({
+        limit: 2,
+        cursor: page2.nextCursor ?? undefined,
+      });
+      expect(page3.items).toHaveLength(1);
+      expect(page3.items[0]?.inputsHash).toBe('h0');
+      expect(page3.nextCursor).toBeNull();
+    });
+  });
 });

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Update } from 'grammy/types';
+import { Public } from '../auth/public.decorator';
 import { TelegramBotService } from './telegram-bot.service';
 
 @ApiTags('telegram')
@@ -16,6 +17,10 @@ import { TelegramBotService } from './telegram-bot.service';
 export class TelegramWebhookController {
   constructor(private readonly telegramBotService: TelegramBotService) {}
 
+  // Autenticado por su propio secret header de Telegram (validado abajo),
+  // no por JWT — `JwtAuthGuard` es global desde la Fase 6.1, así que este
+  // endpoint necesita el allowlist explícito.
+  @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Endpoint del Webhook de Telegram' })
