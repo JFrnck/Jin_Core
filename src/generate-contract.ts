@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -11,7 +12,7 @@ async function generate() {
     .setVersion('1.0')
     .build();
 
-  const document = SwaggerModule.createDocument(app, config);
+  const document = cleanupOpenApiDoc(SwaggerModule.createDocument(app, config));
   const outputPath = path.resolve(process.cwd(), 'contracts/openapi.json');
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });

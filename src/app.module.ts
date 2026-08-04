@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard } from '@nestjs/throttler';
+import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import { AgentModule } from './agent/agent.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -57,6 +58,14 @@ import { TelegramModule } from './telegram/telegram.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_FILTER, useClass: JinErrorFilter },
+    // nestjs-zod (Fase 6.1.1): valida request bodies/query/params contra
+    // los DTOs `createZodDto(...)` de cada controller, y serializa cada
+    // response contra el schema declarado en `@ZodResponse(...)` —
+    // reemplaza el `ZodValidationPipe` casero (borrado) y es lo que hace
+    // que `contracts/openapi.json` documente algo más que el path/summary
+    // (ningún endpoint de Fase 6.1 tenía request/response en el contrato).
+    { provide: APP_PIPE, useClass: ZodValidationPipe },
+    { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
   ],
 })
 export class AppModule {}

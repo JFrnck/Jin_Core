@@ -9,9 +9,19 @@ import { RUNAWAY_DETECTED_TOTAL } from '../metrics/metrics.module';
 import { currentHourBucket } from './budget-time';
 import { BUDGET_CONFIG } from './budget.tokens';
 import type { BudgetConfig } from './budget.types';
-import { isRunawayDetected } from './kill-switch.logic';
+import { isRunawayDetected, type HourlyUsage } from './kill-switch.logic';
 
 const KILL_SWITCH_ROW_ID = 1;
+
+export interface KillSwitchStatus {
+  readonly active: boolean;
+  readonly activatedAt: string | null;
+  readonly reason: string | null;
+  /** Tokens (input+output) consumidos en el bucket de la hora actual. */
+  readonly currentHourTokens: number;
+  /** Promedio por hora sobre `runawayLookbackHours` — 0 sin historial. */
+  readonly avgHourlyTokens: number;
+}
 
 /**
  * Kill switch de runaway (BLUEPRINT 9.6). Estado persistido en
@@ -61,6 +71,59 @@ export class KillSwitchService {
       return; // ya activo — no hay nada que re-detectar hasta el /unpause
     }
 
+    const { currentHourTokens, lookbackRows } = await this.getHourUsageDetail();
+
+    if (isRunawayDetected(currentHourTokens, lookbackRows, this.config)) {
+      const reason =
+        `Consumo de la hora actual (${currentHourTokens} tokens) supera ` +
+        `${this.config.runawayMultiplier}x el promedio de las últimas ` +
+        `${this.config.runawayLookbackHours}h.`;
+      await this.upsertState({ active: true, activatedAt: new Date(), reason });
+      this.runawayDetectedCounter.inc();
+      this.logger.error(`KILL SWITCH ACTIVADO: ${reason}`);
+      // Notificación real a Telegram: TelegramBotService la hace vía
+      // polling de isActive() (evita import circular entre
+      // TelegramModule y BudgetModule — ver STATUS.md Fase 4.1).
+    }
+  }
+
+  /**
+   * Estado completo para la API (Fase 6.2, panel de presupuesto): a
+   * diferencia de `isActive()` (solo el booleano que ya consumía
+   * Telegram), expone también cuándo/por qué se activó y el detalle de
+   * consumo que lo explica — sin esto el dashboard no tiene forma de
+   * mostrar "2.4x lo normal", solo el sí/no.
+   */
+  async getStatus(): Promise<KillSwitchStatus> {
+    const [row] = await this.db
+      .select()
+      .from(budgetKillSwitch)
+      .where(eq(budgetKillSwitch.id, KILL_SWITCH_ROW_ID));
+
+    const { currentHourTokens, lookbackRows } = await this.getHourUsageDetail();
+    const lookbackTotal = lookbackRows.reduce(
+      (sum, hour) => sum + hour.inputTokens + hour.outputTokens,
+      0,
+    );
+    const avgHourlyTokens =
+      lookbackRows.length > 0
+        ? lookbackTotal / this.config.runawayLookbackHours
+        : 0;
+
+    return {
+      active: row?.active ?? false,
+      activatedAt: row?.activatedAt?.toISOString() ?? null,
+      reason: row?.reason ?? null,
+      currentHourTokens,
+      avgHourlyTokens,
+    };
+  }
+
+  /** Compartido por `checkRunaway()` y `getStatus()` — misma consulta, un solo lugar. */
+  private async getHourUsageDetail(): Promise<{
+    currentHourTokens: number;
+    lookbackRows: readonly HourlyUsage[];
+  }> {
     const currentBucket = currentHourBucket();
     const lookbackStart = new Date(
       currentBucket.getTime() -
@@ -83,21 +146,10 @@ export class KillSwitchService {
         ),
     ]);
 
-    const currentUsage =
+    const currentHourTokens =
       (currentRow[0]?.inputTokens ?? 0) + (currentRow[0]?.outputTokens ?? 0);
 
-    if (isRunawayDetected(currentUsage, lookbackRows, this.config)) {
-      const reason =
-        `Consumo de la hora actual (${currentUsage} tokens) supera ` +
-        `${this.config.runawayMultiplier}x el promedio de las últimas ` +
-        `${this.config.runawayLookbackHours}h.`;
-      await this.upsertState({ active: true, activatedAt: new Date(), reason });
-      this.runawayDetectedCounter.inc();
-      this.logger.error(`KILL SWITCH ACTIVADO: ${reason}`);
-      // Notificación real a Telegram: TelegramBotService la hace vía
-      // polling de isActive() (evita import circular entre
-      // TelegramModule y BudgetModule — ver STATUS.md Fase 4.1).
-    }
+    return { currentHourTokens, lookbackRows };
   }
 
   private async upsertState(state: {

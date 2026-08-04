@@ -1,13 +1,14 @@
 import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
-import { MemoryService } from './memory.service';
 import {
   MEMORY_ENTRY_TYPES,
+  MemoryEntryTypeSchema,
   type MemoryEntry,
   type RecallFilters,
 } from './memory.types';
+import { MemoryService } from './memory.service';
 
 const RecallBodySchema = z.object({
   query: z.string().min(1),
@@ -20,7 +21,20 @@ const RecallBodySchema = z.object({
     })
     .optional(),
 });
+class RecallDto extends createZodDto(RecallBodySchema) {}
 type RecallBody = z.infer<typeof RecallBodySchema>;
+
+const MemoryEntrySchema = z.object({
+  id: z.number(),
+  content: z.string(),
+  tipo: MemoryEntryTypeSchema,
+  fuente: z.string(),
+  fecha: z.string(),
+  modeloEmbedding: z.string(),
+  sessionId: z.string().optional(),
+  distance: z.number().optional(),
+});
+class MemoryEntryDto extends createZodDto(MemoryEntrySchema) {}
 
 // `exactOptionalPropertyTypes` prohíbe pasar `{ tipo: undefined }` donde
 // el target declara `tipo?: X` (mismo criterio que `google.module.ts`) —
@@ -48,13 +62,14 @@ export class MemoryController {
   @ApiOperation({
     summary: 'Recall de memoria extendida por similaridad semántica',
   })
-  async recall(
-    @Body(new ZodValidationPipe(RecallBodySchema)) body: RecallBody,
-  ): Promise<readonly MemoryEntry[]> {
-    return this.memoryService.recall(
-      body.query,
-      body.k,
-      buildRecallFilters(body.filters),
-    );
+  @ZodResponse({ status: 200, type: [MemoryEntryDto] })
+  async recall(@Body() body: RecallDto): Promise<MemoryEntry[]> {
+    return [
+      ...(await this.memoryService.recall(
+        body.query,
+        body.k,
+        buildRecallFilters(body.filters),
+      )),
+    ];
   }
 }

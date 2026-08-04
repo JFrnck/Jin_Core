@@ -1,3 +1,4 @@
+import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 import type {
   ModelMessage,
@@ -40,6 +41,11 @@ export const ChatBodySchema = z.object({
 });
 
 export type ChatBody = z.infer<typeof ChatBodySchema>;
+
+// DTO nestjs-zod (Fase 6.1.1) — solo lo usa `chat.controller.ts` (REST).
+// `chat.gateway.ts` sigue con `ChatBodySchema.safeParse()` a mano: el
+// handshake WS no pasa por el pipeline de pipes de Nest.
+export class ChatDto extends createZodDto(ChatBodySchema) {}
 
 function toContentBlock(
   block: z.infer<typeof ModelMessageContentBlockSchema>,
