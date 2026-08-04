@@ -240,6 +240,29 @@ describe('BudgetService (integración, Postgres real)', () => {
     expect(ratio).toBeCloseTo(0.8, 6);
   });
 
+  it('getDailyUsage() devuelve el desglose real (tokens + costo), no solo el ratio', async () => {
+    await service.recordUsage({
+      sessionId: 'sess-1',
+      modelId: 'test-model',
+      taskProfile: 'test_profile',
+      inputTokens: 1000,
+      outputTokens: 500,
+    });
+
+    const usage = await service.getDailyUsage();
+
+    expect(usage.inputTokens).toBe(1000);
+    expect(usage.outputTokens).toBe(500);
+    expect(usage.costUsd).toBeGreaterThan(0);
+  });
+
+  it('getLimits() expone los límites diarios configurados, no un ratio calculado', () => {
+    expect(service.getLimits()).toEqual({
+      dailyMaxTokens: TEST_CONFIG.dailyMaxTokens,
+      dailyMaxUsd: TEST_CONFIG.dailyMaxUsd,
+    });
+  });
+
   it('hour_bucket trunca correctamente a la hora (no crea una fila por minuto)', async () => {
     await service.recordUsage({
       sessionId: 'sess-1',

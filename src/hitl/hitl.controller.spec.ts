@@ -30,7 +30,10 @@ describe('HitlController', () => {
       dualConfirm: { listPending: vi.fn().mockResolvedValue(rows) },
     });
 
-    await expect(controller.listPending()).resolves.toBe(rows);
+    // .toEqual, no .toBe: el controller devuelve una copia superficial
+    // (`[...rows]`) para satisfacer el array mutable que exige
+    // `@ZodResponse([PendingApprovalDto])` en su firma de tipos.
+    await expect(controller.listPending()).resolves.toEqual(rows);
   });
 
   it('approve delega en ApprovalExecutionService.resolveAndExecute con approver "owner"', async () => {

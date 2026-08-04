@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -20,7 +21,10 @@ async function bootstrap() {
   // Movido de '/api' a '/docs' (Fase 6.1): BLUEPRINT 5.2 reserva '/api'
   // para la API de negocio real — hasta esta fase, Swagger era el único
   // ocupante de ese path.
-  SwaggerModule.setup('docs', app, document);
+  // `cleanupOpenApiDoc` (Fase 6.1.1) post-procesa los DTOs de
+  // nestjs-zod: sin esto, cada `createZodDto` reutilizado en más de un
+  // endpoint aparece duplicado con sufijos numéricos en el documento.
+  SwaggerModule.setup('docs', app, cleanupOpenApiDoc(document));
 
   await app.listen(process.env.PORT ?? 3000);
 }

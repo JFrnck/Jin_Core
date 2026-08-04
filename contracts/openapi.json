@@ -20,25 +20,36 @@
         "operationId": "AuditController_list",
         "parameters": [
           {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "exclusiveMinimum": true,
+              "default": 50,
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
             "name": "cursor",
             "required": false,
             "in": "query",
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "number"
-            }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRecentResponseDto"
+                }
+              }
+            }
           }
         },
         "summary": "Audit log paginado, más reciente primero",
@@ -53,7 +64,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingApprovalDto"
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Lista las aprobaciones pendientes (confirm/dual-confirm)",
@@ -77,7 +98,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolveAndExecuteResult_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Aprueba una acción pendiente — ejecuta la tool real igual que /approve en Telegram",
@@ -101,7 +129,14 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Rechaza una acción pendiente",
@@ -116,7 +151,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetStatusDto_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Estado actual de presupuesto diario y kill switch",
@@ -131,7 +173,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Desactiva el kill switch manualmente — mismo flujo que /unpause en Telegram",
@@ -158,9 +207,29 @@
       "post": {
         "operationId": "MemoryController_recall",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryEntryDto_Output"
+                  }
+                }
+              }
+            }
           }
         },
         "summary": "Recall de memoria extendida por similaridad semántica",
@@ -201,9 +270,26 @@
       "post": {
         "operationId": "AuthController_login",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Login correcto — setea cookie __Host-jin_session (Web) y devuelve el token en el body (CLI)"
+            "description": "Login correcto — setea cookie __Host-jin_session (Web) y devuelve el token en el body (CLI)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResultDto_Output"
+                }
+              }
+            }
           },
           "401": {
             "description": "Contraseña incorrecta"
@@ -221,7 +307,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Cookie de sesión borrada"
+            "description": "Cookie de sesión borrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Logout — borra la cookie del cliente. Sin blocklist: un Bearer token capturado sigue válido hasta expirar (ver ADR 0007).",
@@ -234,9 +327,26 @@
       "post": {
         "operationId": "ChatController_chat",
         "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentTurnResultDto_Output"
+                }
+              }
+            }
           }
         },
         "summary": "Turno de chat contra el agente — sin persistencia de sesión server-side, el caller manda su propio historial",
@@ -255,6 +365,568 @@
   "tags": [],
   "servers": [],
   "components": {
-    "schemas": {}
+    "schemas": {
+      "ListRecentResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "requestId": {
+                  "type": "string"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "actionType": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "inputsHash": {
+                  "type": "string"
+                },
+                "planSummary": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "approvalStatus": {
+                  "type": "string"
+                },
+                "approver": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "externalInputsSummary": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "prevHash": {
+                  "type": "string"
+                },
+                "currentHash": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "requestId",
+                "timestamp",
+                "actor",
+                "actionType",
+                "toolName",
+                "inputsHash",
+                "planSummary",
+                "approvalStatus",
+                "approver",
+                "externalInputsSummary",
+                "prevHash",
+                "currentHash"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "PendingApprovalDto": {
+        "type": "object",
+        "properties": {
+          "requestId": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "inputsHash": {
+            "type": "string"
+          },
+          "planSummary": {
+            "type": "string",
+            "nullable": true
+          },
+          "payload": {},
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "firstApprovedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "nullable": true
+          },
+          "firstApprover": {
+            "type": "string",
+            "nullable": true
+          },
+          "availableAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "nullable": true
+          },
+          "escalatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "nullable": true
+          }
+        },
+        "required": [
+          "requestId",
+          "toolName",
+          "level",
+          "inputsHash",
+          "planSummary",
+          "payload",
+          "createdAt",
+          "firstApprovedAt",
+          "firstApprover",
+          "availableAt",
+          "escalatedAt"
+        ]
+      },
+      "ResolveAndExecuteResult_Output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "awaiting-second"
+                ]
+              }
+            },
+            "required": [
+              "outcome"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "resolved"
+                ]
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "result": {}
+            },
+            "required": [
+              "outcome",
+              "toolName",
+              "result"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "OkResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "additionalProperties": false
+      },
+      "BudgetStatusDto_Output": {
+        "type": "object",
+        "properties": {
+          "dailyUsageRatio": {
+            "type": "number"
+          },
+          "dailyUsageUsd": {
+            "type": "number"
+          },
+          "dailyUsageTokens": {
+            "type": "number"
+          },
+          "dailyLimitUsd": {
+            "type": "number"
+          },
+          "dailyLimitTokens": {
+            "type": "number"
+          },
+          "killSwitchActive": {
+            "type": "boolean"
+          },
+          "killSwitch": {
+            "type": "object",
+            "properties": {
+              "activatedAt": {
+                "type": "string",
+                "nullable": true
+              },
+              "reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "currentHourTokens": {
+                "type": "number"
+              },
+              "avgHourlyTokens": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "activatedAt",
+              "reason",
+              "currentHourTokens",
+              "avgHourlyTokens"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "dailyUsageRatio",
+          "dailyUsageUsd",
+          "dailyUsageTokens",
+          "dailyLimitUsd",
+          "dailyLimitTokens",
+          "killSwitchActive",
+          "killSwitch"
+        ],
+        "additionalProperties": false
+      },
+      "RecallDto": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1
+          },
+          "k": {
+            "default": 5,
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "maximum": 50,
+            "minimum": 0
+          },
+          "filters": {
+            "type": "object",
+            "properties": {
+              "tipo": {
+                "type": "string",
+                "enum": [
+                  "hecho",
+                  "preferencia",
+                  "leccion",
+                  "episodio"
+                ]
+              },
+              "fuente": {
+                "type": "string"
+              },
+              "sessionId": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "MemoryEntryDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "content": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "hecho",
+              "preferencia",
+              "leccion",
+              "episodio"
+            ]
+          },
+          "fuente": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string"
+          },
+          "modeloEmbedding": {
+            "type": "string"
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "distance": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "tipo",
+          "fuente",
+          "fecha",
+          "modeloEmbedding"
+        ],
+        "additionalProperties": false
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "password"
+        ]
+      },
+      "LoginResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken"
+        ],
+        "additionalProperties": false
+      },
+      "ChatDto": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "objective": {
+            "type": "string",
+            "minLength": 1
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant"
+                  ]
+                },
+                "content": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "text"
+                                ]
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "text"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "tool_use"
+                                ]
+                              },
+                              "toolCall": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "input": {}
+                                },
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "input"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "toolCall"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "tool_result"
+                                ]
+                              },
+                              "toolCallId": {
+                                "type": "string"
+                              },
+                              "output": {},
+                              "isError": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "toolCallId",
+                              "output"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "role",
+                "content"
+              ]
+            }
+          }
+        },
+        "required": [
+          "sessionId",
+          "objective"
+        ]
+      },
+      "AgentTurnResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "finalResponse": {
+            "type": "string"
+          },
+          "plan": {
+            "type": "object",
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "in-progress",
+                        "done",
+                        "failed"
+                      ]
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "description",
+                    "status"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "steps"
+            ],
+            "additionalProperties": false
+          },
+          "pendingApprovals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "requestId": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "requestId",
+                "toolName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "iterationsUsed": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "finalResponse",
+          "plan",
+          "pendingApprovals",
+          "iterationsUsed"
+        ],
+        "additionalProperties": false
+      }
+    }
   }
 }

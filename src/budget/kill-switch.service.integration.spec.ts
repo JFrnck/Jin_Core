@@ -185,6 +185,54 @@ describe('KillSwitchService (integración, Postgres real)', () => {
     expect(await freshService.isActive()).toBe(false);
   });
 
+  it('getStatus() sin ninguna fila devuelve inactivo y sin actividad de hora', async () => {
+    await expect(service.getStatus()).resolves.toEqual({
+      active: false,
+      activatedAt: null,
+      reason: null,
+      currentHourTokens: 0,
+      avgHourlyTokens: 0,
+    });
+  });
+
+  it('getStatus() expone el detalle real que explicó una activación (Fase 6.2, panel de presupuesto)', async () => {
+    await testDb.db.insert(budgetHourlyUsage).values([
+      {
+        hourBucket: hoursAgo(1),
+        inputTokens: 100,
+        outputTokens: 0,
+        costUsd: 0,
+      },
+      {
+        hourBucket: hoursAgo(2),
+        inputTokens: 100,
+        outputTokens: 0,
+        costUsd: 0,
+      },
+      {
+        hourBucket: hoursAgo(3),
+        inputTokens: 100,
+        outputTokens: 0,
+        costUsd: 0,
+      },
+      {
+        hourBucket: currentHourBucket(),
+        inputTokens: 10_000,
+        outputTokens: 0,
+        costUsd: 0,
+      },
+    ]);
+
+    await service.checkRunaway();
+    const status = await service.getStatus();
+
+    expect(status.active).toBe(true);
+    expect(status.activatedAt).not.toBeNull();
+    expect(status.reason).toContain('supera');
+    expect(status.currentHourTokens).toBe(10_000);
+    expect(status.avgHourlyTokens).toBeCloseTo(100, 6);
+  });
+
   it('checkRunaway no re-evalúa (ni sobreescribe la razón) si el kill switch ya está activo', async () => {
     await testDb.db.insert(budgetKillSwitch).values({
       id: 1,

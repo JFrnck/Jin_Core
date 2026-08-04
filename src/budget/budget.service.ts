@@ -174,11 +174,17 @@ export class BudgetService {
    * — lo usa también el watcher de alertas de Telegram (80%/100%).
    */
   async getDailyUsageRatio(): Promise<number> {
-    const daily = await this.getTodayUsage();
+    const daily = await this.getDailyUsage();
     return computeDailyUsageRatio(daily, this.config);
   }
 
-  private async getTodayUsage(): Promise<DailyUsage> {
+  /**
+   * Consumo real del día (tokens + costo) — público desde Fase 6.2
+   * (`BudgetController`, panel de presupuesto): el ratio por sí solo no
+   * alcanza para mostrar "$4.31 / $5.00", el dashboard necesita el
+   * desglose real.
+   */
+  async getDailyUsage(): Promise<DailyUsage> {
     const today = todayLocalDate();
     const rows = await this.db
       .select()
@@ -192,5 +198,16 @@ export class BudgetService {
           costUsd: row.costUsd,
         }
       : { inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  }
+
+  /**
+   * Límites diarios configurados — el dashboard los necesita para
+   * mostrar "consumido / límite", no solo el ratio ya calculado.
+   */
+  getLimits(): { dailyMaxTokens: number; dailyMaxUsd: number } {
+    return {
+      dailyMaxTokens: this.config.dailyMaxTokens,
+      dailyMaxUsd: this.config.dailyMaxUsd,
+    };
   }
 }
