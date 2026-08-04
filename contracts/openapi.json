@@ -238,6 +238,80 @@
         ]
       }
     },
+    "/api/orchestrator/runs": {
+      "get": {
+        "operationId": "OrchestratorController_listRuns",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 200,
+              "exclusiveMinimum": true,
+              "default": 20,
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListRunsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Runs de orquestación multi-agente, más reciente primero",
+        "tags": [
+          "orchestrator"
+        ]
+      }
+    },
+    "/api/orchestrator/runs/{runId}": {
+      "get": {
+        "operationId": "OrchestratorController_getRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Detalle de un run: tickets + hilo de comentarios de cada uno (board de orquestación)",
+        "tags": [
+          "orchestrator"
+        ]
+      }
+    },
     "/telegram/webhook": {
       "post": {
         "operationId": "TelegramWebhookController_handleWebhook",
@@ -263,6 +337,62 @@
         "summary": "Endpoint del Webhook de Telegram",
         "tags": [
           "telegram"
+        ]
+      }
+    },
+    "/api/preview-services": {
+      "get": {
+        "operationId": "PreviewServicesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PreviewServiceDto_Output"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Apps de preview corriendo (jinserver.com)",
+        "tags": [
+          "preview-services"
+        ]
+      }
+    },
+    "/api/preview-services/{serviceId}": {
+      "delete": {
+        "operationId": "PreviewServicesController_stop",
+        "parameters": [
+          {
+            "name": "serviceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Detiene una preview app antes de su TTL",
+        "tags": [
+          "preview-services"
         ]
       }
     },
@@ -703,6 +833,263 @@
           "fuente",
           "fecha",
           "modeloEmbedding"
+        ],
+        "additionalProperties": false
+      },
+      "ListRunsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "objective": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "running",
+                    "blocked",
+                    "done",
+                    "failed",
+                    "killed"
+                  ]
+                },
+                "parentSessionId": {
+                  "type": "string"
+                },
+                "finalResponse": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+                },
+                "completedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "objective",
+                "status",
+                "parentSessionId",
+                "finalResponse",
+                "createdAt",
+                "completedAt"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "RunDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "run": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "objective": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running",
+                  "blocked",
+                  "done",
+                  "failed",
+                  "killed"
+                ]
+              },
+              "parentSessionId": {
+                "type": "string"
+              },
+              "finalResponse": {
+                "type": "string",
+                "nullable": true
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "objective",
+              "status",
+              "parentSessionId",
+              "finalResponse",
+              "createdAt",
+              "completedAt"
+            ]
+          },
+          "tickets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "runId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "in-progress",
+                    "done",
+                    "failed",
+                    "blocked"
+                  ]
+                },
+                "assignedSubAgentId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "allowedTools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "result": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "comments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "ticketId": {
+                        "type": "string"
+                      },
+                      "authorType": {
+                        "type": "string",
+                        "enum": [
+                          "orchestrator",
+                          "sub_agent",
+                          "owner"
+                        ]
+                      },
+                      "authorId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "note",
+                          "result",
+                          "conflict",
+                          "resolution"
+                        ]
+                      },
+                      "body": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "ticketId",
+                      "authorType",
+                      "authorId",
+                      "kind",
+                      "body"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "runId",
+                "description",
+                "status",
+                "assignedSubAgentId",
+                "allowedTools",
+                "dependsOn",
+                "result",
+                "comments"
+              ]
+            }
+          }
+        },
+        "required": [
+          "run",
+          "tickets"
+        ]
+      },
+      "PreviewServiceDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "expired"
+            ]
+          },
+          "expiresAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "url",
+          "status",
+          "expiresAt"
         ],
         "additionalProperties": false
       },
