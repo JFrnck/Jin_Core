@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq, lt } from 'drizzle-orm';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import {
   agentOrchestrationRuns,
@@ -16,6 +16,26 @@ import type {
   Ticket,
   TicketComment,
 } from './orchestrator.types';
+
+export interface RunSummary {
+  readonly id: string;
+  readonly objective: string;
+  readonly status: AgentRunStatus;
+  readonly parentSessionId: string;
+  readonly finalResponse: string | null;
+  readonly createdAt: Date;
+  readonly completedAt: Date | null;
+}
+
+export interface ListRunsInput {
+  readonly limit: number;
+  readonly cursor?: string;
+}
+
+export interface ListRunsResult {
+  readonly items: readonly RunSummary[];
+  readonly nextCursor: string | null;
+}
 
 /**
  * CRUD Drizzle del task ledger (Fase 5.4, ADR 0005) — rol equivalente a
@@ -175,5 +195,56 @@ export class LedgerRepository {
       .update(agentOrchestrationRuns)
       .set({ status, finalResponse, completedAt: new Date() })
       .where(eq(agentOrchestrationRuns.id, runId));
+  }
+
+  private toRunSummary(
+    row: typeof agentOrchestrationRuns.$inferSelect,
+  ): RunSummary {
+    return {
+      id: row.id,
+      objective: row.objective,
+      status: row.status as AgentRunStatus,
+      parentSessionId: row.parentSessionId,
+      finalResponse: row.finalResponse,
+      createdAt: row.createdAt,
+      completedAt: row.completedAt,
+    };
+  }
+
+  /**
+   * Lectura paginada de runs para el board de orquestación (Fase 6.2/6.3,
+   * panel "Board de orquestación"). Cursor por `createdAt`, no por `id`
+   * (uuid, sin orden natural) — mismo criterio de "limit+1" que
+   * `AuditService.listRecent()`.
+   */
+  async listRuns(input: ListRunsInput): Promise<ListRunsResult> {
+    const rows = await this.db
+      .select()
+      .from(agentOrchestrationRuns)
+      .where(
+        input.cursor
+          ? lt(agentOrchestrationRuns.createdAt, new Date(input.cursor))
+          : undefined,
+      )
+      .orderBy(desc(agentOrchestrationRuns.createdAt))
+      .limit(input.limit + 1);
+
+    const hasMore = rows.length > input.limit;
+    const items = hasMore ? rows.slice(0, input.limit) : rows;
+    const nextCursor = hasMore
+      ? (items[items.length - 1]?.createdAt.toISOString() ?? null)
+      : null;
+
+    return { items: items.map((row) => this.toRunSummary(row)), nextCursor };
+  }
+
+  /** `null` si no existe — el controller decide el 404 (`RunNotFoundError`). */
+  async getRun(runId: string): Promise<RunSummary | null> {
+    const rows = await this.db
+      .select()
+      .from(agentOrchestrationRuns)
+      .where(eq(agentOrchestrationRuns.id, runId));
+    const row = rows[0];
+    return row ? this.toRunSummary(row) : null;
   }
 }

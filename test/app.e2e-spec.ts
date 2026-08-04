@@ -18,6 +18,13 @@ import { MemoryService } from '../src/memory/memory.service';
 import type { MemoryEntry } from '../src/memory/memory.types';
 import { AgentService } from '../src/agent/agent.service';
 import type { AgentTurnResult } from '../src/agent/agent.types';
+import {
+  LedgerRepository,
+  type RunSummary,
+} from '../src/agent/ledger.repository';
+import type { Ticket, TicketComment } from '../src/agent/orchestrator.types';
+import { ExecutorClientService } from '../src/executor-client/executor-client.service';
+import type { PreviewServiceInfo } from '../src/executor-client/executor-client.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -452,5 +459,148 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
 
     expect(response.body).toEqual(emptyResult);
     await emptyApp.close();
+  });
+});
+
+describe('OrchestratorController (e2e) — board de orquestación, Date real anidada', () => {
+  let app: INestApplication<App>;
+  let token: string;
+
+  const run: RunSummary = {
+    id: 'a1a2a3a4-0000-4000-8000-000000000000',
+    objective: 'publicar dashboard de tesis',
+    status: 'running',
+    parentSessionId: 'sess-1',
+    finalResponse: null,
+    createdAt: new Date('2026-08-03T23:36:00.000Z'),
+    completedAt: null,
+  };
+  const ticket: Ticket = {
+    id: 'ticket-28',
+    runId: run.id,
+    description: 'Implementar parser de CSV',
+    status: 'in-progress',
+    assignedSubAgentId: 'builder',
+    allowedTools: ['runCode'],
+    dependsOn: [],
+    result: null,
+  };
+  const comment: TicketComment = {
+    id: '1',
+    ticketId: ticket.id,
+    authorType: 'sub_agent',
+    authorId: 'builder',
+    kind: 'conflict',
+    body: 'El CSV usa punto y coma; cambio el delimitador en el parser.',
+  };
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(LedgerRepository)
+      .useValue({
+        listRuns: () => Promise.resolve({ items: [run], nextCursor: null }),
+        getRun: (id: string) => Promise.resolve(id === run.id ? run : null),
+        getTickets: () => Promise.resolve([ticket]),
+        getComments: () => Promise.resolve([comment]),
+      })
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+
+    const jwtService = moduleFixture.get(JwtService);
+    token = await jwtService.signAsync({ sub: 'owner' });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('GET /api/orchestrator/runs — createdAt (Date real) sobrevive como ISO string', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/orchestrator/runs')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      items: [
+        { ...run, createdAt: '2026-08-03T23:36:00.000Z', completedAt: null },
+      ],
+      nextCursor: null,
+    });
+  });
+
+  it('GET /api/orchestrator/runs/:runId — tickets con hilo de comentarios, conflicto visible', async () => {
+    const response = await request(app.getHttpServer())
+      .get(`/api/orchestrator/runs/${run.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.body).toEqual({
+      run: { ...run, createdAt: '2026-08-03T23:36:00.000Z', completedAt: null },
+      tickets: [{ ...ticket, comments: [comment] }],
+    });
+  });
+
+  it('GET /api/orchestrator/runs/:runId sobre un id inexistente → 404 (JinErrorFilter real)', () => {
+    return request(app.getHttpServer())
+      .get('/api/orchestrator/runs/no-existe')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
+  });
+});
+
+describe('PreviewServicesController (e2e)', () => {
+  let app: INestApplication<App>;
+  let token: string;
+
+  const service: PreviewServiceInfo = {
+    id: 'svc-1',
+    slug: 'tesis-dashboard-a7f3k9',
+    url: 'https://tesis-dashboard-a7f3k9.jinserver.com',
+    status: 'running',
+    expiresAt: '2026-08-04T08:52:00.000Z',
+  };
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(ExecutorClientService)
+      .useValue({
+        listPreviewServices: () => Promise.resolve([service]),
+        stopPreviewService: () => Promise.resolve(undefined),
+      })
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+
+    const jwtService = moduleFixture.get(JwtService);
+    token = await jwtService.signAsync({ sub: 'owner' });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('GET /api/preview-services — lista las apps corriendo', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/preview-services')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.body).toEqual([service]);
+  });
+
+  it('DELETE /api/preview-services/:id — detiene la app', async () => {
+    const response = await request(app.getHttpServer())
+      .delete('/api/preview-services/svc-1')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(response.body).toEqual({ ok: true });
   });
 });

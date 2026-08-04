@@ -6,9 +6,11 @@ import {
   type RunCodeInput,
   type StartPreviewServiceInput,
 } from './executor-client.service';
+import { PreviewServicesController } from './preview-services.controller';
 
 @Module({
   imports: [HitlModule],
+  controllers: [PreviewServicesController],
   providers: [ExecutorClientService],
   exports: [ExecutorClientService],
 })

@@ -128,6 +128,59 @@ describe('LedgerRepository (integración, Postgres real)', () => {
     expect(siblings.map((t) => t.id)).toEqual([tickets[0]!.id]);
   });
 
+  it('getRun devuelve null si no existe — el controller decide el 404', async () => {
+    expect(
+      await repo.getRun('00000000-0000-4000-8000-000000000000'),
+    ).toBeNull();
+  });
+
+  it('getRun devuelve el resumen real de un run existente', async () => {
+    const runId = await repo.createRun({
+      objective: 'publicar dashboard de tesis',
+      parentSessionId: 'sess-1',
+    });
+
+    const run = await repo.getRun(runId);
+
+    expect(run).toMatchObject({
+      id: runId,
+      objective: 'publicar dashboard de tesis',
+      status: 'running',
+      parentSessionId: 'sess-1',
+      finalResponse: null,
+      completedAt: null,
+    });
+    expect(run?.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('listRuns pagina más reciente primero, con cursor por createdAt', async () => {
+    const id1 = await repo.createRun({
+      objective: 'primero',
+      parentSessionId: 's1',
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    const id2 = await repo.createRun({
+      objective: 'segundo',
+      parentSessionId: 's1',
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    const id3 = await repo.createRun({
+      objective: 'tercero',
+      parentSessionId: 's1',
+    });
+
+    const firstPage = await repo.listRuns({ limit: 2 });
+    expect(firstPage.items.map((r) => r.id)).toEqual([id3, id2]);
+    expect(firstPage.nextCursor).not.toBeNull();
+
+    const secondPage = await repo.listRuns({
+      limit: 2,
+      cursor: firstPage.nextCursor!,
+    });
+    expect(secondPage.items.map((r) => r.id)).toEqual([id1]);
+    expect(secondPage.nextCursor).toBeNull();
+  });
+
   it('completeRun persiste status final y finalResponse', async () => {
     const runId = await repo.createRun({
       objective: 'obj',

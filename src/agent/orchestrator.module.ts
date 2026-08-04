@@ -6,6 +6,7 @@ import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import { AgentModule } from './agent.module';
 import { AgentBranchMergeNotImplementedError } from './errors';
 import { LedgerRepository } from './ledger.repository';
+import { OrchestratorController } from './orchestrator.controller';
 import { OrchestratorService } from './orchestrator.service';
 import { ReconciliationService } from './reconciliation.service';
 import { TicketDecompositionService } from './ticket-decomposition.service';
@@ -18,6 +19,7 @@ interface ResolveAgentConflictPayload {
 
 @Module({
   imports: [AgentModule, HitlModule, BudgetModule, AuditModule],
+  controllers: [OrchestratorController],
   providers: [
     LedgerRepository,
     TicketDecompositionService,

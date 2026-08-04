@@ -34,6 +34,16 @@ export class ReconciliationParseError extends JinError {
   }
 }
 
+/** Fase 6.2/6.3 — `GET /api/orchestrator/runs/:runId` sobre un id que no existe. */
+export class RunNotFoundError extends JinError {
+  constructor(runId: string) {
+    super(`Run de orquestación no encontrado: ${runId}`, {
+      code: 'AGENT_RUN_NOT_FOUND',
+      httpStatus: 404,
+    });
+  }
+}
+
 /**
  * Fase 5.4 (orquestación multi-agente, ADR 0005 punto 9). `mergeAgentBranch`
  * está declarada en `registry.ts` (guardrail exigido por PROMPTS.md §5.4)
