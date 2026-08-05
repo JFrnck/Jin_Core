@@ -361,6 +361,8 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
     );
     expect(pending?.toolName).toBe('resolveAgentConflict');
     expect(pending?.level).toBe('confirm');
+    expect(pending?.actor).toBe('orchestrator');
+    expect(pending?.externalInputsSummary).toBeNull();
   });
 
   it('un confirm de un sub-agente NO bloquea tareas independientes: la otra llega a done igual', async () => {

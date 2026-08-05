@@ -53,6 +53,13 @@ export const pendingApprovals = pgTable('pending_approvals', {
   level: text('level').notNull(), // 'confirm' | 'dual-confirm'
   inputsHash: text('inputs_hash').notNull(),
   planSummary: text('plan_summary'),
+  // Mismos nombres/semántica que `audit_log.actor`/`external_inputs_summary`
+  // (AGENTS.md 5.1 punto 3) — acá viven ANTES de la resolución, para que el
+  // owner los vea al decidir, no solo después en el audit log. Nullable:
+  // el path de `orchestrator.service.ts` no tiene historial de mensajes de
+  // LLM del que extraer inputs externos (no es un turno de agente).
+  actor: text('actor'),
+  externalInputsSummary: text('external_inputs_summary'),
   // Datos de la acción real a ejecutar si se aprueba (ej. to/subject/body
   // de un email) — sin esto no había dónde reconstruir "qué ejecutar" al
   // momento de aprobar (prerequisito de Fase 4.2, ver STATUS.md). Nullable:

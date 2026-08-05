@@ -373,10 +373,64 @@ describe('AgentService.runTurn', () => {
         toolName: 'sendEmail',
         level: 'confirm',
         payload: { to: 'x@y.com', subject: 'hola', body: 'mundo' },
+        actor: 'agent',
       }),
     );
     expect(result.pendingApprovals).toHaveLength(1);
     expect(result.pendingApprovals[0]?.toolName).toBe('sendEmail');
+  });
+
+  it('tool confirm precedida por una tool auto en el mismo turno: createPendingApproval recibe externalInputsSummary con la traza real', async () => {
+    const readEmailsExecutor = vi
+      .fn()
+      .mockResolvedValue([{ from: 'prof@uni.edu', subject: 'Asesoría' }]);
+    toolExecutorRegistry.register('readEmails', readEmailsExecutor);
+    toolExecutorRegistry.register(
+      'sendEmail',
+      vi.fn().mockResolvedValue('no debería llamarse'),
+    );
+
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [{ id: 'call-1', name: 'readEmails', input: {} }],
+        }),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [
+            {
+              id: 'call-2',
+              name: 'sendEmail',
+              input: {
+                to: 'prof@uni.edu',
+                subject: 'Re: Asesoría',
+                body: 'Ok.',
+              },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse({ content: 'correo pendiente de aprobación' }),
+      );
+
+    await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'revisá mis correos y respondé al del profe',
+      actorLabel: 'web-chat',
+    });
+
+    expect(readEmailsExecutor).toHaveBeenCalledTimes(1);
+    expect(mockDualConfirm.createPendingApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'sendEmail',
+        actor: 'web-chat',
+        externalInputsSummary: 'readEmails (1)',
+      }),
+    );
   });
 
   it('tool desconocida (alucinada por el modelo): no crashea, vuelve error y cuenta como fallo', async () => {

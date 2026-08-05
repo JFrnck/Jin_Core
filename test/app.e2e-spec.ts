@@ -206,6 +206,8 @@ describe('HitlController (e2e) — Date real y payload arbitrario a través de Z
     inputsHash: 'sha256:fake',
     planSummary: 'Responder a Prof. Martínez confirmando asistencia',
     payload: { to: 'l.martinez@uni.edu', subject: 'Re: Asesoría', body: 'Ok.' },
+    actor: 'web-chat',
+    externalInputsSummary: 'readEmails (1)',
     createdAt: new Date('2026-08-03T23:41:00.000Z'),
     firstApprovedAt: null,
     firstApprover: null,

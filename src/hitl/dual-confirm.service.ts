@@ -55,6 +55,20 @@ export interface CreatePendingApprovalInput {
    * acciones sin ejecución diferida.
    */
   readonly payload?: unknown;
+  /**
+   * Quién/qué disparó esta tool (ej. 'web-chat', 'telegram', 'orchestrator')
+   * — mismo campo que `audit_log.actor`, pero disponible ANTES de la
+   * resolución (AGENTS.md 5.1 punto 3). Opcional: no todo caller lo tiene
+   * hoy con certeza (ver `orchestrator.service.ts`).
+   */
+  readonly actor?: string;
+  /**
+   * Resumen de qué inputs externos (tools ya ejecutadas en el mismo turno,
+   * ver `summarizeUntrustedSources`) pudieron influir en la decisión del
+   * LLM de invocar esta tool. Ausente cuando no hay historial de LLM del
+   * que extraerlo (ej. `orchestrator.service.ts`, que no corre un turno).
+   */
+  readonly externalInputsSummary?: string;
 }
 
 export type ApprovalOutcome = 'resolved' | 'awaiting-second';
@@ -81,6 +95,8 @@ export class DualConfirmService {
       inputsHash: input.inputsHash,
       planSummary: input.planSummary ?? null,
       payload: input.payload ?? null,
+      actor: input.actor ?? null,
+      externalInputsSummary: input.externalInputsSummary ?? null,
     });
 
     this.eventEmitter.emit(PENDING_APPROVAL_CREATED_EVENT, {

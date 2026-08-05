@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { ModelMessage } from '../model-provider/model-provider.types';
 import { InvalidSessionNonceError } from './errors';
 import {
   generateSessionNonce,
   sanitizeForIndexing,
+  summarizeUntrustedSources,
   wrapUntrustedContent,
 } from './injection-sanitizer';
 
@@ -80,6 +82,120 @@ describe('wrapUntrustedContent', () => {
     expect(() => wrapUntrustedContent('x', 'canvas', 'abc123')).toThrow(
       InvalidSessionNonceError,
     );
+  });
+});
+
+describe('summarizeUntrustedSources', () => {
+  const nonce = 'abc123def4567890';
+
+  it('devuelve undefined si no hay historial', () => {
+    expect(summarizeUntrustedSources([])).toBeUndefined();
+  });
+
+  it('devuelve undefined si no hay ningún tool_result envuelto', () => {
+    const messages: ModelMessage[] = [
+      { role: 'user', content: 'hola' },
+      { role: 'assistant', content: 'respuesta sin tool calls' },
+    ];
+    expect(summarizeUntrustedSources(messages)).toBeUndefined();
+  });
+
+  it('extrae el source de un único tool_result envuelto', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolCallId: 'call-1',
+            output: wrapUntrustedContent(
+              '3 correos nuevos',
+              'readEmails',
+              nonce,
+            ),
+          },
+        ],
+      },
+    ];
+    expect(summarizeUntrustedSources(messages)).toBe('readEmails (1)');
+  });
+
+  it('cuenta ocurrencias repetidas del mismo source a través de varios mensajes', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolCallId: 'call-1',
+            output: wrapUntrustedContent('correo A', 'readEmails', nonce),
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolCallId: 'call-2',
+            output: wrapUntrustedContent('correo B', 'readEmails', nonce),
+          },
+          {
+            type: 'tool_result',
+            toolCallId: 'call-3',
+            output: wrapUntrustedContent(
+              '3 eventos',
+              'listCalendarEvents',
+              nonce,
+            ),
+          },
+        ],
+      },
+    ];
+    expect(summarizeUntrustedSources(messages)).toBe(
+      'readEmails (2), listCalendarEvents (1)',
+    );
+  });
+
+  it('ignora tool_result cuyo output no es string y bloques que no son tool_result', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            toolCall: { id: 'c1', name: 'readEmails', input: {} },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolCallId: 'c1',
+            output: { not: 'a string' },
+          },
+        ],
+      },
+    ];
+    expect(summarizeUntrustedSources(messages)).toBeUndefined();
+  });
+
+  it('decodifica un source con caracteres escapados (comillas)', () => {
+    const messages: ModelMessage[] = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            toolCallId: 'call-1',
+            output: wrapUntrustedContent('x', 'foo" bar', nonce),
+          },
+        ],
+      },
+    ];
+    expect(summarizeUntrustedSources(messages)).toBe('foo" bar (1)');
   });
 });
 

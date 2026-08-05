@@ -13,6 +13,7 @@ import type {
 } from '../model-provider/model-provider.types';
 import {
   generateSessionNonce,
+  summarizeUntrustedSources,
   wrapUntrustedContent,
 } from '../security/injection-sanitizer';
 import { listRegisteredTools } from '../tools/registry';
@@ -210,6 +211,7 @@ export class AgentService {
           consecutiveFailures,
           pendingApprovals,
           toolResultBlocks,
+          messages,
         );
       }
 
@@ -317,6 +319,7 @@ export class AgentService {
     consecutiveFailures: Map<string, number>,
     pendingApprovals: AgentPendingApproval[],
     toolResultBlocks: ModelMessageContentBlock[],
+    messages: readonly ModelMessage[],
   ): Promise<void> {
     const failureKey = buildToolCallKey(call.name, call.input);
     const priorFailures = consecutiveFailures.get(failureKey) ?? 0;
@@ -337,6 +340,7 @@ export class AgentService {
       const inputsHash = computeInputsHash(call.input);
 
       if (decision.level === 'confirm' || decision.level === 'dual-confirm') {
+        const externalInputsSummary = summarizeUntrustedSources(messages);
         await this.dualConfirmService.createPendingApproval({
           requestId: decision.requestId,
           toolName: call.name,
@@ -344,6 +348,10 @@ export class AgentService {
           inputsHash,
           planSummary: `Tool "${call.name}" invocada por ${actorLabel} (sesión ${sessionId})`,
           payload: call.input,
+          actor: actorLabel,
+          ...(externalInputsSummary !== undefined
+            ? { externalInputsSummary }
+            : {}),
         });
         pendingApprovals.push({
           requestId: decision.requestId,
