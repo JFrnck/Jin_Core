@@ -254,6 +254,10 @@ export class OrchestratorService {
         inputsHash: computeInputsHash(payload),
         planSummary: `Conflicto material en run ${runId} (tickets ${conflict.ticketIds.join(', ')}): ${conflict.summary}`,
         payload,
+        actor: 'orchestrator',
+        // Sin `externalInputsSummary`: este path no corre un turno de LLM
+        // (viene de comparar tickets ya completados, ver plan de esta
+        // fase) — no hay `messages` del que extraer inputs externos.
       });
       pendingApprovals.push({
         requestId: decision.requestId,

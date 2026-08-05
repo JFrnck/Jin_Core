@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { InvalidSessionNonceError } from './errors';
+import type { ModelMessage } from '../model-provider/model-provider.types';
 
 // 16 caracteres hex exactos (AGENTS.md 5.1) → 8 bytes, no 16. randomBytes(16)
 // produciría 32 caracteres — ver ADR 0004 para el porqué de este detalle.
@@ -73,4 +74,49 @@ export function wrapUntrustedContent(
  */
 export function sanitizeForIndexing(content: string): string {
   return escapeDelimiterChars(content);
+}
+
+const UNTRUSTED_SOURCE_RE = /<untrusted_content_[0-9a-f]{16} source="([^"]*)"/g;
+
+function unescapeDelimiterChars(value: string): string {
+  return value
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Contraparte de lectura de `wrapUntrustedContent` (AGENTS.md 5.1 punto 3:
+ * "aparecer en el campo external_inputs_summary... cuando influya en una
+ * decisión HITL"). Dado el historial de un turno de agente, extrae qué
+ * tools ya ejecutadas (auto/notify, iteraciones previas del mismo turno)
+ * dejaron contenido envuelto antes de la tool confirm/dual-confirm que se
+ * está clasificando ahora — la traza real de qué pudo influir en la
+ * decisión del LLM, no un resumen inventado. Sin consumidor fuera de
+ * `agent.service.ts`: `orchestrator.service.ts` no tiene `messages` de LLM
+ * en su propio path de `createPendingApproval` (ver plan de esta fase).
+ */
+export function summarizeUntrustedSources(
+  messages: readonly ModelMessage[],
+): string | undefined {
+  const counts = new Map<string, number>();
+
+  for (const message of messages) {
+    if (typeof message.content === 'string') continue;
+    for (const block of message.content) {
+      if (block.type !== 'tool_result' || typeof block.output !== 'string') {
+        continue;
+      }
+      for (const match of block.output.matchAll(UNTRUSTED_SOURCE_RE)) {
+        const source = unescapeDelimiterChars(match[1] ?? '');
+        counts.set(source, (counts.get(source) ?? 0) + 1);
+      }
+    }
+  }
+
+  if (counts.size === 0) return undefined;
+  return [...counts.entries()]
+    .map(([source, count]) => `${source} (${count})`)
+    .join(', ');
 }

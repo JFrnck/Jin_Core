@@ -41,6 +41,10 @@ const PendingApprovalSchema = z.object({
   inputsHash: z.string(),
   planSummary: z.string().nullable(),
   payload: z.unknown(),
+  // Mismos campos que `audit_log` (AGENTS.md 5.1 punto 3), disponibles acá
+  // ya al crear la pending approval — ver plan de esta fase.
+  actor: z.string().nullable(),
+  externalInputsSummary: z.string().nullable(),
   createdAt: dateCodec,
   firstApprovedAt: nullableDateCodec,
   firstApprover: z.string().nullable(),

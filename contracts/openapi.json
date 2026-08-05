@@ -597,6 +597,14 @@
             "nullable": true
           },
           "payload": {},
+          "actor": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalInputsSummary": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -632,6 +640,8 @@
           "inputsHash",
           "planSummary",
           "payload",
+          "actor",
+          "externalInputsSummary",
           "createdAt",
           "firstApprovedAt",
           "firstApprover",
