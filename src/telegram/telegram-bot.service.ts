@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
 import { eq } from 'drizzle-orm';
 import { Bot, InlineKeyboard, type Context } from 'grammy';
 import type { Update } from 'grammy/types';
 import { AgentService } from '../agent/agent.service';
 import { AuditService } from '../audit/audit.service';
+import { ChainVerificationService } from '../audit/chain-verification.service';
 import { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import { BudgetService } from '../budget/budget.service';
 import { KillSwitchService } from '../budget/kill-switch.service';
@@ -23,6 +25,11 @@ import {
   PendingApprovalNotFoundError,
   SecondApprovalTooEarlyError,
 } from '../hitl/dual-confirm.service';
+import {
+  HITL_APPROVAL_ABANDONED_EVENT,
+  HITL_APPROVAL_ESCALATED_EVENT,
+  type HitlApprovalTimeoutEvent,
+} from '../hitl/timeout.service';
 import { GoogleOAuthService } from '../integrations/google/oauth.service';
 import { MemoryService } from '../memory/memory.service';
 import type { MemoryEntry } from '../memory/memory.types';
@@ -47,6 +54,7 @@ export class TelegramBotService implements OnModuleInit {
   private readonly notifiedDailyThresholdsToday = new Set<number>();
   private lastDailyThresholdResetDate = '';
   private lastOAuthAlertNotifiedDate = '';
+  private lastNotifiedChainLocked = false;
 
   constructor(
     private readonly configService: ConfigService<Env, true>,
@@ -55,6 +63,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly killSwitchService: KillSwitchService,
     private readonly dualConfirmService: DualConfirmService,
     private readonly auditService: AuditService,
+    private readonly chainVerificationService: ChainVerificationService,
     private readonly approvalExecutionService: ApprovalExecutionService,
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly agentService: AgentService,
@@ -611,6 +620,65 @@ export class TelegramBotService implements OnModuleInit {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Error chequeando alertas de budget/oauth: ${msg}`);
     }
+  }
+
+  /**
+   * docs/RECOMENDACIONES.md #11: `ChainVerificationService.verifyDaily()`
+   * antes solo lo logueaba ("Alerta Telegram real: Fase 2.4... por ahora
+   * solo el log") — fase cerrada hace semanas, nunca recableada. Polling,
+   * no evento (mismo criterio que `checkKillSwitchAlert`, comentario en
+   * `kill-switch.service.ts`): es un estado booleano persistente, no un
+   * suceso puntual — evita el import circular AuditModule→TelegramModule.
+   */
+  @Cron('*/5 * * * *')
+  async checkAuditIntegrityAlert(): Promise<void> {
+    try {
+      const locked = await this.chainVerificationService.isLocked();
+      if (locked && !this.lastNotifiedChainLocked) {
+        await this.bot.api.sendMessage(
+          this.ownerChatId,
+          '🔴 *Audit log bloqueado* — se detectó corrupción en la cadena de auditoría. ' +
+            'Todas las escrituras de audit log están rechazadas hasta intervención manual.',
+          { parse_mode: 'Markdown' },
+        );
+      }
+      this.lastNotifiedChainLocked = locked;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error chequeando integridad del audit log: ${msg}`);
+    }
+  }
+
+  /**
+   * docs/RECOMENDACIONES.md #11: antes solo `logger.warn` en
+   * `TimeoutService` ("notificación real llega en Fase 2.4"). Escucha
+   * `HITL_APPROVAL_ESCALATED_EVENT` (mismo mecanismo que
+   * `pending-approval:new` en `realtime.gateway.ts`) — el owner tiene 12h
+   * más antes del abandono a las 24h.
+   */
+  @OnEvent(HITL_APPROVAL_ESCALATED_EVENT)
+  async onHitlApprovalEscalated(
+    event: HitlApprovalTimeoutEvent,
+  ): Promise<void> {
+    await this.bot.api.sendMessage(
+      this.ownerChatId,
+      `⚠️ *Aprobación sin responder hace 12h*: \`${event.toolName}\` (${event.requestId}). ` +
+        `Se descarta automáticamente a las 24h si no respondés. Usa /tasks para verla.`,
+      { parse_mode: 'Markdown' },
+    );
+  }
+
+  /** Ver el comentario de `onHitlApprovalEscalated` — mismo mecanismo, evento de abandono a las 24h. */
+  @OnEvent(HITL_APPROVAL_ABANDONED_EVENT)
+  async onHitlApprovalAbandoned(
+    event: HitlApprovalTimeoutEvent,
+  ): Promise<void> {
+    await this.bot.api.sendMessage(
+      this.ownerChatId,
+      `🔴 *Aprobación ABANDONADA* tras 24h sin respuesta: \`${event.toolName}\` (${event.requestId}). ` +
+        'La acción se descartó — nunca se ejecutó.',
+      { parse_mode: 'Markdown' },
+    );
   }
 
   @Cron('*/5 * * * *')

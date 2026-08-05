@@ -1,11 +1,26 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { eq } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { pendingApprovals, type PendingApprovalRow } from '../db/schema';
 import { getToolDefinition } from '../tools/registry';
 import { decideTimeoutOutcome } from './timeout.logic';
+
+// docs/RECOMENDACIONES.md #11: antes solo un `logger.warn`/`logger.error`
+// que nadie mira — "notificación real llega en Fase 2.4" nunca se
+// recableó pese a que esa fase cerró hace semanas. `TelegramBotService`
+// escucha estos eventos (mismo mecanismo que `PENDING_APPROVAL_CREATED_EVENT`
+// en dual-confirm.service.ts) — evita el import circular
+// HitlModule→TelegramModule→HitlModule que una inyección directa crearía.
+export const HITL_APPROVAL_ESCALATED_EVENT = 'hitl.approval.escalated';
+export const HITL_APPROVAL_ABANDONED_EVENT = 'hitl.approval.abandoned';
+
+export interface HitlApprovalTimeoutEvent {
+  readonly requestId: string;
+  readonly toolName: string;
+}
 
 /**
  * Barrido de aprobaciones pendientes vencidas (BLUEPRINT 9.4). El
@@ -18,6 +33,7 @@ export class TimeoutService {
   constructor(
     @Inject(DB_CONNECTION) private readonly db: Db,
     private readonly auditService: AuditService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -65,9 +81,12 @@ export class TimeoutService {
           .set({ escalatedAt: now })
           .where(eq(pendingApprovals.requestId, pending.requestId));
         this.logger.warn(
-          `Escalando aprobación pendiente (12h sin respuesta): ${pending.requestId} (${pending.toolName}). ` +
-            'Notificación real llega en Fase 2.4 (bot Telegram).',
+          `Escalando aprobación pendiente (12h sin respuesta): ${pending.requestId} (${pending.toolName}).`,
         );
+        this.eventEmitter.emit(HITL_APPROVAL_ESCALATED_EVENT, {
+          requestId: pending.requestId,
+          toolName: pending.toolName,
+        } satisfies HitlApprovalTimeoutEvent);
         return;
 
       case 'abandon':
@@ -81,6 +100,10 @@ export class TimeoutService {
         this.logger.error(
           `Aprobación ABANDONADA tras 24h sin respuesta: ${pending.requestId} (${pending.toolName})`,
         );
+        this.eventEmitter.emit(HITL_APPROVAL_ABANDONED_EVENT, {
+          requestId: pending.requestId,
+          toolName: pending.toolName,
+        } satisfies HitlApprovalTimeoutEvent);
         return;
     }
   }

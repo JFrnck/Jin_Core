@@ -3,6 +3,7 @@ import type { Update, UserFromGetMe } from 'grammy/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentService } from '../agent/agent.service';
 import type { AuditService } from '../audit/audit.service';
+import type { ChainVerificationService } from '../audit/chain-verification.service';
 import type { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import type { BudgetService } from '../budget/budget.service';
 import type { KillSwitchService } from '../budget/kill-switch.service';
@@ -26,6 +27,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
   let mockKillSwitchService: Partial<KillSwitchService>;
   let mockDualConfirm: Partial<DualConfirmService>;
   let mockAuditService: Partial<AuditService>;
+  let mockChainVerificationService: Partial<ChainVerificationService>;
   let mockApprovalExecutionService: Partial<ApprovalExecutionService>;
   let mockGoogleOAuthService: Partial<GoogleOAuthService>;
   let mockAgentService: Partial<AgentService>;
@@ -103,6 +105,10 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
     mockAuditService = {
       recordApproval: vi.fn().mockResolvedValue(undefined),
       recordRejection: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mockChainVerificationService = {
+      isLocked: vi.fn().mockResolvedValue(false),
     };
 
     mockApprovalExecutionService = {
@@ -214,6 +220,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       mockKillSwitchService as KillSwitchService,
       mockDualConfirm as DualConfirmService,
       mockAuditService as AuditService,
+      mockChainVerificationService as ChainVerificationService,
       mockApprovalExecutionService as ApprovalExecutionService,
       mockGoogleOAuthService as GoogleOAuthService,
       mockAgentService as AgentService,
@@ -545,6 +552,82 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
 
       expect(
         sentMessages.some((msg) => msg.includes('ALERTA DE SEGURIDAD OAUTH')),
+      ).toBe(true);
+    });
+  });
+
+  describe('checkAuditIntegrityAlert (cron, docs/RECOMENDACIONES.md #11)', () => {
+    it('notifica al owner cuando el audit log pasa a bloqueado', async () => {
+      vi.mocked(mockChainVerificationService.isLocked!).mockResolvedValue(true);
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.checkAuditIntegrityAlert();
+
+      expect(
+        sentMessages.some((msg) => msg.includes('Audit log bloqueado')),
+      ).toBe(true);
+    });
+
+    it('no repite la alerta en corridas sucesivas mientras siga bloqueado', async () => {
+      vi.mocked(mockChainVerificationService.isLocked!).mockResolvedValue(true);
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.checkAuditIntegrityAlert();
+      await service.checkAuditIntegrityAlert();
+
+      expect(
+        sentMessages.filter((msg) => msg.includes('Audit log bloqueado')),
+      ).toHaveLength(1);
+    });
+
+    it('no notifica nada mientras el audit log no esté bloqueado', async () => {
+      vi.mocked(mockChainVerificationService.isLocked!).mockResolvedValue(
+        false,
+      );
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.checkAuditIntegrityAlert();
+
+      expect(sentMessages).toHaveLength(0);
+    });
+  });
+
+  describe('eventos HITL de timeout (docs/RECOMENDACIONES.md #11)', () => {
+    it('onHitlApprovalEscalated notifica al owner con el requestId y toolName', async () => {
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.onHitlApprovalEscalated({
+        requestId: 'req-escalated-1',
+        toolName: 'sendEmail',
+      });
+
+      expect(
+        sentMessages.some(
+          (msg) => msg.includes('sendEmail') && msg.includes('req-escalated-1'),
+        ),
+      ).toBe(true);
+    });
+
+    it('onHitlApprovalAbandoned notifica al owner con el requestId y toolName', async () => {
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.onHitlApprovalAbandoned({
+        requestId: 'req-abandoned-1',
+        toolName: 'deleteCalendarEventFuture',
+      });
+
+      expect(
+        sentMessages.some(
+          (msg) =>
+            msg.includes('ABANDONADA') &&
+            msg.includes('deleteCalendarEventFuture') &&
+            msg.includes('req-abandoned-1'),
+        ),
       ).toBe(true);
     });
   });
