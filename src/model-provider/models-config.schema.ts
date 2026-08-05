@@ -20,7 +20,7 @@ const ModelProfileYamlSchema = z.object({
   temperature: z.number().min(0).max(2),
 });
 
-// Los 8 profiles son fijos y requeridos (no un mapa abierto): un typo en
+// Los 9 profiles son fijos y requeridos (no un mapa abierto): un typo en
 // el nombre de un profile en el YAML debe fallar la validación de
 // startup, no crear silenciosamente un profile con nombre distinto al
 // que el código espera.
@@ -33,6 +33,7 @@ const ModelsYamlSchema = z.object({
     chat_conversational: ModelProfileYamlSchema,
     code_execution_planner: ModelProfileYamlSchema,
     memory_consolidation: ModelProfileYamlSchema,
+    history_compaction: ModelProfileYamlSchema,
     vision_analysis: ModelProfileYamlSchema,
   }),
 });
@@ -75,6 +76,7 @@ export function parseModelsConfig(raw: unknown): ModelsConfig {
       profiles.code_execution_planner,
     ),
     memory_consolidation: toModelProfileConfig(profiles.memory_consolidation),
+    history_compaction: toModelProfileConfig(profiles.history_compaction),
     vision_analysis: toModelProfileConfig(profiles.vision_analysis),
   };
 }

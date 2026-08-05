@@ -23,6 +23,7 @@ import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type { ModelCompletionResponse } from '../model-provider/model-provider.types';
 import type { AgentConfig } from './agent-config.schema';
 import { AgentService } from './agent.service';
+import type { HistoryCompactionService } from './history-compaction.service';
 
 function fakeResponse(
   overrides: Partial<ModelCompletionResponse>,
@@ -48,7 +49,14 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
     maxIterationsPerTurn: 5,
     maxConsecutiveToolFailures: 2,
     maxConcurrentSubAgents: 3,
+    // Alto a propósito: este archivo no ejercita la compresión de
+    // historial (fuera de su alcance), solo necesita que nunca dispare.
+    maxHistoryTokens: 1_000_000,
+    preserveLastTurns: 6,
   };
+  const historyCompactionService = {
+    compact: vi.fn(),
+  } as unknown as HistoryCompactionService;
 
   beforeAll(async () => {
     testDb = await startTestDb();
@@ -80,6 +88,7 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
       toolExecutorRegistry,
       dualConfirmService,
       auditService,
+      historyCompactionService,
       config,
     );
   });

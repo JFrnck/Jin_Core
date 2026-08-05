@@ -45,6 +45,7 @@ import type {
 import type { AgentConfig } from './agent-config.schema';
 import { AGENT_CONFIG } from './agent.tokens';
 import { AgentService } from './agent.service';
+import { HistoryCompactionService } from './history-compaction.service';
 import { LedgerRepository } from './ledger.repository';
 import { OrchestratorService } from './orchestrator.service';
 import { ReconciliationService } from './reconciliation.service';
@@ -99,6 +100,10 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
       maxIterationsPerTurn: 5,
       maxConsecutiveToolFailures: 2,
       maxConcurrentSubAgents: 3,
+      // Alto a propósito: este archivo no ejercita la compresión de
+      // historial (fuera de su alcance), solo necesita que nunca dispare.
+      maxHistoryTokens: 1_000_000,
+      preserveLastTurns: 6,
     };
     completeMock = vi.fn<CompleteFn>();
 
@@ -123,6 +128,10 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
         BudgetService,
         KillSwitchService,
         BudgetGuardedModelRouter,
+        {
+          provide: HistoryCompactionService,
+          useValue: { compact: vi.fn() },
+        },
         AgentService,
         LedgerRepository,
         TicketDecompositionService,

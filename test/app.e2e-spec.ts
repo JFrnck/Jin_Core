@@ -462,6 +462,46 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
     expect(response.body).toEqual(emptyResult);
     await emptyApp.close();
   });
+
+  it('POST /api/chat con compactedHistory — sobrevive intacto al ZodSerializerInterceptor (poda + compresión, docs/RECOMENDACIONES.md #2)', async () => {
+    const compactedResult: AgentTurnResult = {
+      ...turnResult,
+      compactedHistory: [
+        {
+          role: 'user',
+          content: '[Resumen automático de turnos previos]\nresumen viejo',
+        },
+        { role: 'user', content: 'objective actual' },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              toolCall: { id: 't1', name: 'readEmails', input: {} },
+            },
+          ],
+        },
+      ],
+    };
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(AgentService)
+      .useValue({ runTurn: () => Promise.resolve(compactedResult) })
+      .compile();
+    const compactedApp: INestApplication<App> =
+      moduleFixture.createNestApplication();
+    await compactedApp.init();
+
+    const response = await request(compactedApp.getHttpServer())
+      .post('/api/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ sessionId: 's1', objective: 'revisa mi correo' })
+      .expect(200);
+
+    expect(response.body).toEqual(compactedResult);
+    await compactedApp.close();
+  });
 });
 
 describe('OrchestratorController (e2e) — board de orquestación, Date real anidada', () => {

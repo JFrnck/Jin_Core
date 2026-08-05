@@ -59,6 +59,14 @@ profiles:
     max_tokens_output: 2000
     temperature: 0.2
 
+  history_compaction:
+    description: "Comprime un tramo viejo del historial de chat a un resumen (poda + compresión, docs/RECOMENDACIONES.md #2)"
+    primary: claude-haiku-4-5
+    fallback: gemini-2.5-flash-lite
+    max_tokens_input: 64000
+    max_tokens_output: 1000
+    temperature: 0.2
+
   vision_analysis:
     description: "Análisis de screenshots, imágenes, gráficas"
     primary: claude-opus-4-8

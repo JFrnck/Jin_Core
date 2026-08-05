@@ -59,4 +59,14 @@ export interface AgentTurnResult {
   /** Tools confirm/dual-confirm que quedaron diferidas esperando aprobación en este turno. */
   readonly pendingApprovals: readonly AgentPendingApproval[];
   readonly iterationsUsed: number;
+  /**
+   * Presente SOLO cuando el turno comprimió el historial (poda +
+   * compresión, docs/RECOMENDACIONES.md #2). `/api/chat` es stateless
+   * (Fase 6.1) — el caller es dueño de su propio historial, así que este
+   * campo es la forma en que el servidor le devuelve el historial ya
+   * comprimido para que lo ADOPTE (reemplace, no concatene) como base
+   * del próximo turno. Ausente, nunca `[]`, cuando no hizo falta
+   * comprimir — así el caller distingue "sin cambios" de "se vació".
+   */
+  readonly compactedHistory?: readonly ModelMessage[];
 }

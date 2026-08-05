@@ -4,7 +4,12 @@ import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { AgentService } from '../agent/agent.service';
 import { AgentStepStatusSchema } from '../agent/agent.types';
-import { ChatDto, toModelMessages } from './model-message.schema';
+import {
+  ChatDto,
+  fromModelMessages,
+  ModelMessageSchema,
+  toModelMessages,
+} from './model-message.schema';
 
 const AgentStepSchema = z.object({
   description: z.string(),
@@ -19,6 +24,10 @@ const AgentTurnResultSchema = z.object({
     z.object({ requestId: z.string(), toolName: z.string() }),
   ),
   iterationsUsed: z.number(),
+  // Presente solo cuando el turno comprimió el historial (poda +
+  // compresión, docs/RECOMENDACIONES.md #2) — ver AgentTurnResult en
+  // agent.types.ts. El caller lo adopta como su nuevo historial local.
+  compactedHistory: z.array(ModelMessageSchema).optional(),
 });
 class AgentTurnResultDto extends createZodDto(AgentTurnResultSchema) {}
 type AgentTurnResultResponse = z.infer<typeof AgentTurnResultSchema>;
@@ -57,6 +66,9 @@ export class ChatController {
       plan: { steps: [...result.plan.steps] },
       pendingApprovals: [...result.pendingApprovals],
       iterationsUsed: result.iterationsUsed,
+      ...(result.compactedHistory !== undefined
+        ? { compactedHistory: fromModelMessages(result.compactedHistory) }
+        : {}),
     };
   }
 }
