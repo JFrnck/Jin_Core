@@ -73,6 +73,14 @@ const PROFILES: ModelsConfig = {
     maxTokensOutput: 2000,
     temperature: 0.2,
   },
+  history_compaction: {
+    description: 'x',
+    primary: 'claude-haiku-4-5',
+    fallback: 'gemini-2.5-flash-lite',
+    maxTokensInput: 64_000,
+    maxTokensOutput: 1000,
+    temperature: 0.2,
+  },
   vision_analysis: {
     description: 'x',
     // Modelo con vendor deliberadamente desconocido, para probar

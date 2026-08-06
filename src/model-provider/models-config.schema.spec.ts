@@ -32,6 +32,7 @@ function validRawConfig(
       chat_conversational: profile,
       code_execution_planner: profile,
       memory_consolidation: profile,
+      history_compaction: profile,
       vision_analysis: profile,
     },
   };
@@ -50,7 +51,7 @@ describe('parseModelsConfig', () => {
     });
   });
 
-  it('lanza si falta uno de los 8 profiles requeridos', () => {
+  it('lanza si falta uno de los 9 profiles requeridos', () => {
     const raw = validRawConfig() as { profiles: Record<string, unknown> };
     delete raw.profiles.vision_analysis;
 

@@ -83,3 +83,45 @@ export function toModelMessages(
         : message.content.map(toContentBlock),
   }));
 }
+
+function fromContentBlock(
+  block: ModelMessageContentBlock,
+): z.infer<typeof ModelMessageContentBlockSchema> {
+  if (block.type !== 'tool_result') {
+    return block.type === 'text'
+      ? { type: 'text', text: block.text }
+      : {
+          type: 'tool_use',
+          toolCall: {
+            id: block.toolCall.id,
+            name: block.toolCall.name,
+            input: block.toolCall.input,
+          },
+        };
+  }
+  return {
+    type: 'tool_result',
+    toolCallId: block.toolCallId,
+    output: block.output,
+    ...(block.isError !== undefined ? { isError: block.isError } : {}),
+  };
+}
+
+/**
+ * Dirección inversa de `toModelMessages` — `compactedHistory`
+ * (`AgentTurnResult`, poda + compresión del historial) vuelve del agent
+ * loop con los tipos `readonly` de `ModelMessage`/`ModelMessageContentBlock`;
+ * el DTO de respuesta (`chat.controller.ts`) necesita el tipo mutable que
+ * infiere `ModelMessageSchema` para que `@ZodResponse` lo acepte.
+ */
+export function fromModelMessages(
+  messages: readonly ModelMessage[],
+): z.infer<typeof ModelMessageSchema>[] {
+  return messages.map((message) => ({
+    role: message.role,
+    content:
+      typeof message.content === 'string'
+        ? message.content
+        : message.content.map(fromContentBlock),
+  }));
+}

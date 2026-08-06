@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
+import { buildGenericUntrustedContentInstruction } from '../security/injection-sanitizer';
 import { ConsolidationParseError } from './errors';
 import { MemoryEntryTypeSchema } from './memory.types';
 
@@ -14,6 +15,8 @@ const SYSTEM_PROMPT =
   'en la sesión ("tipo": "episodio"). NO guardes todo — solo lo curado y ' +
   'reutilizable en sesiones futuras. Si no hay nada que valga la pena, ' +
   'devolvé un array vacío.\n\n' +
+  buildGenericUntrustedContentInstruction() +
+  '\n\n' +
   'Respondé EXCLUSIVAMENTE con un array JSON de objetos ' +
   '{"content": string, "tipo": "hecho" | "preferencia" | "leccion" | "episodio"}, ' +
   'sin texto adicional, sin markdown, sin bloque de código.';

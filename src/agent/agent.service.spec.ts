@@ -10,6 +10,7 @@ import type {
 } from '../model-provider/model-provider.types';
 import type { AgentConfig } from './agent-config.schema';
 import { AgentService } from './agent.service';
+import type { HistoryCompactionService } from './history-compaction.service';
 
 function getRequestArg(
   mock: ReturnType<typeof vi.fn>,
@@ -50,6 +51,7 @@ describe('AgentService.runTurn', () => {
   let toolExecutorRegistry: ToolExecutorRegistry;
   let mockDualConfirm: Partial<DualConfirmService>;
   let mockAuditService: Partial<AuditService>;
+  let mockHistoryCompactionService: Partial<HistoryCompactionService>;
   let config: AgentConfig;
   let service: AgentService;
 
@@ -63,10 +65,17 @@ describe('AgentService.runTurn', () => {
     mockAuditService = {
       recordToolCall: vi.fn().mockResolvedValue(undefined),
     };
+    mockHistoryCompactionService = {
+      compact: vi.fn(),
+    };
     config = {
       maxIterationsPerTurn: 5,
       maxConsecutiveToolFailures: 2,
       maxConcurrentSubAgents: 3,
+      // Alto a propósito: la mayoría de los casos de este archivo no
+      // ejercitan la compresión — los que sí, la overridean puntualmente.
+      maxHistoryTokens: 1_000_000,
+      preserveLastTurns: 6,
     };
 
     service = new AgentService(
@@ -74,6 +83,7 @@ describe('AgentService.runTurn', () => {
       toolExecutorRegistry,
       mockDualConfirm as DualConfirmService,
       mockAuditService as AuditService,
+      mockHistoryCompactionService as HistoryCompactionService,
       config,
     );
   });
@@ -499,5 +509,95 @@ describe('AgentService.runTurn', () => {
 
     expect(result.iterationsUsed).toBe(config.maxIterationsPerTurn);
     expect(result.finalResponse).toMatch(/límite de iteraciones/);
+  });
+
+  describe('compresión de historial (docs/RECOMENDACIONES.md #2)', () => {
+    let compactingService: AgentService;
+
+    beforeEach(() => {
+      compactingService = new AgentService(
+        mockRouter as unknown as BudgetGuardedModelRouter,
+        toolExecutorRegistry,
+        mockDualConfirm as DualConfirmService,
+        mockAuditService as AuditService,
+        mockHistoryCompactionService as HistoryCompactionService,
+        {
+          ...config,
+          maxHistoryTokens: 10,
+          preserveLastTurns: 1,
+        },
+      );
+    });
+
+    it('si el historial estimado supera el umbral, devuelve compactedHistory con el resumen + últimos preserveLastTurns verbatim', async () => {
+      const oldHistory = [
+        { role: 'user' as const, content: 'objective viejo '.repeat(30) },
+        { role: 'assistant' as const, content: 'respuesta vieja '.repeat(30) },
+      ];
+      completeMock.mockResolvedValueOnce(
+        fakeResponse({ content: 'respuesta final' }),
+      );
+      const summaryMessage = {
+        role: 'user' as const,
+        content: '[Resumen automático de turnos previos]\nresumen',
+      };
+      (mockHistoryCompactionService.compact as ReturnType<typeof vi.fn>) = vi
+        .fn()
+        .mockResolvedValue(summaryMessage);
+
+      const result = await compactingService.runTurn({
+        sessionId: 'sess-1',
+        objective: 'objective actual',
+        history: oldHistory,
+      });
+
+      expect(mockHistoryCompactionService.compact).toHaveBeenCalledWith(
+        'sess-1',
+        {
+          toCompact: oldHistory,
+          toPreserve: [{ role: 'user', content: 'objective actual' }],
+        },
+      );
+      expect(result.compactedHistory).toEqual([
+        summaryMessage,
+        { role: 'user', content: 'objective actual' },
+      ]);
+    });
+
+    it('si el historial está bajo el umbral, no llama a compact() ni incluye compactedHistory', async () => {
+      completeMock.mockResolvedValueOnce(
+        fakeResponse({ content: 'respuesta final' }),
+      );
+
+      const result = await compactingService.runTurn({
+        sessionId: 'sess-1',
+        objective: 'hola',
+      });
+
+      expect(mockHistoryCompactionService.compact).not.toHaveBeenCalled();
+      expect(result).not.toHaveProperty('compactedHistory');
+    });
+
+    it('si compact() falla (devuelve undefined), el turno igual responde normalmente, sin compactedHistory', async () => {
+      const oldHistory = [
+        { role: 'user' as const, content: 'objective viejo '.repeat(30) },
+        { role: 'assistant' as const, content: 'respuesta vieja '.repeat(30) },
+      ];
+      completeMock.mockResolvedValueOnce(
+        fakeResponse({ content: 'respuesta final' }),
+      );
+      (mockHistoryCompactionService.compact as ReturnType<typeof vi.fn>) = vi
+        .fn()
+        .mockResolvedValue(undefined);
+
+      const result = await compactingService.runTurn({
+        sessionId: 'sess-1',
+        objective: 'objective actual',
+        history: oldHistory,
+      });
+
+      expect(result.finalResponse).toBe('respuesta final');
+      expect(result).not.toHaveProperty('compactedHistory');
+    });
   });
 });

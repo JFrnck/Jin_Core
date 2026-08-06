@@ -9,3 +9,16 @@ max_consecutive_tool_failures: 3
 # corriendo en paralelo dentro de un mismo lote de tickets sin
 # dependencias entre sí. Default bajo a propósito (requisito del owner).
 max_concurrent_sub_agents: 3
+# Poda + compresión del historial de chat (docs/RECOMENDACIONES.md #2 +
+# requisito del owner 2026-08-04). Si el historial estimado supera este
+# techo, se comprime el tramo más viejo a un resumen. ~60% del
+# max_tokens_input de chat_conversational (config/models.yaml) — deja
+# margen para el objective/tools/system prompt del turno actual.
+max_history_tokens: 30000
+# Piso infranqueable: los últimos N turnos SIEMPRE quedan verbatim, nunca
+# se comprimen — no solo por UX (continuidad inmediata), sino porque es
+# la única garantía estructural de que el turno actual (con tags
+# <untrusted_content_{nonce}> recién creados) nunca entra a una llamada
+# de compresión el mismo turno en que se generó. No puede ser 0 (ver
+# validación en agent-config.schema.ts).
+preserve_last_turns: 6

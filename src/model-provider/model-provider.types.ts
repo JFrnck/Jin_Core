@@ -1,5 +1,5 @@
 /**
- * Los 8 TaskProfiles definidos en `docs/MODEL_ROUTING.md` §2.1 /
+ * Los 9 TaskProfiles definidos en `docs/MODEL_ROUTING.md` §2.1 /
  * `config/models.yaml`. Unión literal (no enum) para que un typo en un
  * profile inexistente sea un error de compilación, no de runtime.
  */
@@ -11,6 +11,7 @@ export type TaskProfile =
   | 'chat_conversational'
   | 'code_execution_planner'
   | 'memory_consolidation'
+  | 'history_compaction'
   | 'vision_analysis';
 
 export interface ModelProfileConfig {
