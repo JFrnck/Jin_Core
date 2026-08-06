@@ -134,10 +134,14 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
       body: 'mundo',
     });
 
-    // No se auditó todavía — el audit de una tool confirm ocurre recién
-    // al aprobarse, vía ApprovalExecutionService (PR #8), no acá.
+    // La ejecución real de una tool confirm ocurre recién al aprobarse,
+    // vía ApprovalExecutionService (PR #8) — pero `createPendingApproval`
+    // ya escribe una fila `pending` permanente en audit_log desde este
+    // momento (docs/RECOMENDACIONES.md #13), antes de cualquier resolución.
     const auditRows = await testDb.db.select().from(auditLog);
-    expect(auditRows).toHaveLength(0);
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.approvalStatus).toBe('pending');
+    expect(auditRows[0]?.toolName).toBe('sendEmail');
   });
 
   it('tool auto: ejecuta ya y deja una fila real en audit_log con actor "agent"', async () => {
@@ -202,9 +206,16 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
     expect(deleteExecutor).not.toHaveBeenCalled();
     expect(result.pendingApprovals).toHaveLength(1);
 
+    // 2 filas ahora, no 1: la tool auto audita al ejecutar (como siempre),
+    // y la tool confirm ahora TAMBIÉN deja una fila `pending` permanente
+    // desde `createPendingApproval` (docs/RECOMENDACIONES.md #13) — antes
+    // esta última no dejaba ningún rastro en audit_log hasta resolverse.
     const auditRows = await testDb.db.select().from(auditLog);
-    expect(auditRows).toHaveLength(1);
-    expect(auditRows[0]?.toolName).toBe('canvasListAssignments');
+    expect(auditRows).toHaveLength(2);
+    const autoRow = auditRows.find((r) => r.approvalStatus === 'auto');
+    const pendingRow = auditRows.find((r) => r.approvalStatus === 'pending');
+    expect(autoRow?.toolName).toBe('canvasListAssignments');
+    expect(pendingRow?.toolName).toBe('deleteCalendarEventFuture');
 
     const pendingRows = await testDb.db.select().from(pendingApprovals);
     expect(pendingRows).toHaveLength(1);

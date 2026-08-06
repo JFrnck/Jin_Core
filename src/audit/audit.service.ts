@@ -148,7 +148,12 @@ export class AuditService {
   }
 
   private async appendRow(data: AppendableRow): Promise<AuditLogRow> {
-    if (this.chainVerification.isLocked()) {
+    // `await` explícito, no opcional: `isLocked()` ahora es async
+    // (docs/RECOMENDACIONES.md #12, persistido en audit_chain_lock). Un
+    // Promise es siempre truthy — olvidar el await bloquearía TODAS las
+    // escrituras del audit log permanentemente, el modo de falla opuesto
+    // al que este chequeo existe para prevenir.
+    if (await this.chainVerification.isLocked()) {
       throw new AuditChainLockedError();
     }
 

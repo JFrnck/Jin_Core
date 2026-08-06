@@ -89,10 +89,16 @@ describe('ApprovalExecutionService (integración, Postgres real)', () => {
     );
     expect(pending).toBeUndefined();
 
+    // 2 filas ahora, no 1: `createPendingApproval` (docs/RECOMENDACIONES.md
+    // #13) escribe una fila `tool_call`/pending permanente ANTES de la
+    // resolución — sobrevive aunque el pending se borre, a diferencia de
+    // antes de este fix.
     const auditRows = await testDb.db.select().from(auditLog);
-    expect(auditRows).toHaveLength(1);
-    expect(auditRows[0]?.actionType).toBe('approval');
-    expect(auditRows[0]?.toolName).toBe('sendEmail');
+    expect(auditRows).toHaveLength(2);
+    const pendingRow = auditRows.find((r) => r.approvalStatus === 'pending');
+    const approvalRow = auditRows.find((r) => r.actionType === 'approval');
+    expect(pendingRow?.toolName).toBe('sendEmail');
+    expect(approvalRow?.toolName).toBe('sendEmail');
   });
 
   it('resolveAndExecute (dual-confirm): la primera aprobación NO ejecuta nada', async () => {
@@ -114,8 +120,12 @@ describe('ApprovalExecutionService (integración, Postgres real)', () => {
     expect(result).toEqual({ outcome: 'awaiting-second' });
     expect(executor).not.toHaveBeenCalled();
 
+    // 1 fila (pending), no 0: la primera aprobación de un dual-confirm no
+    // ejecuta ni audita nada por sí misma, pero `createPendingApproval` ya
+    // había escrito la fila permanente al crearse el pending.
     const auditRows = await testDb.db.select().from(auditLog);
-    expect(auditRows).toHaveLength(0);
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.approvalStatus).toBe('pending');
   });
 
   it('resolveAndExecute lanza PendingApprovalNotFoundError si el requestId no existe', async () => {
@@ -150,9 +160,12 @@ describe('ApprovalExecutionService (integración, Postgres real)', () => {
     );
     expect(pending).toBeUndefined();
 
+    // 2 filas ahora, no 1 — mismo motivo que el test de resolveAndExecute
+    // de arriba: la fila pending permanente + la fila terminal de rejection.
     const auditRows = await testDb.db.select().from(auditLog);
-    expect(auditRows).toHaveLength(1);
-    expect(auditRows[0]?.actionType).toBe('rejection');
+    expect(auditRows).toHaveLength(2);
+    expect(auditRows.some((r) => r.approvalStatus === 'pending')).toBe(true);
+    expect(auditRows.some((r) => r.actionType === 'rejection')).toBe(true);
   });
 
   it('resolveRejection lanza PendingApprovalNotFoundError si el requestId no existe', async () => {

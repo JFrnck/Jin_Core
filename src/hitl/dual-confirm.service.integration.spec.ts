@@ -1,12 +1,15 @@
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   startTestDb,
   type TestDb,
 } from '../../test/support/postgres-testcontainer';
+import { AuditService } from '../audit/audit.service';
+import { ChainVerificationService } from '../audit/chain-verification.service';
 import { DB_CONNECTION } from '../db/db.module';
-import { pendingApprovals } from '../db/schema';
+import { auditLog, pendingApprovals } from '../db/schema';
 import {
   DualConfirmService,
   PendingApprovalNotFoundError,
@@ -23,6 +26,8 @@ describe('DualConfirmService (integración, Postgres real)', () => {
       imports: [EventEmitterModule.forRoot()],
       providers: [
         DualConfirmService,
+        ChainVerificationService,
+        AuditService,
         { provide: DB_CONNECTION, useValue: testDb.db },
       ],
     }).compile();
@@ -35,6 +40,7 @@ describe('DualConfirmService (integración, Postgres real)', () => {
 
   beforeEach(async () => {
     await testDb.db.delete(pendingApprovals);
+    await testDb.db.delete(auditLog);
   });
 
   it('createPendingApproval + getPending persisten los datos correctamente', async () => {
@@ -85,6 +91,55 @@ describe('DualConfirmService (integración, Postgres real)', () => {
       body: 'Cuerpo',
     });
     expect(withoutPayload?.payload).toBeNull();
+  });
+
+  it('createPendingApproval escribe una fila permanente en audit_log con approvalStatus:pending — sobrevive aunque se borre el pending (docs/RECOMENDACIONES.md #13)', async () => {
+    await service.createPendingApproval({
+      requestId: '33333333-3333-4333-8333-333333333333',
+      toolName: 'sendEmail',
+      level: 'confirm',
+      inputsHash: 'h3',
+      actor: 'web-chat',
+      externalInputsSummary: 'readEmails (2)',
+    });
+
+    const rows = await testDb.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.requestId, '33333333-3333-4333-8333-333333333333'));
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.actionType).toBe('tool_call');
+    expect(rows[0]?.approvalStatus).toBe('pending');
+    expect(rows[0]?.actor).toBe('web-chat');
+    expect(rows[0]?.externalInputsSummary).toBe('readEmails (2)');
+
+    // Se borra el pending (mismo efecto que una resolución real) — la
+    // fila de audit_log ya escrita no depende de que pending_approvals
+    // siga existiendo, es la garantía central de este fix.
+    await service.removePending('33333333-3333-4333-8333-333333333333');
+    const rowsAfterRemoval = await testDb.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.requestId, '33333333-3333-4333-8333-333333333333'));
+    expect(rowsAfterRemoval).toHaveLength(1);
+  });
+
+  it('createPendingApproval sin actor/externalInputsSummary usa el default "agent" y null (callers legacy que no los pasan)', async () => {
+    await service.createPendingApproval({
+      requestId: '44444444-4444-4444-8444-444444444444',
+      toolName: 'deleteCalendarEventFuture',
+      level: 'confirm',
+      inputsHash: 'h4',
+    });
+
+    const rows = await testDb.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.requestId, '44444444-4444-4444-8444-444444444444'));
+
+    expect(rows[0]?.actor).toBe('agent');
+    expect(rows[0]?.externalInputsSummary).toBeNull();
   });
 
   it('recordApproval resuelve de inmediato para nivel confirm', async () => {

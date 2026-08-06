@@ -147,6 +147,24 @@ export type BudgetKillSwitchRow = typeof budgetKillSwitch.$inferSelect;
 export type NewBudgetKillSwitchRow = typeof budgetKillSwitch.$inferInsert;
 
 /**
+ * Fila singleton (`id` siempre 1) con el estado del lock del audit log
+ * por corrupción de cadena (BLUEPRINT 9.5). Persistido a propósito —
+ * antes vivía solo como `ChainVerificationService.locked` en memoria
+ * (gap documentado en comentarios de `budget_kill_switch` de arriba, sin
+ * resolver hasta ahora): un simple redeploy no debe reanudar escrituras
+ * sobre una cadena que sigue corrupta, misma garantía que el kill switch.
+ */
+export const auditChainLock = pgTable('audit_chain_lock', {
+  id: integer('id').primaryKey(),
+  locked: boolean('locked').notNull().default(false),
+  lockedAt: timestamp('locked_at', { withTimezone: true }),
+  reason: text('reason'),
+});
+
+export type AuditChainLockRow = typeof auditChainLock.$inferSelect;
+export type NewAuditChainLockRow = typeof auditChainLock.$inferInsert;
+
+/**
  * Fila singleton (`id` siempre 1) con el estado de refresco del token
  * de Google OAuth Testing Mode (Fase 4.2). Persistido para calcular con
  * precisión el aviso 24h antes del vencimiento de 7 días, sobreviviendo

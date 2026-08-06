@@ -36,7 +36,7 @@ describe('AuditService + ChainVerificationService (integración, Postgres real)'
 
   beforeEach(async () => {
     await testDb.db.delete(auditLog);
-    chainVerification.unlock();
+    await chainVerification.unlock();
   });
 
   it('recordToolCall inserta la primera fila con prevHash = GENESIS_HASH', async () => {
@@ -144,7 +144,7 @@ describe('AuditService + ChainVerificationService (integración, Postgres real)'
     const result = await chainVerification.verifyDaily();
     expect(result.valid).toBe(false);
     expect(result.brokenAtId).toBe(row1.id);
-    expect(chainVerification.isLocked()).toBe(true);
+    expect(await chainVerification.isLocked()).toBe(true);
   });
 
   it('MUTACIÓN: un DELETE de una fila histórica es detectado', async () => {
@@ -193,6 +193,27 @@ describe('AuditService + ChainVerificationService (integración, Postgres real)'
         approvalStatus: 'auto',
       }),
     ).rejects.toThrow('bloqueado');
+  });
+
+  it('el lock persiste — una instancia NUEVA del servicio (simula un restart de pod) contra la misma DB ve el lock activo (docs/RECOMENDACIONES.md #12)', async () => {
+    const row1 = await auditService.recordToolCall({
+      requestId: '11111111-1111-4111-8111-111111111111',
+      actor: 'agent',
+      toolName: 'readEmails',
+      inputsHash: 'h1',
+      approvalStatus: 'auto',
+    });
+    await testDb.pool.query(
+      'UPDATE audit_log SET approval_status = $1 WHERE id = $2',
+      ['approved', row1.id],
+    );
+    await chainVerification.verifyDaily(); // detecta la corrupción y persiste el lock
+
+    // Instancia nueva, sin ningún estado en memoria compartido con la de
+    // arriba — antes de este fix (`locked` en memoria) esto habría dado
+    // `false`, exactamente el gap que un redeploy explotaba.
+    const freshInstance = new ChainVerificationService(testDb.db);
+    await expect(freshInstance.isLocked()).resolves.toBe(true);
   });
 
   it('escrituras concurrentes no rompen la cadena (advisory lock serializa los appends)', async () => {

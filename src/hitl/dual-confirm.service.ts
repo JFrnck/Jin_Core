@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
+import { AuditService } from '../audit/audit.service';
 import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { pendingApprovals, type PendingApprovalRow } from '../db/schema';
@@ -83,6 +84,7 @@ export class DualConfirmService {
   constructor(
     @Inject(DB_CONNECTION) private readonly db: Db,
     private readonly eventEmitter: EventEmitter2,
+    private readonly auditService: AuditService,
   ) {}
 
   async createPendingApproval(
@@ -97,6 +99,31 @@ export class DualConfirmService {
       payload: input.payload ?? null,
       actor: input.actor ?? null,
       externalInputsSummary: input.externalInputsSummary ?? null,
+    });
+
+    // Único punto de creación de un pending approval, sea cual sea el
+    // caller (agent loop, orquestador, tools de Google) — fila permanente
+    // en audit_log con approvalStatus:'pending' ANTES de que se resuelva.
+    // docs/RECOMENDACIONES.md #13: `pending_approvals.actor`/
+    // `externalInputsSummary` se borran al resolverse (ver `removePending`),
+    // así que sin esto esa traza se perdía para siempre del registro
+    // permanente. Se correlaciona por `requestId` con la fila terminal
+    // (approval/rejection/timeout) — mismo diseño ya documentado en
+    // audit.service.ts ("cada transición... comparte requestId con la
+    // fila que la originó"), no hace falta duplicar el dato en la fila
+    // de resolución.
+    await this.auditService.recordToolCall({
+      requestId: input.requestId,
+      actor: input.actor ?? 'agent',
+      toolName: input.toolName,
+      inputsHash: input.inputsHash,
+      approvalStatus: 'pending',
+      ...(input.planSummary !== undefined
+        ? { planSummary: input.planSummary }
+        : {}),
+      ...(input.externalInputsSummary !== undefined
+        ? { externalInputsSummary: input.externalInputsSummary }
+        : {}),
     });
 
     this.eventEmitter.emit(PENDING_APPROVAL_CREATED_EVENT, {
