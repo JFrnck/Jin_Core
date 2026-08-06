@@ -25,6 +25,8 @@ import {
 import type { Ticket, TicketComment } from '../src/agent/orchestrator.types';
 import { ExecutorClientService } from '../src/executor-client/executor-client.service';
 import type { PreviewServiceInfo } from '../src/executor-client/executor-client.service';
+import { HealthService } from '../src/health/health.service';
+import type { HealthReport } from '../src/health/health.service';
 
 describe('AppController (e2e)', () => {
   let app: INestApplication<App>;
@@ -604,5 +606,81 @@ describe('PreviewServicesController (e2e)', () => {
       .expect(200);
 
     expect(response.body).toEqual({ ok: true });
+  });
+});
+
+describe('HealthController (e2e) — pipeline real: guard global + status code', () => {
+  let app: INestApplication<App>;
+
+  async function bootstrap(report: HealthReport): Promise<void> {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(HealthService)
+      .useValue({ check: () => Promise.resolve(report) })
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  }
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  // Sin `Authorization`: el kubelet no tiene JWT. Si `@Public()` faltara,
+  // el `JwtAuthGuard` global devolvería 401 y K8s leería el pod como
+  // caído para siempre — el modo de falla que este test existe para
+  // detectar, invisible en un unit spec del controller.
+  it('GET /health/live sin token → 200 (ruta pública, guard global real)', async () => {
+    await bootstrap({ status: 'ok', postgres: 'up', redis: 'up' });
+
+    const response = await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200);
+
+    expect(response.body).toEqual({ status: 'ok' });
+  });
+
+  it('GET /health/ready sin token → 200 y el reporte sobrevive al ZodSerializerInterceptor', async () => {
+    await bootstrap({ status: 'ok', postgres: 'up', redis: 'up' });
+
+    const response = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      status: 'ok',
+      postgres: 'up',
+      redis: 'up',
+    });
+  });
+
+  it('GET /health/ready con Redis caído → 200 degraded: el pod sigue sirviendo', async () => {
+    await bootstrap({ status: 'degraded', postgres: 'up', redis: 'down' });
+
+    const response = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200);
+
+    expect(response.body).toEqual({
+      status: 'degraded',
+      postgres: 'up',
+      redis: 'down',
+    });
+  });
+
+  it('GET /health/ready con Postgres caído → 503 con cuerpo, no una respuesta vacía', async () => {
+    await bootstrap({ status: 'error', postgres: 'down', redis: 'up' });
+
+    const response = await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(503);
+
+    expect(response.body).toEqual({
+      status: 'error',
+      postgres: 'down',
+      redis: 'up',
+    });
   });
 });

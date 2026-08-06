@@ -16,6 +16,7 @@ import { JinErrorFilter } from './common/filters/jin-error.filter';
 import { ConfigModule } from './config';
 import { DbModule } from './db/db.module';
 import { ExecutorClientModule } from './executor-client/executor-client.module';
+import { HealthModule } from './health/health.module';
 import { HitlModule } from './hitl/hitl.module';
 import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
@@ -33,6 +34,7 @@ import { TelegramModule } from './telegram/telegram.module';
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     RateLimitModule,
+    HealthModule,
     AuditModule,
     HitlModule,
     ModelProviderModule,

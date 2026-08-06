@@ -132,6 +132,25 @@ export class RedisThrottlerStorage
     }
   }
 
+  /**
+   * Usado solo por el health check (`HealthService`): es el único punto
+   * del repo que tiene la conexión a Redis, así que expone el PING en vez
+   * de abrir una segunda conexión solo para sondear. Nunca lanza — el
+   * caller decide qué significa `false` (para readiness, "degraded", no
+   * "fuera de rotación": ver el porqué en `HealthService`).
+   */
+  async isReachable(timeoutMs: number): Promise<boolean> {
+    try {
+      const ping = this.redis.ping().then(() => true);
+      const timeout = new Promise<boolean>((resolve) => {
+        setTimeout(() => resolve(false), timeoutMs).unref();
+      });
+      return await Promise.race([ping, timeout]);
+    } catch {
+      return false;
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     await this.redis.quit();
   }

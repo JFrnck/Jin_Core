@@ -15,6 +15,46 @@
         ]
       }
     },
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Liveness — el proceso responde. No consulta dependencias a propósito: reiniciar el pod no arregla un Postgres caído.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "status \"ok\" (todo arriba) o \"degraded\" (Redis caído, se sigue sirviendo)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthReportDto_Output"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Postgres no responde"
+          }
+        },
+        "summary": "Readiness — 200 si el pod puede servir, 503 si no. Postgres es dependencia dura; Redis solo degrada (fail-open, ADR 0007).",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/api/audit": {
       "get": {
         "operationId": "AuditController_list",
@@ -496,6 +536,39 @@
   "servers": [],
   "components": {
     "schemas": {
+      "HealthReportDto_Output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded",
+              "error"
+            ]
+          },
+          "postgres": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          },
+          "redis": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "postgres",
+          "redis"
+        ],
+        "additionalProperties": false
+      },
       "ListRecentResponseDto": {
         "type": "object",
         "properties": {
