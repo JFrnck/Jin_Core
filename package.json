@@ -46,7 +46,7 @@
     "googleapis": "^173.0.0",
     "grammy": "^1.45.1",
     "ioredis": "^6.0.0",
-    "js-yaml": "^5.2.1",
+    "js-yaml": "^5.2.3",
     "nestjs-zod": "^5.5.0",
     "openai": "^6.49.0",
     "pg": "8.22.0",

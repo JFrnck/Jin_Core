@@ -1,7 +1,15 @@
 # No es un monorepo (AGENTS.md 4.1): este repo sigue siendo independiente,
 # con su propio lockfile. pnpm 11 centraliza aquí la aprobación de scripts
-# de instalación (allowBuilds) — es solo dónde vive esta configuración,
-# no una decisión de arquitectura.
+# de instalación (allowBuilds) y los overrides de versión — es solo dónde
+# vive esta configuración, no una decisión de arquitectura.
+overrides:
+  # docs/RECOMENDACIONES.md #18: @nestjs/swagger@11.4.6 (vía nestjs-zod)
+  # fija js-yaml en el EXACTO 5.2.1 (no un rango) — el advisory alto de
+  # DoS por parsing exponencial (GHSA, parcheado en >=5.2.2) cubre esa
+  # versión. Nuestra propia dependencia directa (config/*.yaml al
+  # arrancar) ya usa `^5.2.1`, que sí permite subir — el pin ajeno de
+  # @nestjs/swagger es lo único que necesitaba forzarse.
+  js-yaml: ^5.2.3
 allowBuilds:
   # unrs-resolver: dependencia real de typescript-eslint (resolución de
   # módulos para el linter). Necesita su binario nativo.
