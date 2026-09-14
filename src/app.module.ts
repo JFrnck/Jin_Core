@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { HitlModule } from './hitl/hitl.module';
 import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
+import { McpModule } from './mcp/mcp.module';
 import { MemoryModule } from './memory/memory.module';
 import { ModelProviderModule } from './model-provider/model-provider.module';
 import { OrchestratorModule } from './agent/orchestrator.module';
@@ -42,6 +43,7 @@ import { TelegramModule } from './telegram/telegram.module';
     CanvasModule,
     GoogleModule,
     MemoryModule,
+    McpModule,
     AgentModule,
     OrchestratorModule,
     TelegramModule,
