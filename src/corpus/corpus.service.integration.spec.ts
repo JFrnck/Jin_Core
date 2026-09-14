@@ -65,6 +65,40 @@ describe('CorpusService (integración, Postgres real con pgvector)', () => {
     setGaugeMock.mockReset();
   });
 
+  /**
+   * `rag_hit_ratio` se calcula sobre contadores en memoria del *proceso*
+   * de `CorpusService` (ver comentario en corpus.service.ts) -- viven en
+   * la instancia, no en la DB, y `beforeEach` solo limpia la DB y los
+   * mocks. Los dos tests de `rag_hit_ratio` de abajo necesitan afirmar un
+   * ratio *absoluto* (0, 0.5, 1), así que cada uno arma su propia
+   * instancia aislada de `CorpusService` -- nunca la `service` compartida
+   * del resto del archivo, que ya acumuló hits/total de tests previos.
+   */
+  async function createIsolatedService(): Promise<{
+    service: CorpusService;
+    embedMock: ReturnType<typeof vi.fn>;
+    setGaugeMock: ReturnType<typeof vi.fn>;
+  }> {
+    const isolatedEmbedMock = vi.fn();
+    const isolatedSetGaugeMock = vi.fn();
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        CorpusService,
+        { provide: DB_CONNECTION, useValue: testDb.db },
+        { provide: EmbeddingProvider, useValue: { embed: isolatedEmbedMock } },
+        {
+          provide: getToken(RAG_HIT_RATIO),
+          useValue: { set: isolatedSetGaugeMock },
+        },
+      ],
+    }).compile();
+    return {
+      service: moduleRef.get(CorpusService),
+      embedMock: isolatedEmbedMock,
+      setGaugeMock: isolatedSetGaugeMock,
+    };
+  }
+
   it('indexEmail persiste la entrada sanitizada y su embedding, recuperable por búsqueda', async () => {
     embedMock.mockResolvedValueOnce(VECTOR_A); // indexEmail
     embedMock.mockResolvedValueOnce(VECTOR_A); // search (misma query, mismo vector)
@@ -147,26 +181,36 @@ describe('CorpusService (integración, Postgres real con pgvector)', () => {
   });
 
   it('rag_hit_ratio: hit cuando hay resultados, y el gauge se actualiza', async () => {
-    embedMock.mockResolvedValueOnce(VECTOR_A);
-    await service.indexEmail({ messageId: 'msg-1', body: 'contenido' });
+    const isolated = await createIsolatedService();
 
-    embedMock.mockResolvedValueOnce(VECTOR_A);
-    await service.search('query con resultado', 5);
+    isolated.embedMock.mockResolvedValueOnce(VECTOR_A);
+    await isolated.service.indexEmail({
+      messageId: 'msg-1',
+      body: 'contenido',
+    });
 
-    expect(setGaugeMock).toHaveBeenLastCalledWith(1); // 1 hit / 1 total
+    isolated.embedMock.mockResolvedValueOnce(VECTOR_A);
+    await isolated.service.search('query con resultado', 5);
+
+    expect(isolated.setGaugeMock).toHaveBeenLastCalledWith(1); // 1 hit / 1 total
   });
 
   it('rag_hit_ratio: miss cuando el corpus está vacío, ratio baja del promedio', async () => {
-    embedMock.mockResolvedValueOnce(VECTOR_A);
-    await service.search('corpus vacío', 5); // miss
+    const isolated = await createIsolatedService();
 
-    expect(setGaugeMock).toHaveBeenLastCalledWith(0); // 0 hits / 1 total
+    isolated.embedMock.mockResolvedValueOnce(VECTOR_A);
+    await isolated.service.search('corpus vacío', 5); // miss
 
-    embedMock.mockResolvedValueOnce(VECTOR_A);
-    await service.indexEmail({ messageId: 'msg-1', body: 'contenido' });
-    embedMock.mockResolvedValueOnce(VECTOR_A);
-    await service.search('ahora sí hay algo', 5); // hit
+    expect(isolated.setGaugeMock).toHaveBeenLastCalledWith(0); // 0 hits / 1 total
 
-    expect(setGaugeMock).toHaveBeenLastCalledWith(0.5); // 1 hit / 2 total
+    isolated.embedMock.mockResolvedValueOnce(VECTOR_A);
+    await isolated.service.indexEmail({
+      messageId: 'msg-1',
+      body: 'contenido',
+    });
+    isolated.embedMock.mockResolvedValueOnce(VECTOR_A);
+    await isolated.service.search('ahora sí hay algo', 5); // hit
+
+    expect(isolated.setGaugeMock).toHaveBeenLastCalledWith(0.5); // 1 hit / 2 total
   });
 });
