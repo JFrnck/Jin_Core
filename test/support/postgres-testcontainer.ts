@@ -8,10 +8,14 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import * as schema from '../../src/db/schema';
 
-// Pinneado (nunca `latest`), Postgres 16 como el resto del stack
-// (BLUEPRINT 3.3). No usa pgvector aquí: HITL/audit no tocan esa
-// extensión, y el testcontainer genérico basta.
-const POSTGRES_IMAGE = 'postgres:16.14-alpine';
+// Pinneado (nunca `latest`) -- mismo tag que producción y
+// docker-compose.dev.yaml (BLUEPRINT 3.3). Antes usaba el postgres:16
+// genérico (HITL/audit no tocan pgvector), pero desde Fase 9.3
+// (src/corpus/) `CREATE EXTENSION vector` necesita el binario de la
+// extensión, que el postgres genérico no trae -- pgvector/pgvector es
+// un superset estricto de la imagen oficial de Postgres 16, no debería
+// romper ningún test existente.
+const POSTGRES_IMAGE = 'pgvector/pgvector:0.8.5-pg16';
 
 export interface TestDb {
   pool: Pool;
