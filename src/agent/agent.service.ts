@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { classifyToolCall } from '../hitl/classifier';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
@@ -17,7 +18,7 @@ import {
   summarizeUntrustedSources,
   wrapUntrustedContent,
 } from '../security/injection-sanitizer';
-import { listRegisteredTools } from '../tools/registry';
+import { getToolDefinition, listRegisteredTools } from '../tools/registry';
 import type { AgentConfig } from './agent-config.schema';
 import { AGENT_CONFIG } from './agent.tokens';
 import {
@@ -130,6 +131,7 @@ export class AgentService {
     private readonly dualConfirmService: DualConfirmService,
     private readonly auditService: AuditService,
     private readonly historyCompactionService: HistoryCompactionService,
+    private readonly featureFlagsService: FeatureFlagsService,
     @Inject(AGENT_CONFIG) private readonly config: AgentConfig,
   ) {}
 
@@ -364,6 +366,24 @@ export class AgentService {
     toolResultBlocks: ModelMessageContentBlock[],
     messages: readonly ModelMessage[],
   ): Promise<void> {
+    // Fase 9.5: chequeo único de integración apagada, antes de clasificar
+    // o contar fallos -- una integración desactivada no es un "fallo" de
+    // la tool, es una decisión operativa del owner (config/feature-flags.yaml).
+    const toolDefinition = getToolDefinition(call.name);
+    if (
+      toolDefinition?.integration &&
+      !this.featureFlagsService.isIntegrationEnabled(toolDefinition.integration)
+    ) {
+      toolResultBlocks.push(
+        buildToolResultBlock(
+          call.id,
+          `La integración "${toolDefinition.integration}" está desactivada (feature flag). No se ejecutó "${call.name}".`,
+          true,
+        ),
+      );
+      return;
+    }
+
     const failureKey = buildToolCallKey(call.name, call.input);
     const priorFailures = consecutiveFailures.get(failureKey) ?? 0;
 
@@ -379,7 +399,12 @@ export class AgentService {
     }
 
     try {
-      const decision = classifyToolCall(call.name, call.input);
+      // classifyToolCall (src/hitl/classifier.ts) sigue siendo el ÚNICO
+      // nivel ESTÁTICO -- resolveEffectiveLevel solo lo ajusta si existe
+      // un override de config/feature-flags.yaml ya aprobado (Fase 9.5).
+      const decision = await this.featureFlagsService.resolveEffectiveLevel(
+        classifyToolCall(call.name, call.input),
+      );
       const inputsHash = computeInputsHash(call.input);
 
       if (decision.level === 'confirm' || decision.level === 'dual-confirm') {

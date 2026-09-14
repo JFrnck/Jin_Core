@@ -1,0 +1,28 @@
+# Feature flags en caliente (BLUEPRINT §12.3, Fase 9.5). Reload sin
+# redeploy: kill -HUP al proceso de jin-core (ver Jin_Infra, ConfigMap +
+# volumen montado en el Deployment).
+#
+# Cambiar este archivo en producción: editar -> PR a Jin_Infra -> merge
+# -> Flux lo aplica -> `kubectl -n jin exec deploy/jin-core -- kill -HUP 1`.
+# El LLM no tiene NINGÚN camino hacia este archivo -- no es una tool
+# declarada en Jin_Core/src/tools/registry.ts.
+integrations:
+  canvas:
+    enabled: true
+  google:
+    enabled: true
+  mcp:
+    enabled: true
+  telegram:
+    enabled: true
+
+# Override opcional del modelo `primary` por TaskProfile, sobre
+# config/models.yaml (no lo reemplaza -- capa hot encima de la
+# estática). Vacío por default.
+modelRouting: {}
+
+# Override de hitlLevel por tool (BLUEPRINT §12.3). Subir el nivel
+# (más restrictivo) se aplica al reload; bajarlo requiere una aprobación
+# dual-confirm real antes de tomar efecto -- ver
+# src/feature-flags/feature-flags.service.ts. Vacío por default.
+hitlOverrides: {}

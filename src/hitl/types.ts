@@ -14,6 +14,16 @@ export const HITL_LEVELS = [
 export const HitlLevelSchema = z.enum(HITL_LEVELS);
 export type HitlLevel = z.infer<typeof HitlLevelSchema>;
 
+/**
+ * Posición de un nivel en la escala de restricción (Fase 9.5,
+ * `feature-flags`) — `HITL_LEVELS` ya está declarado en orden creciente,
+ * esto solo le da nombre al índice para no repetir el array en cada
+ * comparación "¿este override sube o baja el nivel?".
+ */
+export function hitlLevelOrdinal(level: HitlLevel): number {
+  return HITL_LEVELS.indexOf(level);
+}
+
 /** Cuántas aprobaciones humanas requiere cada nivel — derivado, no declarado dos veces. */
 export function approvalsRequiredFor(level: HitlLevel): 0 | 1 | 2 {
   switch (level) {

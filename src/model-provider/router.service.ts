@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AnthropicProvider } from './anthropic.provider';
 import { MODELS_CONFIG } from './model-provider.tokens';
 import type {
@@ -30,6 +31,7 @@ export class ModelRouterService {
     private readonly anthropicProvider: AnthropicProvider,
     private readonly googleProvider: GoogleProvider,
     private readonly failoverService: FailoverService,
+    private readonly featureFlagsService: FeatureFlagsService,
   ) {}
 
   async complete(
@@ -37,8 +39,25 @@ export class ModelRouterService {
     request: ModelCompletionRequest,
     hints?: SelectModelHints,
   ): Promise<ModelCompletionResponse> {
-    const selected = selectModel(this.profiles, taskProfile, hints);
-    const profile = this.profiles[taskProfile];
+    // Fase 9.5 (BLUEPRINT §12.3): override hot de `primary` sobre
+    // config/models.yaml -- regla de oro #5 intacta, sigue siendo
+    // 100% config-driven, solo con una segunda capa encima de la
+    // estática. Ningún cambio si no hay override declarado (camino
+    // caliente sin allocación extra).
+    const modelOverride =
+      this.featureFlagsService.getModelOverride(taskProfile);
+    const effectiveProfiles = modelOverride
+      ? {
+          ...this.profiles,
+          [taskProfile]: {
+            ...this.profiles[taskProfile],
+            primary: modelOverride,
+          },
+        }
+      : this.profiles;
+
+    const selected = selectModel(effectiveProfiles, taskProfile, hints);
+    const profile = effectiveProfiles[taskProfile];
     const secondaryModelId =
       selected.modelId === profile.primary ? profile.fallback : profile.primary;
 

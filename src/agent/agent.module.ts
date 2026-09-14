@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { BudgetModule } from '../budget/budget.module';
+import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { HitlModule } from '../hitl/hitl.module';
 import { MemoryModule } from '../memory/memory.module';
 import { loadAgentConfig, type AgentConfig } from './agent-config.schema';
@@ -12,7 +13,13 @@ import { HistoryCompactionService } from './history-compaction.service';
 const AGENT_CONFIG_PATH = join(process.cwd(), 'config', 'agent.yaml');
 
 @Module({
-  imports: [BudgetModule, HitlModule, AuditModule, MemoryModule],
+  imports: [
+    BudgetModule,
+    HitlModule,
+    AuditModule,
+    MemoryModule,
+    FeatureFlagsModule,
+  ],
   providers: [
     {
       provide: AGENT_CONFIG,

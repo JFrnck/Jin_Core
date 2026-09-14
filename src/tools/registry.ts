@@ -1,3 +1,4 @@
+import type { IntegrationName } from '../feature-flags/feature-flags.types';
 import type { HitlLevel } from '../hitl/types';
 
 /**
@@ -28,6 +29,15 @@ export interface ToolDefinition {
    * por su cuenta, nunca el LLM.
    */
   readonly inputSchema: Record<string, unknown>;
+  /**
+   * Integración toggleable vía `config/feature-flags.yaml` (Fase 9.5,
+   * BLUEPRINT §12.3) que esta tool necesita para funcionar. Ausente para
+   * tools que no dependen de una integración externa apagable (plan,
+   * runCode, orquestación, preview services). `AgentService` rechaza la
+   * llamada ANTES de clasificarla si la integración declarada acá está
+   * desactivada — chequeo único, no disperso por módulo.
+   */
+  readonly integration?: IntegrationName;
 }
 
 // `as const` es solo un contrato de tipos — Object.freeze es lo que da la
@@ -37,6 +47,7 @@ export interface ToolDefinition {
 const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   Object.freeze({
     name: 'readEmails',
+    integration: 'google',
     hitlLevel: 'auto',
     description:
       'Lee correos del usuario. Solo lectura, sin efectos secundarios.',
@@ -61,6 +72,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'createCalendarEvent',
+    integration: 'google',
     hitlLevel: 'notify',
     description:
       'Crea un evento en Google Calendar. Se ejecuta y se notifica después.',
@@ -82,6 +94,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'sendEmail',
+    integration: 'google',
     hitlLevel: 'confirm',
     description:
       'Envía un correo en nombre del usuario. Requiere 1 aprobación.',
@@ -109,6 +122,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   // registradas (WORKFLOW.md 2.2: registry.ts es área de Claude Code).
   Object.freeze({
     name: 'canvasListAssignments',
+    integration: 'canvas',
     hitlLevel: 'auto',
     description:
       'Lista tareas/entregables próximos de Canvas. Solo lectura, sin efectos secundarios.',
@@ -125,6 +139,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'canvasGetCourseContent',
+    integration: 'canvas',
     hitlLevel: 'auto',
     description:
       'Lee materiales de un curso de Canvas (anuncios, archivos). Solo lectura.',
@@ -147,6 +162,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'canvasScheduleStudyBlock',
+    integration: 'canvas',
     hitlLevel: 'notify',
     description:
       'Crea un bloque de estudio sugerido en Google Calendar a partir de tareas de Canvas. Se ejecuta y se notifica después.',
@@ -178,6 +194,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   // se reusa tal cual.
   Object.freeze({
     name: 'listCalendarEvents',
+    integration: 'google',
     hitlLevel: 'auto',
     description:
       'Lista eventos de Google Calendar. Solo lectura, sin efectos secundarios.',
@@ -200,6 +217,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'updateCalendarEvent',
+    integration: 'google',
     hitlLevel: 'notify',
     // Owner decidió 'notify' (no está en BLUEPRINT/PROMPTS explícito):
     // mismo riesgo que crear un evento nuevo — se ejecuta y se notifica
@@ -234,6 +252,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   // ANTES de llamar, no el clasificador después.
   Object.freeze({
     name: 'deleteCalendarEventPast',
+    integration: 'google',
     hitlLevel: 'notify',
     description:
       'Borra un evento pasado de Google Calendar. Se ejecuta y se notifica después.',
@@ -245,6 +264,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'deleteCalendarEventFuture',
+    integration: 'google',
     hitlLevel: 'confirm',
     description:
       'Borra un evento futuro de Google Calendar. Requiere 1 aprobación.',

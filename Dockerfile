@@ -24,6 +24,13 @@ ENV NODE_ENV=production
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --from=builder --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/package.json ./package.json
+# Hallazgo real (Fase 9.5): sin esto, models.yaml/agent.yaml/budget.yaml/
+# feature-flags.yaml/mcp-servers.yaml -- todos leídos por
+# readFileSync(join(process.cwd(), 'config', ...)) en runtime -- nunca
+# existieron en la imagen. jin-core habría fallado con ENOENT al primer
+# arranque en un clúster real; nunca se detectó porque el job "docker"
+# del CI solo publica la imagen, no la corre.
+COPY --from=builder --chown=node:node /app/config ./config
 USER node
 EXPOSE 3000
 ENTRYPOINT ["dumb-init", "--"]
