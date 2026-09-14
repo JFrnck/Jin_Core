@@ -1,8 +1,10 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { FeatureFlagsService } from './feature-flags/feature-flags.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -11,6 +13,18 @@ async function bootstrap() {
   // httpOnly `__Host-jin_session` (Fase 6.1) — sin esto `req.cookies` no
   // existe y el guard cae siempre al header `Authorization: Bearer`.
   app.use(cookieParser());
+
+  // Feature flags en caliente (Fase 9.5, BLUEPRINT §12.3): SIGHUP
+  // re-lee config/feature-flags.yaml sin redeploy. El operador lo
+  // dispara con `kubectl exec deploy/jin-core -- kill -HUP 1` tras
+  // actualizar el ConfigMap (ver Jin_Infra).
+  const featureFlagsService = app.get(FeatureFlagsService);
+  const logger = new Logger('SIGHUP');
+  process.on('SIGHUP', () => {
+    featureFlagsService.reload().catch((err: unknown) => {
+      logger.error(`Falló el reload de feature flags: ${String(err)}`);
+    });
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Jin Core API')

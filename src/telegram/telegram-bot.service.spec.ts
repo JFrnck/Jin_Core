@@ -9,6 +9,7 @@ import type { BudgetService } from '../budget/budget.service';
 import type { KillSwitchService } from '../budget/kill-switch.service';
 import type { Env } from '../config/env.schema';
 import type { Db } from '../db/db.module';
+import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import type { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
   DualConfirmService,
@@ -32,6 +33,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
   let mockGoogleOAuthService: Partial<GoogleOAuthService>;
   let mockAgentService: Partial<AgentService>;
   let mockMemoryService: Partial<MemoryService>;
+  let mockFeatureFlagsService: Partial<FeatureFlagsService>;
   let mockDb: Partial<Db>;
 
   const OWNER_CHAT_ID = 123456789;
@@ -135,6 +137,10 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       consolidate: vi.fn().mockResolvedValue([]),
     };
 
+    mockFeatureFlagsService = {
+      isIntegrationEnabled: vi.fn().mockReturnValue(true),
+    };
+
     mockDb = {
       select: vi.fn().mockReturnValue({
         from: vi.fn().mockImplementation(() => {
@@ -225,6 +231,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       mockGoogleOAuthService as GoogleOAuthService,
       mockAgentService as AgentService,
       mockMemoryService as MemoryService,
+      mockFeatureFlagsService as FeatureFlagsService,
       mockDb as Db,
     );
 
