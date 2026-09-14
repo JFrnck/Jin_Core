@@ -397,6 +397,56 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       'Lista los pods de servicio activos del owner y su TTL restante. Solo lectura.',
     inputSchema: { type: 'object', properties: {} },
   }),
+  // Fase 9.3 (BLUEPRINT §3.3/§3.3.1/§6.4): corpus propio en pgvector,
+  // distinto de la memoria del agente (sqlite-vec, ya construida en
+  // Fase 4.3). Ejecutor real en src/corpus/corpus.module.ts. `auto`:
+  // BLUEPRINT §9.1 lista "indexar docs" explícitamente como ejemplo de
+  // ese nivel en la tabla de niveles HITL.
+  //
+  // TODO(Fase 9.5, PR #32 en curso en paralelo): `ToolDefinition` gana
+  // ahí un campo opcional `integration?` para apagar tools junto con su
+  // integración vía feature flags -- cuando esa fase mergee, taguear
+  // `indexEmailToCorpus` con `integration: 'google'` (depende de Gmail
+  // para tener contenido que indexar; `searchCorpus` no, el corpus ya
+  // indexado se puede seguir consultando con Gmail apagado).
+  Object.freeze({
+    name: 'indexEmailToCorpus',
+    hitlLevel: 'auto',
+    description:
+      'Indexa un correo (ya leído con readEmails) en el corpus propio para poder recuperarlo después por similitud semántica. Solo lectura desde la perspectiva del usuario -- no envía ni modifica nada.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        messageId: {
+          type: 'string',
+          description:
+            'ID del mensaje en Gmail (dedup real: reindexar el mismo ID actualiza, no duplica).',
+        },
+        subject: { type: 'string' },
+        from: { type: 'string' },
+        date: { type: 'string' },
+        body: { type: 'string', description: 'Contenido del correo.' },
+      },
+      required: ['messageId', 'body'],
+    },
+  }),
+  Object.freeze({
+    name: 'searchCorpus',
+    hitlLevel: 'auto',
+    description:
+      'Busca en el corpus propio (correos indexados) por similitud semántica. Solo lectura, sin efectos secundarios.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Qué se necesita encontrar.' },
+        limit: {
+          type: 'number',
+          description: 'Tope de resultados (default 5).',
+        },
+      },
+      required: ['query'],
+    },
+  }),
 ] satisfies ToolDefinition[]);
 
 const TOOL_REGISTRY_BY_NAME: ReadonlyMap<string, ToolDefinition> = new Map(
