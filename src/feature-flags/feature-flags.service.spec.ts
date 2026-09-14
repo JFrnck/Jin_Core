@@ -60,7 +60,10 @@ describe('FeatureFlagsService', () => {
       insert: vi.fn().mockReturnValue({ values: insertValuesMock }),
     };
     createPendingApprovalMock = vi.fn().mockResolvedValue(undefined);
-    mockDualConfirm = { createPendingApproval: createPendingApprovalMock };
+    mockDualConfirm = {
+      createPendingApproval:
+        createPendingApprovalMock as unknown as DualConfirmService['createPendingApproval'],
+    };
     toolExecutorRegistry = new ToolExecutorRegistry();
   });
 
