@@ -1,0 +1,18 @@
+# Servidores MCP permitidos para documentación técnica externa
+# (BLUEPRINT §6.4 / §13.1: "MCP servers oficiales (Context7, etc.). No
+# mantenemos pipeline propio de scraping"). Fase 7.3, ADR 0008.
+#
+# Todo servidor listado acá se trata como fuente EXTERNA no confiable
+# (AGENTS.md 5.1): sus resultados pasan por wrapUntrustedContent antes
+# de llegar al modelo, exactamente igual que un correo o una página web
+# (heredado gratis del pipeline de src/agent/agent.service.ts, sin
+# código nuevo — ver ADR 0008).
+#
+# Solo lectura. Nunca agregar acá un servidor MCP que exponga mutación
+# real sin una revisión de seguridad aparte (esto NO es una whitelist de
+# "cualquier tool que el servidor liste" — el código solo llama a
+# operaciones específicas que conoce, ver src/mcp/mcp-client.service.ts).
+servers:
+  - name: context7
+    url: "https://mcp.context7.com/mcp"
+    description: "Documentación oficial de librerías y frameworks (React, Tailwind, Next.js, etc.), vía Context7."
