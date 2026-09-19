@@ -417,6 +417,33 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       'Lista los pods de servicio activos del owner y su TTL restante. Solo lectura.',
     inputSchema: { type: 'object', properties: {} },
   }),
+  // Fase 7.3 (ADR 0008, BLUEPRINT §6.4): documentación técnica externa
+  // vía MCP servers oficiales (Context7 hoy, config/mcp-servers.yaml),
+  // sin pipeline propio de scraping. Ejecutor real en
+  // src/mcp/mcp.module.ts. `auto`: es un lookup de solo lectura, sin
+  // efectos secundarios -- el resultado (contenido externo) pasa por
+  // wrapUntrustedContent como cualquier otra tool, en
+  // AgentService.handleRealToolCall, sin código nuevo ahí.
+  Object.freeze({
+    name: 'queryExternalDocs',
+    hitlLevel: 'auto',
+    description:
+      'Busca documentación oficial de una librería o framework externo (ej. "react", "tailwindcss") sobre un tema puntual. Solo lectura, vía MCP.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        library: {
+          type: 'string',
+          description: 'Nombre de la librería/framework, ej. "react".',
+        },
+        query: {
+          type: 'string',
+          description: 'Qué se necesita saber, ej. "hooks useEffect cleanup".',
+        },
+      },
+      required: ['library', 'query'],
+    },
+  }),
 ] satisfies ToolDefinition[]);
 
 const TOOL_REGISTRY_BY_NAME: ReadonlyMap<string, ToolDefinition> = new Map(
