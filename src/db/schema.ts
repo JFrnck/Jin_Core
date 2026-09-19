@@ -9,6 +9,7 @@ import {
   uuid,
   timestamp,
   text,
+  vector,
 } from 'drizzle-orm/pg-core';
 
 /**
@@ -284,6 +285,59 @@ export const telegramSessions = pgTable('telegram_sessions', {
 
 export type TelegramSessionRow = typeof telegramSessions.$inferSelect;
 export type NewTelegramSessionRow = typeof telegramSessions.$inferInsert;
+
+/**
+ * Corpus propio (Fase 9.3, BLUEPRINT §3.3/§3.3.1/§6.4) -- distinto de
+ * `src/memory/` (sqlite-vec, memoria del agente): dos almacenes, dos
+ * ciclos de vida, la frontera de §3.3.1 no se negocia. `content` YA
+ * pasó por `sanitizeForIndexing()` (src/security/injection-sanitizer.ts,
+ * AGENTS.md 5.1 punto 2) antes de llegar acá -- nunca texto crudo de una
+ * fuente externa. Dedup real por `(source, sourceId)` -- ver la
+ * constraint UNIQUE en la migración, no solo a nivel app.
+ */
+export const corpusEntries = pgTable('corpus_entries', {
+  id: uuid('id').primaryKey(),
+  // 'gmail' hoy (Fase 9.3) -- 'canvas_pdf'/'notes' quedan documentados
+  // como extensión futura en el ADR, sin stub vacío acá.
+  source: text('source').notNull(),
+  // ID estable en la fuente (Gmail messageId) -- la clave real de dedup.
+  sourceId: text('source_id').notNull(),
+  content: text('content').notNull(),
+  // Libre por fuente (ej. subject/from/date para gmail) -- sin schema
+  // fijo porque cada fuente futura trae metadata distinta.
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type CorpusEntryRow = typeof corpusEntries.$inferSelect;
+export type NewCorpusEntryRow = typeof corpusEntries.$inferInsert;
+
+/**
+ * Tabla separada de `corpusEntries` a propósito -- es el JOIN relacional
+ * real (`corpus_embeddings` × `corpus_entries`) el argumento entero de
+ * BLUEPRINT §3.3 para elegir pgvector sobre Qdrant/Supabase ("un JOIN
+ * entre tasks y task_embeddings es SQL nativo"). `vector()` es nativo de
+ * drizzle-orm 0.45+ -- sin paquete `pgvector` externo.
+ */
+export const corpusEmbeddings = pgTable('corpus_embeddings', {
+  id: uuid('id').primaryKey(),
+  entryId: uuid('entry_id')
+    .notNull()
+    .references(() => corpusEntries.id),
+  // Misma dimensión que EMBEDDING_DIMENSIONS en
+  // src/memory/embedding-provider.ts -- no hay un solo lugar que las una
+  // (ese módulo no sabe nada de Postgres), la dimensión real de cada
+  // fila queda auditable vía `modeloEmbedding`.
+  embedding: vector('embedding', { dimensions: 1024 }).notNull(),
+  // EMBEDDING_MODEL_ID (embedding-provider.ts) -- reusa el mismo
+  // EmbeddingProvider que src/memory/, nunca un segundo proveedor.
+  modeloEmbedding: text('modelo_embedding').notNull(),
+});
+
+export type CorpusEmbeddingRow = typeof corpusEmbeddings.$inferSelect;
+export type NewCorpusEmbeddingRow = typeof corpusEmbeddings.$inferInsert;
 
 /**
  * Overrides de `hitlLevel` VIGENTES por tool (Fase 9.5, BLUEPRINT 12.3).

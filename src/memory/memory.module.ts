@@ -24,6 +24,9 @@ import { MemoryStore } from './store';
     ConsolidationService,
     MemoryService,
   ],
-  exports: [MemoryService, ConsolidationService],
+  // EmbeddingProvider exportado desde Fase 9.3: src/corpus/ lo reusa
+  // (importando MemoryModule) en vez de registrar un segundo proveedor
+  // de embeddings (AGENTS.md 1.1).
+  exports: [MemoryService, ConsolidationService, EmbeddingProvider],
 })
 export class MemoryModule {}

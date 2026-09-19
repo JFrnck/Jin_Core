@@ -14,6 +14,7 @@ import { BudgetModule } from './budget/budget.module';
 import { ChatModule } from './chat/chat.module';
 import { JinErrorFilter } from './common/filters/jin-error.filter';
 import { ConfigModule } from './config';
+import { CorpusModule } from './corpus/corpus.module';
 import { DbModule } from './db/db.module';
 import { ExecutorClientModule } from './executor-client/executor-client.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
@@ -44,6 +45,7 @@ import { TelegramModule } from './telegram/telegram.module';
     CanvasModule,
     GoogleModule,
     MemoryModule,
+    CorpusModule,
     FeatureFlagsModule,
     McpModule,
     AgentModule,
