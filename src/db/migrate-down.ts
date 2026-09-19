@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { validateEnv } from '../config/env.schema';
+import { validateMigrationEnv } from '../config/env.schema';
 
 interface JournalEntry {
   tag: string;
@@ -18,7 +18,7 @@ interface Journal {
  * a cada migración generada.
  */
 async function main(): Promise<void> {
-  const env = validateEnv(process.env);
+  const env = validateMigrationEnv(process.env);
   const migrationsDir = path.resolve(process.cwd(), 'drizzle');
   const journal = JSON.parse(
     readFileSync(path.join(migrationsDir, 'meta', '_journal.json'), 'utf-8'),
