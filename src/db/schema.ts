@@ -338,3 +338,36 @@ export const corpusEmbeddings = pgTable('corpus_embeddings', {
 
 export type CorpusEmbeddingRow = typeof corpusEmbeddings.$inferSelect;
 export type NewCorpusEmbeddingRow = typeof corpusEmbeddings.$inferInsert;
+
+/**
+ * Overrides de `hitlLevel` VIGENTES por tool (Fase 9.5, BLUEPRINT 12.3).
+ * `classifyToolCall` (src/hitl/classifier.ts) sigue siendo la única
+ * fuente del nivel ESTÁTICO -- esta tabla no lo toca. La resuelve un
+ * paso separado (`FeatureFlagsService.resolveEffectiveLevel`) que
+ * AgentService llama después de clasificar.
+ *
+ * Invariante de seguridad (por qué esta tabla nunca contiene un nivel
+ * "sin aprobar" que baje protección): un override que SUBE el nivel se
+ * escribe directo al recargar `config/feature-flags.yaml` (subir nunca
+ * necesita aprobación humana adicional -- ya es más restrictivo que el
+ * estático). Un override que BAJA el nivel nunca se escribe acá hasta
+ * que exista una aprobación `dual-confirm` real, resuelta vía el mismo
+ * mecanismo de `DualConfirmService`/`ApprovalExecutionService` que
+ * cualquier otra tool `dual-confirm` (PR #8, Fase 4.2) -- sin tabla ni
+ * flujo de aprobación nuevo. Mientras la aprobación esté pendiente, NO
+ * hay fila acá para esa tool: `resolveEffectiveLevel` cae al nivel
+ * estático (fail-safe, nunca al revés).
+ */
+export const featureFlagHitlOverrides = pgTable('feature_flag_hitl_overrides', {
+  toolName: text('tool_name').primaryKey(),
+  level: text('level').notNull(), // HitlLevel — ver src/hitl/types.ts
+  approvedAt: timestamp('approved_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  approver: text('approver').notNull(),
+});
+
+export type FeatureFlagHitlOverrideRow =
+  typeof featureFlagHitlOverrides.$inferSelect;
+export type NewFeatureFlagHitlOverrideRow =
+  typeof featureFlagHitlOverrides.$inferInsert;

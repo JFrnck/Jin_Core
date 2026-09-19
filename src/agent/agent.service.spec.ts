@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditService } from '../audit/audit.service';
 import type { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
+import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type {
@@ -52,6 +53,7 @@ describe('AgentService.runTurn', () => {
   let mockDualConfirm: Partial<DualConfirmService>;
   let mockAuditService: Partial<AuditService>;
   let mockHistoryCompactionService: Partial<HistoryCompactionService>;
+  let mockFeatureFlagsService: Partial<FeatureFlagsService>;
   let config: AgentConfig;
   let service: AgentService;
 
@@ -67,6 +69,15 @@ describe('AgentService.runTurn', () => {
     };
     mockHistoryCompactionService = {
       compact: vi.fn(),
+    };
+    // Fase 9.5: por default ninguna integración está apagada, y el
+    // override de hitlLevel nunca cambia nada -- los tests que sí
+    // quieren ejercitar feature flags lo overridean puntualmente.
+    mockFeatureFlagsService = {
+      isIntegrationEnabled: vi.fn().mockReturnValue(true),
+      resolveEffectiveLevel: vi
+        .fn()
+        .mockImplementation((decision) => Promise.resolve(decision)),
     };
     config = {
       maxIterationsPerTurn: 5,
@@ -84,6 +95,7 @@ describe('AgentService.runTurn', () => {
       mockDualConfirm as DualConfirmService,
       mockAuditService as AuditService,
       mockHistoryCompactionService as HistoryCompactionService,
+      mockFeatureFlagsService as FeatureFlagsService,
       config,
     );
   });
@@ -521,6 +533,7 @@ describe('AgentService.runTurn', () => {
         mockDualConfirm as DualConfirmService,
         mockAuditService as AuditService,
         mockHistoryCompactionService as HistoryCompactionService,
+        mockFeatureFlagsService as FeatureFlagsService,
         {
           ...config,
           maxHistoryTokens: 10,

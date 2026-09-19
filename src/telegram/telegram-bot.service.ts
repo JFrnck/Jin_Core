@@ -14,6 +14,7 @@ import { BudgetService } from '../budget/budget.service';
 import { KillSwitchService } from '../budget/kill-switch.service';
 import type { Env } from '../config/env.schema';
 import { DB_CONNECTION, type Db } from '../db/db.module';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import {
   pendingApprovals,
   telegramSessions,
@@ -68,6 +69,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly googleOAuthService: GoogleOAuthService,
     private readonly agentService: AgentService,
     private readonly memoryService: MemoryService,
+    private readonly featureFlagsService: FeatureFlagsService,
     @Inject(DB_CONNECTION) private readonly db: Db,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -349,6 +351,17 @@ export class TelegramBotService implements OnModuleInit {
     this.bot.on('message:text', async (ctx) => {
       const text = ctx.message.text;
       if (text.startsWith('/')) {
+        return;
+      }
+
+      // Fase 9.5: apaga solo el chat libre (turno de agente), nunca los
+      // comandos /approve /reject (setupMiddleware/setupHandlers los
+      // registra aparte) -- un flag jamás puede bloquear el canal de
+      // aprobación HITL en sí, solo la conversación.
+      if (!this.featureFlagsService.isIntegrationEnabled('telegram')) {
+        await ctx.reply(
+          'El chat conversacional está desactivado temporalmente.',
+        );
         return;
       }
 

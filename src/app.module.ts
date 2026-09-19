@@ -17,10 +17,12 @@ import { ConfigModule } from './config';
 import { CorpusModule } from './corpus/corpus.module';
 import { DbModule } from './db/db.module';
 import { ExecutorClientModule } from './executor-client/executor-client.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { HealthModule } from './health/health.module';
 import { HitlModule } from './hitl/hitl.module';
 import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
+import { McpModule } from './mcp/mcp.module';
 import { MemoryModule } from './memory/memory.module';
 import { ModelProviderModule } from './model-provider/model-provider.module';
 import { OrchestratorModule } from './agent/orchestrator.module';
@@ -44,6 +46,8 @@ import { TelegramModule } from './telegram/telegram.module';
     GoogleModule,
     MemoryModule,
     CorpusModule,
+    FeatureFlagsModule,
+    McpModule,
     AgentModule,
     OrchestratorModule,
     TelegramModule,

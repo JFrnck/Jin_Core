@@ -18,6 +18,7 @@ import { ChainVerificationService } from '../audit/chain-verification.service';
 import type { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import { DB_CONNECTION } from '../db/db.module';
 import { auditLog, pendingApprovals } from '../db/schema';
+import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type { ModelCompletionResponse } from '../model-provider/model-provider.types';
@@ -57,6 +58,13 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
   const historyCompactionService = {
     compact: vi.fn(),
   } as unknown as HistoryCompactionService;
+  // Fase 9.5: este archivo prueba el estado en Postgres de dual-confirm/
+  // audit, no feature flags (eso lo cubre feature-flags.service.spec.ts)
+  // -- mock sin efecto, ninguna integración apagada, el nivel nunca cambia.
+  const featureFlagsService = {
+    isIntegrationEnabled: () => true,
+    resolveEffectiveLevel: (decision: unknown) => Promise.resolve(decision),
+  } as unknown as FeatureFlagsService;
 
   beforeAll(async () => {
     testDb = await startTestDb();
@@ -89,6 +97,7 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
       dualConfirmService,
       auditService,
       historyCompactionService,
+      featureFlagsService,
       config,
     );
   });

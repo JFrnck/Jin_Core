@@ -22,6 +22,9 @@ import type { BudgetConfig } from '../budget/budget.types';
 import { BudgetService } from '../budget/budget.service';
 import { KillSwitchService } from '../budget/kill-switch.service';
 import { DB_CONNECTION } from '../db/db.module';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { FEATURE_FLAGS_CONFIG } from '../feature-flags/feature-flags.tokens';
+import type { FeatureFlagsConfig } from '../feature-flags/feature-flags.types';
 import {
   agentOrchestrationRuns,
   agentTicketComments,
@@ -132,6 +135,23 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
           provide: HistoryCompactionService,
           useValue: { compact: vi.fn() },
         },
+        // Fase 9.5: config sin overrides -- este archivo prueba el
+        // orquestador multi-agente, no feature flags (eso lo cubre
+        // feature-flags.service.spec.ts).
+        {
+          provide: FEATURE_FLAGS_CONFIG,
+          useValue: {
+            integrations: {
+              canvas: { enabled: true },
+              google: { enabled: true },
+              mcp: { enabled: true },
+              telegram: { enabled: true },
+            },
+            modelRouting: {},
+            hitlOverrides: {},
+          } satisfies FeatureFlagsConfig,
+        },
+        FeatureFlagsService,
         AgentService,
         LedgerRepository,
         TicketDecompositionService,
