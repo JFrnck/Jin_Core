@@ -97,6 +97,22 @@ export const EnvSchema = z.object({
   REDIS_URL: z
     .string()
     .min(1, 'REDIS_URL es requerida (ej: redis://jin-redis:6379)'),
+  // src/config/secrets-loader.ts (Fase 8.1, BLUEPRINT §11): ninguna de
+  // estas 4 es un secreto — son la configuración de a qué proyecto/
+  // environment de Infisical conectarse. `INFISICAL_CLIENT_ID`/
+  // `INFISICAL_CLIENT_SECRET` (las credenciales de la identidad de
+  // máquina) NO entran a este schema a propósito: `loadSecrets()` los
+  // lee de `process.env` directo, antes de que Nest exista, porque son
+  // el único secreto que sigue viviendo fuera de Infisical (problema de
+  // bootstrap). Default `false`: en desarrollo local con `.env`, el
+  // camino de siempre sigue intacto.
+  INFISICAL_ENABLED: z.enum(['true', 'false']).default('false'),
+  INFISICAL_SITE_URL: z
+    .string()
+    .url()
+    .default('http://infisical.jin.svc.cluster.local:8080'),
+  INFISICAL_PROJECT_ID: z.string().optional(),
+  INFISICAL_ENVIRONMENT: z.string().min(1).default('prod'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

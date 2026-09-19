@@ -3,8 +3,15 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { AppModule } from './app.module';
+import { loadSecrets } from './config/secrets-loader';
 
 async function bootstrap() {
+  // Fase 8.1: debe correr ANTES de crear la app — `ConfigModule.forRoot`
+  // (dentro de AppModule) lee `process.env` en ese momento, así que
+  // `validateEnv()` ve los secretos de Infisical ya inyectados sin que
+  // el schema sepa de dónde vinieron. No-op si INFISICAL_ENABLED!='true'.
+  await loadSecrets();
+
   const app = await NestFactory.create(AppModule);
 
   // Requerida por `JwtAuthGuard`/`extractWsToken` para leer la cookie
