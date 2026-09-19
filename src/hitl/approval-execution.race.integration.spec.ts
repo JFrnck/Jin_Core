@@ -18,7 +18,10 @@ import { AuditService } from '../audit/audit.service';
 import { ChainVerificationService } from '../audit/chain-verification.service';
 import { DB_CONNECTION } from '../db/db.module';
 import { auditLog, pendingApprovals } from '../db/schema';
-import { ApprovalExecutionService } from './approval-execution.service';
+import {
+  ApprovalExecutionService,
+  type ResolveAndExecuteResult,
+} from './approval-execution.service';
 import {
   ApprovalAlreadyResolvedError,
   DualConfirmService,
@@ -193,16 +196,15 @@ describe('ApprovalExecutionService — reclamo atómico (integración, Postgres 
       (s): s is PromiseRejectedResult => s.status === 'rejected',
     );
     const fulfilled = settled.filter(
-      (s): s is PromiseFulfilledResult<unknown> => s.status === 'fulfilled',
+      (s): s is PromiseFulfilledResult<ResolveAndExecuteResult> =>
+        s.status === 'fulfilled',
     );
     expect(
       rejected.every((r) => r.reason instanceof SecondApprovalTooEarlyError),
     ).toBe(true);
-    expect(
-      fulfilled.every(
-        (f) => (f.value as { outcome?: string }).outcome === 'awaiting-second',
-      ),
-    ).toBe(true);
+    expect(fulfilled.every((f) => f.value.outcome === 'awaiting-second')).toBe(
+      true,
+    );
     expect(fulfilled.length).toBeGreaterThanOrEqual(1); // exactamente una gana
     const row = await dualConfirmService.getPending(REQUEST_ID);
     expect(row?.firstApprovedAt).not.toBeNull();
