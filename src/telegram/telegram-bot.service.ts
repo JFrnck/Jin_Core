@@ -22,6 +22,7 @@ import {
 } from '../db/schema';
 import { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
+  ApprovalAlreadyResolvedError,
   DualConfirmService,
   PendingApprovalNotFoundError,
   SecondApprovalTooEarlyError,
@@ -29,6 +30,7 @@ import {
 import {
   HITL_APPROVAL_ABANDONED_EVENT,
   HITL_APPROVAL_ESCALATED_EVENT,
+  HITL_APPROVAL_STUCK_EVENT,
   type HitlApprovalTimeoutEvent,
 } from '../hitl/timeout.service';
 import { GoogleOAuthService } from '../integrations/google/oauth.service';
@@ -564,12 +566,21 @@ export class TelegramBotService implements OnModuleInit {
         await ctx.reply(`⚠️ ${err.message}`);
         return;
       }
-      if (err instanceof PendingApprovalNotFoundError) {
+      if (
+        err instanceof PendingApprovalNotFoundError ||
+        err instanceof ApprovalAlreadyResolvedError
+      ) {
         await ctx.reply(`❌ ${err.message}`);
         return;
       }
+      // El executor falló tras aprobar (issue #36): la acción NO ocurrió y la
+      // aprobación sigue pendiente -- hay que decírselo, no solo "error".
       const msg = err instanceof Error ? err.message : String(err);
-      await ctx.reply(`⚠️ Error al procesar aprobación: ${msg}`);
+      await ctx.reply(
+        `⚠️ Error al ejecutar la acción aprobada: ${msg}\n` +
+          `La acción NO se completó y la aprobación sigue pendiente (/tasks). ` +
+          `No se reintenta sola: aprobala de nuevo si querés reintentar.`,
+      );
     }
   }
 
@@ -587,7 +598,10 @@ export class TelegramBotService implements OnModuleInit {
         },
       );
     } catch (err: unknown) {
-      if (err instanceof PendingApprovalNotFoundError) {
+      if (
+        err instanceof PendingApprovalNotFoundError ||
+        err instanceof ApprovalAlreadyResolvedError
+      ) {
         await ctx.reply(`❌ ${err.message}`);
         return;
       }
@@ -690,6 +704,23 @@ export class TelegramBotService implements OnModuleInit {
       this.ownerChatId,
       `🔴 *Aprobación ABANDONADA* tras 24h sin respuesta: \`${event.toolName}\` (${event.requestId}). ` +
         'La acción se descartó — nunca se ejecutó.',
+      { parse_mode: 'Markdown' },
+    );
+  }
+
+  /**
+   * Issue #36: una aprobación quedó "ejecutándose" y nunca terminó (el
+   * proceso murió entre el claim y el final). La acción PUDO haber ocurrido:
+   * no se reintenta ni se descarta sola. El barrido es horario, así que este
+   * aviso se repite cada hora hasta que el owner actúe.
+   */
+  @OnEvent(HITL_APPROVAL_STUCK_EVENT)
+  async onHitlApprovalStuck(event: HitlApprovalTimeoutEvent): Promise<void> {
+    await this.bot.api.sendMessage(
+      this.ownerChatId,
+      `🔴 *Aprobación TRABADA*: \`${event.toolName}\` (${event.requestId}) quedó ejecutándose y no terminó. ` +
+        'La acción pudo o no haberse realizado — verificalo a mano. ' +
+        `No se reintenta sola. Cuando lo hayas comprobado, usá /reject ${event.requestId} para limpiarla.`,
       { parse_mode: 'Markdown' },
     );
   }

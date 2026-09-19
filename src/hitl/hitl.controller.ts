@@ -50,6 +50,12 @@ const PendingApprovalSchema = z.object({
   firstApprover: z.string().nullable(),
   availableAt: nullableDateCodec,
   escalatedAt: nullableDateCodec,
+  // Issue #36: si la ejecución falló tras aprobar, el pendiente sigue vivo y
+  // acá está el motivo -- el owner tiene que VER que la acción NO ocurrió y
+  // que necesita aprobarla de nuevo. `executingAt` no nulo = en ejecución
+  // ahora mismo (o trabada, si es de hace >15 min).
+  executingAt: nullableDateCodec,
+  executionError: z.string().nullable(),
 });
 class PendingApprovalDto extends createZodDto(PendingApprovalSchema, {
   codec: true,

@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditService } from '../audit/audit.service';
 import type { Db } from '../db/db.module';
 import type { PendingApprovalRow } from '../db/schema';
+import type { DualConfirmService } from './dual-confirm.service';
 import {
   HITL_APPROVAL_ABANDONED_EVENT,
   HITL_APPROVAL_ESCALATED_EVENT,
+  HITL_APPROVAL_STUCK_EVENT,
   TimeoutService,
 } from './timeout.service';
 
@@ -38,6 +40,8 @@ function buildPending(
     firstApprover: null,
     availableAt: null,
     escalatedAt: null,
+    executingAt: null,
+    executionError: null,
     ...overrides,
   };
 }
@@ -49,6 +53,10 @@ describe('TimeoutService.sweep', () => {
     delete: ReturnType<typeof vi.fn>;
   };
   let mockAuditService: Partial<AuditService>;
+  let mockDualConfirm: {
+    claimForExecution: ReturnType<typeof vi.fn>;
+    releaseClaim: ReturnType<typeof vi.fn>;
+  };
   let mockEmit: ReturnType<typeof vi.fn>;
   let service: TimeoutService;
   let pendingRows: PendingApprovalRow[];
@@ -71,12 +79,92 @@ describe('TimeoutService.sweep', () => {
     };
     mockAuditService = { recordTimeout: vi.fn().mockResolvedValue(undefined) };
     mockEmit = vi.fn();
+    // Por defecto el reclamo se obtiene (nadie más está ejecutando la fila).
+    mockDualConfirm = {
+      claimForExecution: vi.fn().mockResolvedValue(buildPending()),
+      releaseClaim: vi.fn().mockResolvedValue(undefined),
+    };
 
     service = new TimeoutService(
       mockDb as unknown as Db,
       mockAuditService as AuditService,
       { emit: mockEmit } as never,
+      mockDualConfirm as unknown as DualConfirmService,
     );
+  });
+
+  // Issue #36: el barrido nunca compite con una ejecución en curso.
+  it('una aprobación EJECUTÁNDOSE (reciente) no se descarta ni se audita, aunque haya vencido', async () => {
+    getToolDefinitionMock.mockReturnValue(undefined);
+    const now = new Date('2026-08-05T00:00:00.000Z');
+    pendingRows.push(
+      buildPending({
+        createdAt: new Date('2000-01-01T00:00:00.000Z'),
+        executingAt: new Date(now.getTime() - 5_000),
+      }),
+    );
+
+    await service.sweep(now);
+
+    expect(mockDualConfirm.claimForExecution).not.toHaveBeenCalled();
+    expect(mockAuditService.recordTimeout).not.toHaveBeenCalled();
+    expect(mockDb.delete).not.toHaveBeenCalled();
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it('un reclamo TRABADO (>15 min) emite HITL_APPROVAL_STUCK_EVENT y no se reintenta ni se descarta', async () => {
+    getToolDefinitionMock.mockReturnValue(undefined);
+    const now = new Date('2026-08-05T00:00:00.000Z');
+    pendingRows.push(
+      buildPending({
+        requestId: 'req-stuck',
+        toolName: 'sendEmail',
+        createdAt: new Date('2000-01-01T00:00:00.000Z'),
+        executingAt: new Date(now.getTime() - 20 * 60_000),
+      }),
+    );
+
+    await service.sweep(now);
+
+    expect(mockEmit).toHaveBeenCalledWith(HITL_APPROVAL_STUCK_EVENT, {
+      requestId: 'req-stuck',
+      toolName: 'sendEmail',
+    });
+    expect(mockAuditService.recordTimeout).not.toHaveBeenCalled();
+    expect(mockDb.delete).not.toHaveBeenCalled();
+  });
+
+  it('si otra solicitud reclamó la fila justo antes (claim perdido): no audita ni borra', async () => {
+    getToolDefinitionMock.mockReturnValue(undefined);
+    mockDualConfirm.claimForExecution.mockResolvedValue(undefined);
+    pendingRows.push(
+      buildPending({ createdAt: new Date('2000-01-01T00:00:00.000Z') }),
+    );
+
+    await service.sweep(new Date('2026-08-01T00:00:00.000Z'));
+
+    expect(mockAuditService.recordTimeout).not.toHaveBeenCalled();
+    expect(mockDb.delete).not.toHaveBeenCalled();
+  });
+
+  it('si el audit del timeout falla: libera el reclamo (el próximo barrido reintenta) y propaga el error', async () => {
+    getToolDefinitionMock.mockReturnValue(undefined);
+    (
+      mockAuditService.recordTimeout as ReturnType<typeof vi.fn>
+    ).mockRejectedValue(new Error('audit caído'));
+    pendingRows.push(
+      buildPending({
+        requestId: 'req-audit-fail',
+        createdAt: new Date('2000-01-01T00:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      service.sweep(new Date('2026-08-01T00:00:00.000Z')),
+    ).rejects.toThrow('audit caído');
+
+    expect(mockDualConfirm.releaseClaim).toHaveBeenCalledWith('req-audit-fail');
+    expect(mockDb.delete).not.toHaveBeenCalled();
   });
 
   it('discard (default, sin tool con timeoutBehavior escalate): no emite ningún evento', async () => {

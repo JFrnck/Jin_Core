@@ -78,6 +78,17 @@ export const pendingApprovals = pgTable('pending_approvals', {
   // deadline: aviso a las 12h). Evita que timeout.service reenvíe el
   // mismo aviso en cada barrido mientras espera las 24h de abandono.
   escalatedAt: timestamp('escalated_at', { withTimezone: true }),
+  // Reclamo atómico de la ejecución (issue #36, ADR 0010). Se setea con
+  // `UPDATE ... WHERE executing_at IS NULL RETURNING` -- solo UNA llamada
+  // gana, así que la acción irreversible corre a lo sumo una vez aunque
+  // lleguen N aprobaciones simultáneas (Web + Telegram, doble clic). Éxito
+  // -> la fila se borra. Fallo -> `executing_at` vuelve a NULL y el motivo
+  // queda en `execution_error`: NO hay reintento automático, exige una nueva
+  // aprobación humana (regla de oro #9). Un reclamo que nunca se libera
+  // (proceso muerto entre el claim y el final) no se reintenta jamás:
+  // TimeoutService avisa y el owner decide.
+  executingAt: timestamp('executing_at', { withTimezone: true }),
+  executionError: text('execution_error'),
 });
 
 export type PendingApprovalRow = typeof pendingApprovals.$inferSelect;

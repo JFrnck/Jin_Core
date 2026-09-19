@@ -9,6 +9,7 @@ import { AuditService } from '../audit/audit.service';
 import { ChainVerificationService } from '../audit/chain-verification.service';
 import { DB_CONNECTION } from '../db/db.module';
 import { auditLog, pendingApprovals } from '../db/schema';
+import { DualConfirmService } from './dual-confirm.service';
 import { TimeoutService } from './timeout.service';
 
 // Nota de cobertura: solo se prueba aquí el camino 'discard' (usado por
@@ -31,6 +32,7 @@ describe('TimeoutService (integración, Postgres real)', () => {
       imports: [EventEmitterModule.forRoot()],
       providers: [
         TimeoutService,
+        DualConfirmService,
         AuditService,
         ChainVerificationService,
         { provide: DB_CONNECTION, useValue: testDb.db },
@@ -67,6 +69,24 @@ describe('TimeoutService (integración, Postgres real)', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0]?.approvalStatus).toBe('timeout');
     expect(logs[0]?.requestId).toBe('11111111-1111-4111-8111-111111111111');
+  });
+
+  it('issue #36: una aprobación VENCIDA pero reclamada (ejecutándose) NO se descarta ni se audita', async () => {
+    const oldDate = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    await testDb.db.insert(pendingApprovals).values({
+      requestId: '11111111-1111-4111-8111-111111111111',
+      toolName: 'sendEmail',
+      level: 'confirm',
+      inputsHash: 'h1',
+      createdAt: oldDate,
+      executingAt: new Date(), // otra solicitud la está ejecutando ahora
+    });
+
+    await service.sweep();
+
+    // La acción real manda: el barrido no compite con ella.
+    expect(await testDb.db.select().from(pendingApprovals)).toHaveLength(1);
+    expect(await testDb.db.select().from(auditLog)).toHaveLength(0);
   });
 
   it('no toca una aprobación reciente (dentro de la ventana de 24h)', async () => {

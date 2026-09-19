@@ -215,6 +215,8 @@ describe('HitlController (e2e) — Date real y payload arbitrario a través de Z
     firstApprover: null,
     availableAt: null,
     escalatedAt: null,
+    executingAt: null,
+    executionError: null,
   };
 
   beforeEach(async () => {
