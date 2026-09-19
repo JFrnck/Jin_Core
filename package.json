@@ -29,6 +29,7 @@
     "@anthropic-ai/sdk": "^0.113.0",
     "@google/genai": "^2.13.0",
     "@infisical/sdk": "5.0.2",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "^11.0.1",
