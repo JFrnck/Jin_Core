@@ -133,3 +133,29 @@ export function validateEnv(config: Record<string, unknown>): Env {
   }
   return result.data;
 }
+
+/**
+ * Entorno mínimo del migrador (`src/db/migrate.ts`, `migrate-down.ts`):
+ * solo `DATABASE_URL`. Desde la Fase 8.1 los secretos de API (Anthropic,
+ * Google, JWT, ...) viven únicamente en Infisical y `loadSecrets()` los
+ * inyecta en `main.ts` -- el Job de migración de Kubernetes no pasa por
+ * ahí, así que exigirle `EnvSchema` completo lo haría fallar siempre.
+ * Además el migrador nunca debe ser bloqueado (ni tener acceso) por
+ * credenciales que no usa.
+ */
+export const MigrationEnvSchema = EnvSchema.pick({ DATABASE_URL: true });
+
+export type MigrationEnv = z.infer<typeof MigrationEnvSchema>;
+
+export function validateMigrationEnv(
+  config: Record<string, unknown>,
+): MigrationEnv {
+  const result = MigrationEnvSchema.safeParse(config);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
+      .join('\n');
+    throw new Error(`Configuración de entorno inválida:\n${issues}`);
+  }
+  return result.data;
+}
