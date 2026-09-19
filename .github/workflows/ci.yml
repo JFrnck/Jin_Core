@@ -59,8 +59,66 @@ jobs:
       - run: pnpm run build
       - run: pnpm run generate:contract
 
+  # Control que faltaba (docs/runbooks/STATUS_DEPLOY.md, Jin_Docs): el job
+  # `docker` solo compila y publica, NUNCA ejecutaba la imagen. Por eso
+  # llegaron a GHCR imágenes que no podían arrancar (CMD a un archivo
+  # inexistente, config/ sin copiar, sqlite-vec sin poder cargar en Alpine).
+  # Acá se construye la imagen y se levanta de verdad: si /health/live no
+  # responde 200, el CI falla y `docker` no publica.
+  # amd64 nativo a propósito (rápido); el arm64 real se compila en `docker`.
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image (solo para el smoke test)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: jin-core:smoke
+      - name: Arrancar el contenedor y esperar /health/live
+        run: |
+          docker run -d --name jin-smoke -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e MEMORY_DB_PATH=/tmp/memory.db \
+            -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci_not_connected \
+            -e REDIS_URL=redis://127.0.0.1:6379 \
+            -e ANTHROPIC_API_KEY=ci-not-a-real-key \
+            -e GEMINI_API_KEY=ci-not-a-real-key \
+            -e OPENAI_API_KEY=ci-not-a-real-key \
+            -e CANVAS_BASE_URL=https://canvas.ci.local \
+            -e CANVAS_API_TOKEN=ci-not-a-real-token \
+            -e TELEGRAM_BOT_TOKEN=ci-fake-token \
+            -e TELEGRAM_OWNER_CHAT_ID=123456789 \
+            -e TELEGRAM_WEBHOOK_SECRET=ci-fake-secret \
+            -e GOOGLE_CLIENT_ID=ci-not-a-real-id \
+            -e GOOGLE_CLIENT_SECRET=ci-not-a-real-secret \
+            -e GOOGLE_REFRESH_TOKEN=ci-not-a-real-token \
+            -e EXECUTOR_BASE_URL=http://executor.ci.local \
+            -e OWNER_PASSWORD_HASH='$argon2id$v=19$m=65536,t=3,p=4$Y2ktZmFrZS1zYWx0$Y2ktZmFrZS1oYXNo' \
+            -e JWT_SECRET=ci-fake-jwt-secret-at-least-32-characters-long \
+            jin-core:smoke
+          for i in $(seq 1 45); do
+            if curl -fsS http://localhost:3000/health/live; then
+              echo
+              echo "smoke OK: /health/live respondió 200"
+              exit 0
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' jin-smoke)" != "true" ]; then
+              echo "el contenedor murió antes de responder"
+              break
+            fi
+            sleep 2
+          done
+          echo "----- logs del contenedor -----"
+          docker logs jin-smoke
+          exit 1
+
   docker:
-    needs: build
+    needs: [build, container-smoke]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
