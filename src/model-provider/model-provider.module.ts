@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { Module } from '@nestjs/common';
+import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { AnthropicProvider } from './anthropic.provider';
 import { FailoverService } from './failover.service';
 import { GoogleProvider } from './google.provider';
@@ -17,6 +18,7 @@ import { ModelRouterService } from './router.service';
 const MODELS_CONFIG_PATH = join(process.cwd(), 'config', 'models.yaml');
 
 @Module({
+  imports: [FeatureFlagsModule],
   providers: [
     {
       provide: MODELS_CONFIG,

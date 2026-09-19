@@ -9,6 +9,12 @@ import type {
   ModelsConfig,
 } from './model-provider.types';
 import { ModelRouterService } from './router.service';
+import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+
+// Fase 9.5: sin override -- estos tests no ejercitan feature flags.
+const NO_OP_FEATURE_FLAGS = {
+  getModelOverride: () => undefined,
+} as unknown as FeatureFlagsService;
 
 const REQUEST: ModelCompletionRequest = {
   messages: [{ role: 'user', content: 'hola' }],
@@ -126,6 +132,7 @@ describe('ModelRouterService.complete', () => {
       anthropicProvider,
       googleProvider,
       failoverService,
+      NO_OP_FEATURE_FLAGS,
     );
 
     const result = await router.complete('coding_default', REQUEST);
@@ -156,6 +163,7 @@ describe('ModelRouterService.complete', () => {
       anthropicProvider,
       googleProvider,
       failoverService,
+      NO_OP_FEATURE_FLAGS,
     );
 
     const result = await router.complete('long_context', REQUEST);
@@ -189,6 +197,7 @@ describe('ModelRouterService.complete', () => {
       anthropicProvider,
       googleProvider,
       failoverService,
+      NO_OP_FEATURE_FLAGS,
     );
 
     const result = await router.complete('coding_default', REQUEST);
@@ -219,6 +228,7 @@ describe('ModelRouterService.complete', () => {
       anthropicProvider,
       googleProvider,
       failoverService,
+      NO_OP_FEATURE_FLAGS,
     );
 
     const result = await router.complete('coding_default', REQUEST, {
@@ -244,6 +254,7 @@ describe('ModelRouterService.complete', () => {
       anthropicProvider,
       googleProvider,
       failoverService,
+      NO_OP_FEATURE_FLAGS,
     );
 
     let caught: unknown;

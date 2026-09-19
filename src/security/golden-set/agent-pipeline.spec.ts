@@ -11,6 +11,7 @@ import type {
 import { AgentService } from '../../agent/agent.service';
 import type { AgentConfig } from '../../agent/agent-config.schema';
 import type { HistoryCompactionService } from '../../agent/history-compaction.service';
+import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import { GOLDEN_SET } from './corpus';
 
 // Mismo scaffolding de mocks que src/agent/agent.service.spec.ts (no se
@@ -92,6 +93,16 @@ describe('golden set — el loop del agente no ejecuta ni cambia de nivel por co
       mockDualConfirm as DualConfirmService,
       mockAuditService as AuditService,
       mockHistoryCompactionService as HistoryCompactionService,
+      // Fase 9.5: AgentService consulta flags antes de clasificar. Acá es
+      // neutro a propósito (integraciones on, sin override de hitlLevel) --
+      // este spec prueba que el contenido hostil no cambia el nivel; el
+      // único que podría hacerlo legítimamente es un flag aprobado por el owner.
+      {
+        isIntegrationEnabled: vi.fn().mockReturnValue(true),
+        resolveEffectiveLevel: vi
+          .fn()
+          .mockImplementation((decision: unknown) => Promise.resolve(decision)),
+      } as unknown as FeatureFlagsService,
       config,
     );
   });
