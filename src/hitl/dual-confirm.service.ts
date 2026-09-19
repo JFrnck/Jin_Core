@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { JinError } from '../common/errors/jin-error';
@@ -42,6 +42,29 @@ export class SecondApprovalTooEarlyError extends JinError {
     );
   }
 }
+
+/**
+ * Otra llamada ya reclamó (está ejecutando, o ya ejecutó) esta aprobación --
+ * issue #36. 409: el segundo intento es idempotente, NUNCA ejecuta la acción
+ * otra vez. Si la fila ya se borró (ejecución terminada) el caller recibe
+ * `PendingApprovalNotFoundError` en su lugar; ambos significan "ya resuelta".
+ */
+export class ApprovalAlreadyResolvedError extends JinError {
+  constructor(requestId: string) {
+    super(
+      `La aprobación "${requestId}" ya está siendo ejecutada o ya fue resuelta por otra solicitud.`,
+      { code: 'HITL_APPROVAL_ALREADY_RESOLVED', httpStatus: 409 },
+    );
+  }
+}
+
+/**
+ * Un reclamo más viejo que esto sin haberse liberado ni borrado se considera
+ * "trabado" (proceso muerto entre el claim y el final): la acción pudo o no
+ * haber ocurrido, así que NUNCA se reintenta sola -- se avisa al owner
+ * (`TimeoutService`) y solo un humano puede rechazarla.
+ */
+export const STUCK_CLAIM_AFTER_MS = 15 * 60 * 1000;
 
 export interface CreatePendingApprovalInput {
   readonly requestId: string;
@@ -174,11 +197,24 @@ export class DualConfirmService {
 
     if (!pending.firstApprovedAt) {
       const availableAt = computeAvailableAt(now);
-      await this.db
+      // Condicional: si dos "primeras" aprobaciones llegan a la vez, solo una
+      // gana. La que pierde NO cuenta como segunda aprobación dentro de los
+      // 30 s (recursión única: ahora `firstApprovedAt` ya está seteado y cae
+      // en la rama de abajo, que lanza SecondApprovalTooEarlyError).
+      const won = await this.db
         .update(pendingApprovals)
         .set({ firstApprovedAt: now, firstApprover: approver, availableAt })
-        .where(eq(pendingApprovals.requestId, requestId));
-      return 'awaiting-second';
+        .where(
+          and(
+            eq(pendingApprovals.requestId, requestId),
+            isNull(pendingApprovals.firstApprovedAt),
+          ),
+        )
+        .returning({ requestId: pendingApprovals.requestId });
+      if (won.length > 0) {
+        return 'awaiting-second';
+      }
+      return this.recordApproval(requestId, approver, now);
     }
 
     const availableAt =
@@ -190,9 +226,70 @@ export class DualConfirmService {
     return 'resolved';
   }
 
+  /**
+   * Reclama la ejecución (issue #36): solo UNA llamada obtiene la fila,
+   * aunque N lleguen a la vez -- `UPDATE ... WHERE executing_at IS NULL
+   * RETURNING` es atómico en Postgres. `undefined` = otra ya la reclamó.
+   * Lo usan `ApprovalExecutionService` (ejecutar) y `TimeoutService`
+   * (descartar): así una expiración nunca compite con una ejecución.
+   */
+  async claimForExecution(
+    requestId: string,
+    now: Date = new Date(),
+  ): Promise<PendingApprovalRow | undefined> {
+    const [row] = await this.db
+      .update(pendingApprovals)
+      .set({ executingAt: now, executionError: null })
+      .where(
+        and(
+          eq(pendingApprovals.requestId, requestId),
+          isNull(pendingApprovals.executingAt),
+        ),
+      )
+      .returning();
+    return row;
+  }
+
+  /**
+   * Libera un reclamo cuya ejecución NO ocurrió o falló, dejando el
+   * pendiente vivo para una nueva aprobación humana. `error` queda en la fila
+   * para que el owner vea por qué (dashboard / `/tasks`).
+   */
+  async releaseClaim(requestId: string, error?: string): Promise<void> {
+    await this.db
+      .update(pendingApprovals)
+      .set({ executingAt: null, executionError: error ?? null })
+      .where(eq(pendingApprovals.requestId, requestId));
+  }
+
   async removePending(requestId: string): Promise<void> {
     await this.db
       .delete(pendingApprovals)
       .where(eq(pendingApprovals.requestId, requestId));
+  }
+
+  /**
+   * Borra el pendiente SOLO si nadie lo está ejecutando (o si el reclamo está
+   * trabado, ver `STUCK_CLAIM_AFTER_MS`). Devuelve `false` si una ejecución
+   * en curso lo impide -- un rechazo no puede llegar a mitad de la acción.
+   */
+  async removeIfNotExecuting(
+    requestId: string,
+    now: Date = new Date(),
+  ): Promise<boolean> {
+    const stuckBefore = new Date(now.getTime() - STUCK_CLAIM_AFTER_MS);
+    const deleted = await this.db
+      .delete(pendingApprovals)
+      .where(
+        and(
+          eq(pendingApprovals.requestId, requestId),
+          or(
+            isNull(pendingApprovals.executingAt),
+            lt(pendingApprovals.executingAt, stuckBefore),
+          ),
+        ),
+      )
+      .returning({ requestId: pendingApprovals.requestId });
+    return deleted.length > 0;
   }
 }

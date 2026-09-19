@@ -104,6 +104,29 @@ export class AuditService {
     });
   }
 
+  /**
+   * La acción fue aprobada (y auditada como tal, ANTES de ejecutar) pero el
+   * executor falló -- issue #36. Fila propia en la cadena: sin ella, un
+   * "approved" sin resultado dejaría al owner creyendo que la acción ocurrió.
+   */
+  async recordExecutionFailure(input: {
+    requestId: string;
+    toolName: string;
+    inputsHash: string;
+  }): Promise<AuditLogRow> {
+    return this.appendRow({
+      requestId: input.requestId,
+      actor: 'system',
+      actionType: 'execution_failed',
+      toolName: input.toolName,
+      inputsHash: input.inputsHash,
+      planSummary: null,
+      approvalStatus: 'failed',
+      approver: null,
+      externalInputsSummary: null,
+    });
+  }
+
   async recordTimeout(input: {
     requestId: string;
     toolName: string;

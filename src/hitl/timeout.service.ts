@@ -6,6 +6,10 @@ import { AuditService } from '../audit/audit.service';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { pendingApprovals, type PendingApprovalRow } from '../db/schema';
 import { getToolDefinition } from '../tools/registry';
+import {
+  DualConfirmService,
+  STUCK_CLAIM_AFTER_MS,
+} from './dual-confirm.service';
 import { decideTimeoutOutcome } from './timeout.logic';
 
 // docs/RECOMENDACIONES.md #11: antes solo un `logger.warn`/`logger.error`
@@ -16,6 +20,10 @@ import { decideTimeoutOutcome } from './timeout.logic';
 // HitlModule→TelegramModule→HitlModule que una inyección directa crearía.
 export const HITL_APPROVAL_ESCALATED_EVENT = 'hitl.approval.escalated';
 export const HITL_APPROVAL_ABANDONED_EVENT = 'hitl.approval.abandoned';
+// Issue #36: una aprobación quedó "reclamada" (ejecutándose) y nunca terminó
+// -- el proceso murió entre el claim y el final. La acción pudo o no haber
+// ocurrido, así que NO se reintenta ni se descarta sola: se avisa al owner.
+export const HITL_APPROVAL_STUCK_EVENT = 'hitl.approval.stuck';
 
 export interface HitlApprovalTimeoutEvent {
   readonly requestId: string;
@@ -34,6 +42,7 @@ export class TimeoutService {
     @Inject(DB_CONNECTION) private readonly db: Db,
     private readonly auditService: AuditService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly dualConfirmService: DualConfirmService,
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -48,6 +57,27 @@ export class TimeoutService {
     pending: PendingApprovalRow,
     now: Date,
   ): Promise<void> {
+    // Una aprobación que se está ejecutando (o quedó trabada ejecutándose)
+    // NUNCA se descarta ni se abandona desde acá: sería competir con la
+    // acción real. Si el reclamo está trabado se avisa; el barrido es
+    // horario, así que el aviso se repite cada hora hasta que el owner
+    // actúe (rechazarla con /reject es la vía para limpiarla).
+    if (pending.executingAt) {
+      if (
+        now.getTime() - pending.executingAt.getTime() >
+        STUCK_CLAIM_AFTER_MS
+      ) {
+        this.logger.error(
+          `Aprobación TRABADA ejecutándose desde ${pending.executingAt.toISOString()}: ${pending.requestId} (${pending.toolName}). No se reintenta.`,
+        );
+        this.eventEmitter.emit(HITL_APPROVAL_STUCK_EVENT, {
+          requestId: pending.requestId,
+          toolName: pending.toolName,
+        } satisfies HitlApprovalTimeoutEvent);
+      }
+      return;
+    }
+
     const tool = getToolDefinition(pending.toolName);
     const timeoutBehavior = tool?.timeoutBehavior ?? 'discard';
 
@@ -63,12 +93,7 @@ export class TimeoutService {
         return;
 
       case 'discard':
-        await this.auditService.recordTimeout({
-          requestId: pending.requestId,
-          toolName: pending.toolName,
-          inputsHash: pending.inputsHash,
-          status: 'timeout',
-        });
+        if (!(await this.claimAndAuditTimeout(pending, 'timeout'))) return;
         await this.removePending(pending.requestId);
         this.logger.warn(
           `Aprobación descartada por timeout (24h): ${pending.requestId} (${pending.toolName})`,
@@ -90,12 +115,7 @@ export class TimeoutService {
         return;
 
       case 'abandon':
-        await this.auditService.recordTimeout({
-          requestId: pending.requestId,
-          toolName: pending.toolName,
-          inputsHash: pending.inputsHash,
-          status: 'abandoned',
-        });
+        if (!(await this.claimAndAuditTimeout(pending, 'abandoned'))) return;
         await this.removePending(pending.requestId);
         this.logger.error(
           `Aprobación ABANDONADA tras 24h sin respuesta: ${pending.requestId} (${pending.toolName})`,
@@ -106,6 +126,35 @@ export class TimeoutService {
         } satisfies HitlApprovalTimeoutEvent);
         return;
     }
+  }
+
+  /**
+   * Reclama la fila con el MISMO primitivo atómico que la ejecución
+   * (`claimForExecution`) antes de auditar y descartar: si otra solicitud la
+   * está ejecutando en este instante, esta expiración pierde y se salta (la
+   * acción real manda). Si el audit falla, el reclamo se libera y el
+   * próximo barrido reintenta -- mismo comportamiento de antes.
+   */
+  private async claimAndAuditTimeout(
+    pending: PendingApprovalRow,
+    status: 'timeout' | 'abandoned',
+  ): Promise<boolean> {
+    const claimed = await this.dualConfirmService.claimForExecution(
+      pending.requestId,
+    );
+    if (!claimed) return false;
+    try {
+      await this.auditService.recordTimeout({
+        requestId: pending.requestId,
+        toolName: pending.toolName,
+        inputsHash: pending.inputsHash,
+        status,
+      });
+    } catch (err: unknown) {
+      await this.dualConfirmService.releaseClaim(pending.requestId);
+      throw err;
+    }
+    return true;
   }
 
   private async removePending(requestId: string): Promise<void> {
