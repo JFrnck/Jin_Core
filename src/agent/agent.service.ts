@@ -1,10 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { z } from 'zod';
 import { AuditService } from '../audit/audit.service';
 import { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
-import { classifyToolCall } from '../hitl/classifier';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
+import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
+import {
+  HITL_ACTION_NOTIFIED_EVENT,
+  type HitlActionNotifiedEvent,
+} from '../hitl/notify.events';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type {
   ModelMessage,
@@ -132,6 +137,8 @@ export class AgentService {
     private readonly auditService: AuditService,
     private readonly historyCompactionService: HistoryCompactionService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly hitlPolicyService: HitlPolicyService,
+    private readonly eventEmitter: EventEmitter2,
     @Inject(AGENT_CONFIG) private readonly config: AgentConfig,
   ) {}
 
@@ -399,11 +406,12 @@ export class AgentService {
     }
 
     try {
-      // classifyToolCall (src/hitl/classifier.ts) sigue siendo el ÚNICO
-      // nivel ESTÁTICO -- resolveEffectiveLevel solo lo ajusta si existe
-      // un override de config/feature-flags.yaml ya aprobado (Fase 9.5).
-      const decision = await this.featureFlagsService.resolveEffectiveLevel(
-        classifyToolCall(call.name, call.input),
+      // ÚNICA puerta de decisión del nivel HITL (ADR 0010): nivel estático
+      // del registry -> overrides de feature flags -> modo de autonomía.
+      // `classifyToolCall` sigue siendo la única fuente del nivel BASE.
+      const decision = await this.hitlPolicyService.decide(
+        call.name,
+        call.input,
       );
       const inputsHash = computeInputsHash(call.input);
 
@@ -447,7 +455,27 @@ export class AgentService {
         toolName: call.name,
         inputsHash,
         approvalStatus: decision.level === 'auto' ? 'auto' : 'notified',
+        // Si un modo de autonomía la relajó, el audit lo dice: se ve POR QUÉ
+        // esta acción no pidió aprobación.
+        ...(decision.relaxedBy !== undefined
+          ? {
+              planSummary: `Autoejecutada sin aprobación (${decision.relaxedBy}): "${call.name}" era confirm`,
+            }
+          : {}),
       });
+
+      // Notificación post-hoc real (BLUEPRINT 9.1). Antes `notify` solo
+      // dejaba la fila del audit y nadie avisaba al owner.
+      if (decision.level === 'notify') {
+        this.eventEmitter.emit(HITL_ACTION_NOTIFIED_EVENT, {
+          requestId: decision.requestId,
+          toolName: call.name,
+          actor: actorLabel,
+          ...(decision.relaxedBy !== undefined
+            ? { relaxedBy: decision.relaxedBy }
+            : {}),
+        } satisfies HitlActionNotifiedEvent);
+      }
 
       const sanitized = wrapUntrustedContent(
         stringifyToolResult(result),

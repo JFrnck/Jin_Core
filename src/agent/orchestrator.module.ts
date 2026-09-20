@@ -2,6 +2,7 @@ import { Module, type OnModuleInit } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { BudgetModule } from '../budget/budget.module';
 import { HitlModule } from '../hitl/hitl.module';
+import { HitlPolicyModule } from '../hitl-policy/hitl-policy.module';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import { AgentModule } from './agent.module';
 import { AgentBranchMergeNotImplementedError } from './errors';
@@ -18,7 +19,13 @@ interface ResolveAgentConflictPayload {
 }
 
 @Module({
-  imports: [AgentModule, HitlModule, BudgetModule, AuditModule],
+  imports: [
+    AgentModule,
+    HitlModule,
+    HitlPolicyModule,
+    BudgetModule,
+    AuditModule,
+  ],
   controllers: [OrchestratorController],
   providers: [
     LedgerRepository,

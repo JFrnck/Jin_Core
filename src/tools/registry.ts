@@ -38,6 +38,20 @@ export interface ToolDefinition {
    * desactivada — chequeo único, no disperso por módulo.
    */
   readonly integration?: IntegrationName;
+  /**
+   * ADR 0010 (modos de autonomía): en modo `semi-auto` esta tool CONSERVA su
+   * nivel `confirm` en vez de relajarse a `notify`. Decisión del owner
+   * (2026-09-19): git/merges, correos y borrar eventos futuros. Estática e
+   * inmutable como el resto del registry: ni el LLM ni un flag pueden
+   * ponerla o quitarla. En modo `auto` no aplica (el piso es `dual-confirm`).
+   */
+  readonly guardedInSemiAuto?: boolean;
+  /**
+   * ADR 0010: es una DECISIÓN humana, no una acción -- ningún modo de
+   * autonomía la relaja jamás (p. ej. resolver un conflicto material entre
+   * sub-agentes). Automatizarla la vaciaría de sentido.
+   */
+  readonly humanDecision?: boolean;
 }
 
 // `as const` es solo un contrato de tipos — Object.freeze es lo que da la
@@ -94,6 +108,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'sendEmail',
+    guardedInSemiAuto: true,
     integration: 'google',
     hitlLevel: 'confirm',
     description:
@@ -264,6 +279,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   }),
   Object.freeze({
     name: 'deleteCalendarEventFuture',
+    guardedInSemiAuto: true,
     integration: 'google',
     hitlLevel: 'confirm',
     description:
@@ -318,6 +334,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   // 'blocked' para revisión manual.
   Object.freeze({
     name: 'resolveAgentConflict',
+    humanDecision: true,
     hitlLevel: 'confirm',
     description:
       'Escala al owner un conflicto material detectado entre sub-agentes durante una orquestación multi-agente, con una resolución propuesta. Requiere 1 aprobación.',
@@ -345,6 +362,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
   // payload real. Se activa cuando exista una tool de edición de código.
   Object.freeze({
     name: 'mergeAgentBranch',
+    guardedInSemiAuto: true,
     hitlLevel: 'confirm',
     description:
       'Mergea a main la branch feature/agent/<ticket> de un sub-agente. Requiere 1 aprobación. NO IMPLEMENTADA todavía (501) — no existe hoy ninguna tool que le dé a un sub-agente la capacidad de producir una branch real.',

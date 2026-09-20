@@ -4,6 +4,7 @@ import { AuditModule } from '../audit/audit.module';
 import { BudgetModule } from '../budget/budget.module';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { HitlModule } from '../hitl/hitl.module';
+import { HitlPolicyModule } from '../hitl-policy/hitl-policy.module';
 import { MemoryModule } from '../memory/memory.module';
 import { loadAgentConfig, type AgentConfig } from './agent-config.schema';
 import { AGENT_CONFIG } from './agent.tokens';
@@ -19,6 +20,7 @@ const AGENT_CONFIG_PATH = join(process.cwd(), 'config', 'agent.yaml');
     AuditModule,
     MemoryModule,
     FeatureFlagsModule,
+    HitlPolicyModule,
   ],
   providers: [
     {

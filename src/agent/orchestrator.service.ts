@@ -1,8 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { KillSwitchActiveError } from '../budget/errors';
 import { KillSwitchService } from '../budget/kill-switch.service';
-import { classifyToolCall } from '../hitl/classifier';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
+import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
 import { listRegisteredTools } from '../tools/registry';
 import type { AgentConfig } from './agent-config.schema';
 import { AgentService } from './agent.service';
@@ -43,6 +43,7 @@ export class OrchestratorService {
     private readonly reconciliation: ReconciliationService,
     private readonly agentService: AgentService,
     private readonly dualConfirmService: DualConfirmService,
+    private readonly hitlPolicyService: HitlPolicyService,
     private readonly killSwitchService: KillSwitchService,
     @Inject(AGENT_CONFIG) private readonly config: AgentConfig,
   ) {}
@@ -246,7 +247,11 @@ export class OrchestratorService {
         proposedResolution: conflict.proposedResolution,
         runId,
       };
-      const decision = classifyToolCall(RESOLVE_CONFLICT_TOOL_NAME, payload);
+      // `resolveAgentConflict` es `humanDecision`: ningún modo de autonomía la relaja.
+      const decision = await this.hitlPolicyService.decide(
+        RESOLVE_CONFLICT_TOOL_NAME,
+        payload,
+      );
       await this.dualConfirmService.createPendingApproval({
         requestId: decision.requestId,
         toolName: RESOLVE_CONFLICT_TOOL_NAME,

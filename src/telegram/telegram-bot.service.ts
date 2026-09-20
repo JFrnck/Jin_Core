@@ -22,6 +22,16 @@ import {
 } from '../db/schema';
 import { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
+  AUTONOMY_MODE_CHANGED_EVENT,
+  type AutonomyModeChangedEvent,
+} from '../autonomy/autonomy.events';
+import { parseModeCommand } from '../autonomy/autonomy.logic';
+import { AutonomyService } from '../autonomy/autonomy.service';
+import {
+  HITL_ACTION_NOTIFIED_EVENT,
+  type HitlActionNotifiedEvent,
+} from '../hitl/notify.events';
+import {
   ApprovalAlreadyResolvedError,
   DualConfirmService,
   PendingApprovalNotFoundError,
@@ -72,6 +82,7 @@ export class TelegramBotService implements OnModuleInit {
     private readonly agentService: AgentService,
     private readonly memoryService: MemoryService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly autonomyService: AutonomyService,
     @Inject(DB_CONNECTION) private readonly db: Db,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
@@ -230,6 +241,39 @@ export class TelegramBotService implements OnModuleInit {
         return;
       }
       await this.processRejection(ctx, requestId);
+    });
+
+    // Comando /mode (ADR 0010): interruptor de autonomía del HITL. Solo el
+    // owner llega acá (middleware de chat_id). Volver a un modo más
+    // restrictivo es inmediato; bajar la protección crea una aprobación
+    // dual-confirm que se resuelve con /approve dos veces (>=30 s).
+    this.bot.command('mode', async (ctx) => {
+      const command = parseModeCommand(ctx.match);
+      if (command.kind === 'invalid') {
+        await ctx.reply(
+          'Uso: /mode (ver estado) · /mode safe · /mode semi [horas] · /mode auto [horas]',
+        );
+        return;
+      }
+      if (command.kind === 'status') {
+        await ctx.reply(await this.describeAutonomyMode());
+        return;
+      }
+      const result = await this.autonomyService.requestModeChange({
+        mode: command.mode,
+        ...(command.hours !== undefined ? { hours: command.hours } : {}),
+        requestedBy: 'owner:telegram',
+      });
+      if (result.status === 'applied') {
+        await ctx.reply(await this.describeAutonomyMode());
+        return;
+      }
+      await ctx.reply(
+        `⏳ Para pasar a modo "${result.mode}" durante ${result.hours} h hace falta DOBLE aprobación (baja la protección del HITL).\n` +
+          `1) /approve ${result.requestId}\n` +
+          `2) esperá 30 s y repetí /approve ${result.requestId}\n` +
+          'Para cancelar: /reject. Mientras tanto sigue el modo actual.',
+      );
     });
 
     // Comando /budget
@@ -722,6 +766,56 @@ export class TelegramBotService implements OnModuleInit {
         'La acción pudo o no haberse realizado — verificalo a mano. ' +
         `No se reintenta sola. Cuando lo hayas comprobado, usá /reject ${event.requestId} para limpiarla.`,
       { parse_mode: 'Markdown' },
+    );
+  }
+
+  private async describeAutonomyMode(): Promise<string> {
+    const d = await this.autonomyService.describe();
+    if (d.mode === 'supervised') {
+      return '🟢 Modo: supervisado (HITL completo). Toda acción que hoy pide aprobación la sigue pidiendo.';
+    }
+    const hours =
+      d.remainingSeconds !== null
+        ? `${Math.floor(d.remainingSeconds / 3600)} h ${Math.floor((d.remainingSeconds % 3600) / 60)} min`
+        : '?';
+    const label = d.mode === 'auto' ? 'AUTOMÁTICO' : 'semiautomático';
+    const detail =
+      d.mode === 'auto'
+        ? 'Lo que pedía 1 aprobación se ejecuta y te avisa. Lo dual-confirm sigue pidiendo 2 aprobaciones.'
+        : `Se ejecuta y te avisa, salvo: ${d.guardedInSemiAuto.join(', ')} (siguen pidiendo aprobación). Lo dual-confirm sigue igual.`;
+    return `🟠 Modo: ${label} — vuelve solo a supervisado en ${hours}.\n${detail}\nPara volver ya: /mode safe`;
+  }
+
+  /** ADR 0010: cada cambio de modo se avisa al owner (aprobado, caducó, freno de emergencia...). */
+  @OnEvent(AUTONOMY_MODE_CHANGED_EVENT)
+  async onAutonomyModeChanged(event: AutonomyModeChangedEvent): Promise<void> {
+    const why: Record<AutonomyModeChangedEvent['reason'], string> = {
+      approved: 'aprobado con doble confirmación',
+      downgrade: 'lo pediste vos',
+      expired: 'CADUCÓ',
+      'circuit-breaker':
+        'FRENO DE EMERGENCIA: se autoejecutaron demasiadas acciones en 1 h',
+    };
+    await this.bot.api.sendMessage(
+      this.ownerChatId,
+      `${event.mode === 'supervised' ? '🟢' : '🟠'} Modo de autonomía: ${event.previousMode} → ${event.mode} (${why[event.reason]}).`,
+    );
+  }
+
+  /**
+   * Notificación POST-HOC (BLUEPRINT 9.1): una acción `notify` ya se ejecutó.
+   * Con un modo de autonomía activo, también dice que NO pidió aprobación y
+   * por qué -- nunca se autoejecuta nada en silencio.
+   */
+  @OnEvent(HITL_ACTION_NOTIFIED_EVENT)
+  async onHitlActionNotified(event: HitlActionNotifiedEvent): Promise<void> {
+    const relaxed =
+      event.relaxedBy !== undefined
+        ? ` — se ejecutó SIN pedirte aprobación (${event.relaxedBy})`
+        : '';
+    await this.bot.api.sendMessage(
+      this.ownerChatId,
+      `✅ Ejecuté ${event.toolName}${relaxed}. (${event.actor}, id ${event.requestId})`,
     );
   }
 
