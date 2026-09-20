@@ -45,4 +45,10 @@ export interface HitlDecision {
   readonly approvalsRequired: 0 | 1 | 2;
   /** Solo `true` para 'notify': se ejecuta y se notifica DESPUÉS, sin esperar aprobación. */
   readonly notifyAfterExecution: boolean;
+  /**
+   * Presente solo si un modo de autonomía relajó el nivel (`autonomy:<modo>`,
+   * ADR 0010). Va al audit y a la notificación post-hoc: el owner siempre
+   * puede ver QUÉ se autoejecutó y POR QUÉ no pidió aprobación.
+   */
+  readonly relaxedBy?: string;
 }

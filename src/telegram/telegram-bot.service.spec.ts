@@ -9,6 +9,7 @@ import type { BudgetService } from '../budget/budget.service';
 import type { KillSwitchService } from '../budget/kill-switch.service';
 import type { Env } from '../config/env.schema';
 import type { Db } from '../db/db.module';
+import type { AutonomyService } from '../autonomy/autonomy.service';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import type { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
@@ -34,6 +35,10 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
   let mockAgentService: Partial<AgentService>;
   let mockMemoryService: Partial<MemoryService>;
   let mockFeatureFlagsService: Partial<FeatureFlagsService>;
+  let mockAutonomyService: {
+    describe: ReturnType<typeof vi.fn>;
+    requestModeChange: ReturnType<typeof vi.fn>;
+  };
   let mockDb: Partial<Db>;
 
   const OWNER_CHAT_ID = 123456789;
@@ -137,6 +142,21 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       consolidate: vi.fn().mockResolvedValue([]),
     };
 
+    mockAutonomyService = {
+      describe: vi.fn().mockResolvedValue({
+        mode: 'supervised',
+        expiresAt: null,
+        remainingSeconds: null,
+        setBy: 'system:default',
+        limits: {
+          semiAuto: { defaultHours: 24, maxHours: 72 },
+          auto: { defaultHours: 4, maxHours: 24 },
+          maxRelaxedActionsPerHour: 20,
+        },
+        guardedInSemiAuto: ['sendEmail'],
+      }),
+      requestModeChange: vi.fn(),
+    };
     mockFeatureFlagsService = {
       isIntegrationEnabled: vi.fn().mockReturnValue(true),
     };
@@ -232,6 +252,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       mockAgentService as AgentService,
       mockMemoryService as MemoryService,
       mockFeatureFlagsService as FeatureFlagsService,
+      mockAutonomyService as unknown as AutonomyService,
       mockDb as Db,
     );
 
@@ -344,6 +365,79 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
     await service.handleWebhookUpdate(createCommandUpdate(3, '/budget'));
     expect(sentMessages.some((msg) => msg.includes('42%'))).toBe(true);
     expect(sentMessages.some((msg) => msg.includes('inactivo'))).toBe(true);
+  });
+
+  it('/mode sin argumentos: informa el modo vigente (supervisado por default)', async () => {
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+
+    await service.handleWebhookUpdate(createCommandUpdate(40, '/mode'));
+
+    expect(sentMessages.some((m) => m.includes('supervisado'))).toBe(true);
+    expect(mockAutonomyService.requestModeChange).not.toHaveBeenCalled();
+  });
+
+  it('/mode auto 2: pide el cambio con requestedBy del owner y explica que hace falta DOBLE aprobación', async () => {
+    mockAutonomyService.requestModeChange.mockResolvedValue({
+      status: 'pending-approval',
+      requestId: 'req-mode-1',
+      mode: 'auto',
+      hours: 2,
+    });
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+
+    await service.handleWebhookUpdate(createCommandUpdate(41, '/mode auto 2'));
+
+    expect(mockAutonomyService.requestModeChange).toHaveBeenCalledWith({
+      mode: 'auto',
+      hours: 2,
+      requestedBy: 'owner:telegram',
+    });
+    const reply = sentMessages.join('\n');
+    expect(reply).toContain('DOBLE aprobación');
+    expect(reply).toContain('/approve req-mode-1');
+  });
+
+  it('/mode safe: vuelve inmediato, sin pedir aprobación', async () => {
+    mockAutonomyService.requestModeChange.mockResolvedValue({
+      status: 'applied',
+      mode: 'supervised',
+      expiresAt: null,
+    });
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+
+    await service.handleWebhookUpdate(createCommandUpdate(42, '/mode safe'));
+
+    expect(mockAutonomyService.requestModeChange).toHaveBeenCalledWith({
+      mode: 'supervised',
+      requestedBy: 'owner:telegram',
+    });
+    expect(sentMessages.join('\n')).not.toContain('DOBLE');
+  });
+
+  it('/mode con argumentos inválidos: muestra el uso y NO cambia nada', async () => {
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+
+    await service.handleWebhookUpdate(
+      createCommandUpdate(43, '/mode banana 99'),
+    );
+
+    expect(mockAutonomyService.requestModeChange).not.toHaveBeenCalled();
+    expect(sentMessages.join('\n')).toContain('Uso: /mode');
+  });
+
+  it('/mode de un chat NO autorizado no llega al servicio (middleware de chat_id)', async () => {
+    const sentMessages: string[] = [];
+    mockSendMessage(sentMessages);
+    const foreign = createCommandUpdate(44, '/mode auto');
+    (foreign.message as { chat: { id: number } }).chat.id = 999_999_999;
+
+    await service.handleWebhookUpdate(foreign);
+
+    expect(mockAutonomyService.requestModeChange).not.toHaveBeenCalled();
   });
 
   it('/budget muestra el kill switch activo cuando corresponde', async () => {

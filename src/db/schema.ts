@@ -382,3 +382,32 @@ export type FeatureFlagHitlOverrideRow =
   typeof featureFlagHitlOverrides.$inferSelect;
 export type NewFeatureFlagHitlOverrideRow =
   typeof featureFlagHitlOverrides.$inferInsert;
+
+/**
+ * Modo de autonomía del HITL (ADR 0010). Fila singleton (`id` siempre 1),
+ * sembrada por la migración 0011 en `supervised` -- el default seguro. Es
+ * estado del OWNER: solo lo cambian los caminos autenticados (Telegram
+ * `/mode`, `POST /api/autonomy`) o el ejecutor de una aprobación
+ * `dual-confirm`; nunca una tool que el LLM pueda invocar.
+ *
+ * `expires_at`: todo modo distinto de `supervised` caduca solo y vuelve al
+ * modo seguro (lectura perezosa + cron por minuto). `relaxed_count` /
+ * `window_started_at`: contador del freno de emergencia -- si un modo
+ * relajado autoejecuta demasiadas acciones por hora, revierte solo.
+ */
+export const autonomyModeState = pgTable('autonomy_mode_state', {
+  id: integer('id').primaryKey(),
+  mode: text('mode').notNull().default('supervised'), // AutonomyMode -- ver src/autonomy/autonomy.types.ts
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  setBy: text('set_by').notNull().default('system:default'),
+  approvalRequestId: uuid('approval_request_id'),
+  changedAt: timestamp('changed_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  relaxedCount: integer('relaxed_count').notNull().default(0),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type AutonomyModeStateRow = typeof autonomyModeState.$inferSelect;

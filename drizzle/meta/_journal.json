@@ -78,6 +78,13 @@
       "when": 1789540000000,
       "tag": "0010_pending_approval_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789630000000,
+      "tag": "0011_autonomy_mode_state",
+      "breakpoints": true
     }
   ]
 }

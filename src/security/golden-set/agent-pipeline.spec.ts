@@ -11,7 +11,10 @@ import type {
 import { AgentService } from '../../agent/agent.service';
 import type { AgentConfig } from '../../agent/agent-config.schema';
 import type { HistoryCompactionService } from '../../agent/history-compaction.service';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
+import type { AutonomyService } from '../../autonomy/autonomy.service';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
+import { HitlPolicyService } from '../../hitl-policy/hitl-policy.service';
 import { GOLDEN_SET } from './corpus';
 
 // Mismo scaffolding de mocks que src/agent/agent.service.spec.ts (no se
@@ -87,6 +90,12 @@ describe('golden set — el loop del agente no ejecuta ni cambia de nivel por co
       preserveLastTurns: 6,
     };
 
+    const featureFlags = {
+      isIntegrationEnabled: vi.fn().mockReturnValue(true),
+      resolveEffectiveLevel: vi
+        .fn()
+        .mockImplementation((decision: unknown) => Promise.resolve(decision)),
+    } as unknown as FeatureFlagsService;
     service = new AgentService(
       mockRouter as unknown as BudgetGuardedModelRouter,
       toolExecutorRegistry,
@@ -97,12 +106,13 @@ describe('golden set — el loop del agente no ejecuta ni cambia de nivel por co
       // neutro a propósito (integraciones on, sin override de hitlLevel) --
       // este spec prueba que el contenido hostil no cambia el nivel; el
       // único que podría hacerlo legítimamente es un flag aprobado por el owner.
-      {
-        isIntegrationEnabled: vi.fn().mockReturnValue(true),
-        resolveEffectiveLevel: vi
-          .fn()
-          .mockImplementation((decision: unknown) => Promise.resolve(decision)),
-      } as unknown as FeatureFlagsService,
+      featureFlags,
+      new HitlPolicyService(featureFlags, {
+        // ADR 0010: modo supervised (identidad). El golden set de modos de
+        // autonomía vive aparte (autonomy-golden.spec.ts).
+        relax: (decision: unknown) => Promise.resolve(decision),
+      } as unknown as AutonomyService),
+      { emit: vi.fn() } as unknown as EventEmitter2,
       config,
     );
   });

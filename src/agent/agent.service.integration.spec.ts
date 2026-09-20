@@ -1,4 +1,4 @@
-import { EventEmitterModule } from '@nestjs/event-emitter';
+import { EventEmitter2, EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import {
   afterAll,
@@ -18,7 +18,9 @@ import { ChainVerificationService } from '../audit/chain-verification.service';
 import type { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
 import { DB_CONNECTION } from '../db/db.module';
 import { auditLog, pendingApprovals } from '../db/schema';
+import type { AutonomyService } from '../autonomy/autonomy.service';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type { ModelCompletionResponse } from '../model-provider/model-provider.types';
@@ -61,10 +63,19 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
   // Fase 9.5: este archivo prueba el estado en Postgres de dual-confirm/
   // audit, no feature flags (eso lo cubre feature-flags.service.spec.ts)
   // -- mock sin efecto, ninguna integración apagada, el nivel nunca cambia.
+  let moduleEventEmitter: EventEmitter2;
   const featureFlagsService = {
     isIntegrationEnabled: () => true,
     resolveEffectiveLevel: (decision: unknown) => Promise.resolve(decision),
   } as unknown as FeatureFlagsService;
+  // ADR 0010: sin modo de autonomía activo (supervised) -- identidad.
+  const autonomyService = {
+    relax: (decision: unknown) => Promise.resolve(decision),
+  } as unknown as AutonomyService;
+  const hitlPolicyService = new HitlPolicyService(
+    featureFlagsService,
+    autonomyService,
+  );
 
   beforeAll(async () => {
     testDb = await startTestDb();
@@ -81,6 +92,7 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
     dualConfirmService = moduleRef.get(DualConfirmService);
     auditService = moduleRef.get(AuditService);
     toolExecutorRegistry = moduleRef.get(ToolExecutorRegistry);
+    moduleEventEmitter = moduleRef.get(EventEmitter2);
   }, 30_000);
 
   afterAll(async () => {
@@ -98,6 +110,8 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
       auditService,
       historyCompactionService,
       featureFlagsService,
+      hitlPolicyService,
+      moduleEventEmitter,
       config,
     );
   });

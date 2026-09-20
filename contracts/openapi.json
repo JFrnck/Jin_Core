@@ -142,7 +142,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ResolveAndExecuteResult_Output"
+                  "$ref": "#/components/schemas/ChangeModeResult_Output"
                 }
               }
             }
@@ -275,6 +275,58 @@
         "summary": "Recall de memoria extendida por similaridad semántica",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/autonomy": {
+      "get": {
+        "operationId": "AutonomyController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutonomyStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Modo de autonomía vigente, caducidad y límites",
+        "tags": [
+          "autonomy"
+        ]
+      },
+      "post": {
+        "operationId": "AutonomyController_changeMode",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeModeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeModeResult_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cambia el modo. Volver a más restrictivo es inmediato; bajar la protección crea una aprobación dual-confirm (2 aprobaciones ≥30 s)",
+        "tags": [
+          "autonomy"
         ]
       }
     },
@@ -734,41 +786,66 @@
           "executionError"
         ]
       },
-      "ResolveAndExecuteResult_Output": {
+      "ChangeModeResult_Output": {
         "oneOf": [
           {
             "type": "object",
             "properties": {
-              "outcome": {
+              "status": {
                 "type": "string",
                 "enum": [
-                  "awaiting-second"
+                  "applied"
                 ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "supervised",
+                  "semi-auto",
+                  "auto"
+                ]
+              },
+              "expiresAt": {
+                "type": "string",
+                "nullable": true
               }
             },
             "required": [
-              "outcome"
+              "status",
+              "mode",
+              "expiresAt"
             ],
             "additionalProperties": false
           },
           {
             "type": "object",
             "properties": {
-              "outcome": {
+              "status": {
                 "type": "string",
                 "enum": [
-                  "resolved"
+                  "pending-approval"
                 ]
               },
-              "toolName": {
+              "requestId": {
                 "type": "string"
               },
-              "result": {}
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "supervised",
+                  "semi-auto",
+                  "auto"
+                ]
+              },
+              "hours": {
+                "type": "number"
+              }
             },
             "required": [
-              "outcome",
-              "toolName",
-              "result"
+              "status",
+              "requestId",
+              "mode",
+              "hours"
             ],
             "additionalProperties": false
           }
@@ -930,6 +1007,113 @@
           "modeloEmbedding"
         ],
         "additionalProperties": false
+      },
+      "AutonomyStatusDto_Output": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "supervised",
+              "semi-auto",
+              "auto"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "remainingSeconds": {
+            "type": "number",
+            "nullable": true
+          },
+          "setBy": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "semiAuto": {
+                "type": "object",
+                "properties": {
+                  "defaultHours": {
+                    "type": "number"
+                  },
+                  "maxHours": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "defaultHours",
+                  "maxHours"
+                ],
+                "additionalProperties": false
+              },
+              "auto": {
+                "type": "object",
+                "properties": {
+                  "defaultHours": {
+                    "type": "number"
+                  },
+                  "maxHours": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "defaultHours",
+                  "maxHours"
+                ],
+                "additionalProperties": false
+              },
+              "maxRelaxedActionsPerHour": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "semiAuto",
+              "auto",
+              "maxRelaxedActionsPerHour"
+            ],
+            "additionalProperties": false
+          },
+          "guardedInSemiAuto": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "mode",
+          "expiresAt",
+          "remainingSeconds",
+          "setBy",
+          "limits",
+          "guardedInSemiAuto"
+        ],
+        "additionalProperties": false
+      },
+      "ChangeModeDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "supervised",
+              "semi-auto",
+              "auto"
+            ]
+          },
+          "hours": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "maximum": 9007199254740991,
+            "minimum": 0
+          }
+        },
+        "required": [
+          "mode"
+        ]
       },
       "ListRunsResponseDto": {
         "type": "object",

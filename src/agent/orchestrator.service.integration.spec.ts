@@ -21,6 +21,8 @@ import { BUDGET_CONFIG, MODEL_PRICES } from '../budget/budget.tokens';
 import type { BudgetConfig } from '../budget/budget.types';
 import { BudgetService } from '../budget/budget.service';
 import { KillSwitchService } from '../budget/kill-switch.service';
+import { AutonomyService } from '../autonomy/autonomy.service';
+import { AUTONOMY_CONFIG } from '../autonomy/autonomy.tokens';
 import { DB_CONNECTION } from '../db/db.module';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { FEATURE_FLAGS_CONFIG } from '../feature-flags/feature-flags.tokens';
@@ -34,6 +36,7 @@ import {
   pendingApprovals,
 } from '../db/schema';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
+import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import {
   BUDGET_REMAINING_RATIO,
@@ -152,6 +155,18 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
           } satisfies FeatureFlagsConfig,
         },
         FeatureFlagsService,
+        // ADR 0010: modo `supervised` (el default sembrado por la migración
+        // 0011) -- este archivo prueba el orquestador, no los modos.
+        {
+          provide: AUTONOMY_CONFIG,
+          useValue: {
+            semiAuto: { defaultHours: 24, maxHours: 72 },
+            auto: { defaultHours: 4, maxHours: 24 },
+            maxRelaxedActionsPerHour: 20,
+          },
+        },
+        AutonomyService,
+        HitlPolicyService,
         AgentService,
         LedgerRepository,
         TicketDecompositionService,

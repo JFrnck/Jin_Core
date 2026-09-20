@@ -9,6 +9,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { AutonomyModule } from './autonomy/autonomy.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { BudgetModule } from './budget/budget.module';
 import { ChatModule } from './chat/chat.module';
@@ -20,6 +21,7 @@ import { ExecutorClientModule } from './executor-client/executor-client.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { HealthModule } from './health/health.module';
 import { HitlModule } from './hitl/hitl.module';
+import { HitlPolicyModule } from './hitl-policy/hitl-policy.module';
 import { CanvasModule } from './integrations/canvas/canvas.module';
 import { GoogleModule } from './integrations/google/google.module';
 import { McpModule } from './mcp/mcp.module';
@@ -47,6 +49,8 @@ import { TelegramModule } from './telegram/telegram.module';
     MemoryModule,
     CorpusModule,
     FeatureFlagsModule,
+    AutonomyModule,
+    HitlPolicyModule,
     McpModule,
     AgentModule,
     OrchestratorModule,

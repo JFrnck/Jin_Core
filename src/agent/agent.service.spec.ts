@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuditService } from '../audit/audit.service';
 import type { BudgetGuardedModelRouter } from '../budget/budget-guarded-router.service';
+import type { AutonomyService } from '../autonomy/autonomy.service';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
+import { HITL_ACTION_NOTIFIED_EVENT } from '../hitl/notify.events';
+import type { HitlDecision } from '../hitl/types';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type {
@@ -54,6 +59,9 @@ describe('AgentService.runTurn', () => {
   let mockAuditService: Partial<AuditService>;
   let mockHistoryCompactionService: Partial<HistoryCompactionService>;
   let mockFeatureFlagsService: Partial<FeatureFlagsService>;
+  let mockAutonomyService: { relax: ReturnType<typeof vi.fn> };
+  let mockEmit: ReturnType<typeof vi.fn>;
+  let hitlPolicyService: HitlPolicyService;
   let config: AgentConfig;
   let service: AgentService;
 
@@ -79,6 +87,18 @@ describe('AgentService.runTurn', () => {
         .fn()
         .mockImplementation((decision) => Promise.resolve(decision)),
     };
+    // ADR 0010: modo `supervised` por default (relax = identidad); los tests
+    // de modos de autonomía viven en autonomy.service.spec.ts y en el golden set.
+    mockAutonomyService = {
+      relax: vi
+        .fn()
+        .mockImplementation((decision) => Promise.resolve(decision)),
+    };
+    mockEmit = vi.fn();
+    hitlPolicyService = new HitlPolicyService(
+      mockFeatureFlagsService as FeatureFlagsService,
+      mockAutonomyService as unknown as AutonomyService,
+    );
     config = {
       maxIterationsPerTurn: 5,
       maxConsecutiveToolFailures: 2,
@@ -96,6 +116,8 @@ describe('AgentService.runTurn', () => {
       mockAuditService as AuditService,
       mockHistoryCompactionService as HistoryCompactionService,
       mockFeatureFlagsService as FeatureFlagsService,
+      hitlPolicyService,
+      { emit: mockEmit } as unknown as EventEmitter2,
       config,
     );
   });
@@ -362,6 +384,132 @@ describe('AgentService.runTurn', () => {
     );
   });
 
+  it('tool notify: emite la notificación POST-HOC real (antes solo dejaba la fila del audit y nadie avisaba)', async () => {
+    toolExecutorRegistry.register(
+      'createCalendarEvent',
+      vi.fn().mockResolvedValue({ id: 'e' }),
+    );
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [
+            {
+              id: 'c1',
+              name: 'createCalendarEvent',
+              input: { summary: 'x', start: 'a', end: 'b' },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(fakeResponse({ content: 'ok' }));
+
+    await service.runTurn({ sessionId: 's', objective: 'x' });
+
+    expect(mockEmit).toHaveBeenCalledWith(
+      HITL_ACTION_NOTIFIED_EVENT,
+      expect.objectContaining({
+        toolName: 'createCalendarEvent',
+        actor: 'agent',
+      }),
+    );
+    // No es una acción relajada por un modo: sin relaxedBy.
+    expect(mockEmit.mock.calls[0]?.[1]).not.toHaveProperty('relaxedBy');
+  });
+
+  it('tool auto: NO emite notificación (BLUEPRINT 9.1: auto ejecuta sin notificar)', async () => {
+    toolExecutorRegistry.register(
+      'listCalendarEvents',
+      vi.fn().mockResolvedValue([]),
+    );
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [{ id: 'c1', name: 'listCalendarEvents', input: {} }],
+        }),
+      )
+      .mockResolvedValueOnce(fakeResponse({ content: 'ok' }));
+
+    await service.runTurn({ sessionId: 's', objective: 'x' });
+
+    expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  it('ADR 0010: una acción confirm relajada por el modo se EJECUTA, se audita como autoejecutada y se notifica diciendo por qué', async () => {
+    const executor = vi.fn().mockResolvedValue('enviado');
+    toolExecutorRegistry.register('runCode', executor);
+    mockAutonomyService.relax = vi.fn((d: HitlDecision) =>
+      Promise.resolve({
+        ...d,
+        level: 'notify' as const,
+        approvalsRequired: 0 as const,
+        notifyAfterExecution: true,
+        relaxedBy: 'autonomy:semi-auto',
+      }),
+    );
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [
+            {
+              id: 'c1',
+              name: 'runCode',
+              input: { language: 'typescript', code: '1+1' },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(fakeResponse({ content: 'hecho' }));
+
+    const result = await service.runTurn({ sessionId: 's', objective: 'x' });
+
+    expect(executor).toHaveBeenCalledTimes(1);
+    expect(mockDualConfirm.createPendingApproval).not.toHaveBeenCalled();
+    expect(result.pendingApprovals).toHaveLength(0);
+    expect(mockAuditService.recordToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'runCode',
+        approvalStatus: 'notified',
+        planSummary: expect.stringContaining(
+          'autonomy:semi-auto',
+        ) as unknown as string,
+      }),
+    );
+    expect(mockEmit).toHaveBeenCalledWith(
+      HITL_ACTION_NOTIFIED_EVENT,
+      expect.objectContaining({
+        toolName: 'runCode',
+        relaxedBy: 'autonomy:semi-auto',
+      }),
+    );
+  });
+
+  it('ADR 0010: sin modo activo (supervised) una tool confirm SIGUE difiriéndose (default seguro)', async () => {
+    const executor = vi.fn();
+    toolExecutorRegistry.register('runCode', executor);
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          stopReason: 'tool_use',
+          toolCalls: [
+            {
+              id: 'c1',
+              name: 'runCode',
+              input: { language: 'typescript', code: '1' },
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(fakeResponse({ content: 'ok' }));
+
+    const result = await service.runTurn({ sessionId: 's', objective: 'x' });
+
+    expect(executor).not.toHaveBeenCalled();
+    expect(result.pendingApprovals).toHaveLength(1);
+  });
+
   it('tool confirm: NO ejecuta — difiere con createPendingApproval y queda en pendingApprovals', async () => {
     const executor = vi.fn().mockResolvedValue('no debería llamarse');
     toolExecutorRegistry.register('sendEmail', executor);
@@ -534,6 +682,8 @@ describe('AgentService.runTurn', () => {
         mockAuditService as AuditService,
         mockHistoryCompactionService as HistoryCompactionService,
         mockFeatureFlagsService as FeatureFlagsService,
+        hitlPolicyService,
+        { emit: mockEmit } as unknown as EventEmitter2,
         {
           ...config,
           maxHistoryTokens: 10,

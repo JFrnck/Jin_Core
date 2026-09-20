@@ -1,0 +1,16 @@
+# Modos de autonomía del HITL (ADR 0010). El default SIEMPRE es `supervised`
+# (HITL completo) -- este archivo no lo cambia, solo fija límites:
+#   - cuánto puede durar cada modo relajado antes de volver solo a `supervised`;
+#   - el freno de emergencia.
+# Pasar a un modo menos restrictivo exige dual-confirm humano (Telegram /mode,
+# POST /api/autonomy). Nada de acá puede tocarlo el LLM.
+semi_auto:
+  default_hours: 24
+  max_hours: 72
+auto:
+  default_hours: 4
+  max_hours: 24
+circuit_breaker:
+  # Acciones autoejecutadas (confirm -> notify) por hora antes de revertir a
+  # `supervised` y avisar. Frena bucles de un agente o una inyección.
+  max_relaxed_actions_per_hour: 20

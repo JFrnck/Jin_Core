@@ -72,6 +72,28 @@ describe('registry', () => {
     }
   });
 
+  it('ADR 0010: las marcas de autonomía son EXACTAMENTE las decididas por el owner (2026-09-19)', () => {
+    const tools = listRegisteredTools();
+    expect(
+      tools
+        .filter((t) => t.guardedInSemiAuto === true)
+        .map((t) => t.name)
+        .sort(),
+    ).toEqual(['deleteCalendarEventFuture', 'mergeAgentBranch', 'sendEmail']);
+    expect(
+      tools.filter((t) => t.humanDecision === true).map((t) => t.name),
+    ).toEqual(['resolveAgentConflict']);
+    // Una marca guardedInSemiAuto solo tiene sentido sobre una tool confirm.
+    for (const t of tools.filter((x) => x.guardedInSemiAuto === true)) {
+      expect(t.hitlLevel).toBe('confirm');
+    }
+  });
+
+  it('ADR 0010: las tools virtuales que cambian modo/niveles NO están en el registry (el LLM no puede verlas)', () => {
+    expect(getToolDefinition('autonomyModeChange')).toBeUndefined();
+    expect(getToolDefinition('featureFlagHitlOverride')).toBeUndefined();
+  });
+
   it('getToolDefinition devuelve undefined para una tool no registrada', () => {
     expect(getToolDefinition('deleteEverything')).toBeUndefined();
   });
