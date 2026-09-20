@@ -78,6 +78,14 @@ const ResolveAndExecuteResultSchema = z
 // tiene un tipo de objeto único del que heredar (TS2509) — como DTO no
 // se usa como anotación de tipo en ningún lado, basta el valor.
 const ResolveAndExecuteResultDto = createZodDto(ResolveAndExecuteResultSchema);
+// Swagger indexa los DTOs por el NOMBRE de la clase, y toda `createZodDto(...)`
+// anónima se llama "AugmentedZodDto": dos DTOs de unión anónimos (este y
+// `ChangeModeResultDto` de src/autonomy) colisionaban y `POST /api/hitl/{id}/approve`
+// terminó documentando la respuesta de OTRO endpoint en el contrato. Un
+// nombre propio por DTO lo evita (lo protege contracts/openapi.spec.ts).
+Object.defineProperty(ResolveAndExecuteResultDto, 'name', {
+  value: 'ResolveAndExecuteResultDto',
+});
 
 @ApiTags('hitl')
 @Controller('api/hitl')

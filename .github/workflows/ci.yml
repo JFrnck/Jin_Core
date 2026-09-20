@@ -58,6 +58,11 @@ jobs:
       - run: pnpm run test:integration
       - run: pnpm run build
       - run: pnpm run generate:contract
+      # El contrato commiteado tiene que ser exactamente el que genera el código:
+      # Web y CLI generan sus tipos desde ese archivo (regla de oro #11), y un
+      # contrato desactualizado o mentiroso rompe a los consumidores en silencio.
+      - name: contracts/openapi.json está al día
+        run: git diff --exit-code contracts/openapi.json
 
   # Control que faltaba (docs/runbooks/STATUS_DEPLOY.md, Jin_Docs): el job
   # `docker` solo compila y publica, NUNCA ejecutaba la imagen. Por eso

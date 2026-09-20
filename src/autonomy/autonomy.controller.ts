@@ -55,6 +55,11 @@ const ChangeModeResultSchema = z
   ])
   .meta({ id: 'ChangeModeResult' });
 const ChangeModeResultDto = createZodDto(ChangeModeResultSchema);
+// Ver el mismo comentario en src/hitl/hitl.controller.ts: sin nombre propio,
+// dos DTOs de unión anónimos comparten "AugmentedZodDto" y Swagger deja solo uno.
+Object.defineProperty(ChangeModeResultDto, 'name', {
+  value: 'ChangeModeResultDto',
+});
 
 // Sistema single-user (BLUEPRINT 5.2): mismo `actor` que ya usan HitlController/Telegram.
 const REQUESTED_BY = 'owner:api';

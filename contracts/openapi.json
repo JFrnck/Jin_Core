@@ -142,7 +142,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChangeModeResult_Output"
+                  "$ref": "#/components/schemas/ResolveAndExecuteResult_Output"
                 }
               }
             }
@@ -786,66 +786,41 @@
           "executionError"
         ]
       },
-      "ChangeModeResult_Output": {
+      "ResolveAndExecuteResult_Output": {
         "oneOf": [
           {
             "type": "object",
             "properties": {
-              "status": {
+              "outcome": {
                 "type": "string",
                 "enum": [
-                  "applied"
+                  "awaiting-second"
                 ]
-              },
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "supervised",
-                  "semi-auto",
-                  "auto"
-                ]
-              },
-              "expiresAt": {
-                "type": "string",
-                "nullable": true
               }
             },
             "required": [
-              "status",
-              "mode",
-              "expiresAt"
+              "outcome"
             ],
             "additionalProperties": false
           },
           {
             "type": "object",
             "properties": {
-              "status": {
+              "outcome": {
                 "type": "string",
                 "enum": [
-                  "pending-approval"
+                  "resolved"
                 ]
               },
-              "requestId": {
+              "toolName": {
                 "type": "string"
               },
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "supervised",
-                  "semi-auto",
-                  "auto"
-                ]
-              },
-              "hours": {
-                "type": "number"
-              }
+              "result": {}
             },
             "required": [
-              "status",
-              "requestId",
-              "mode",
-              "hours"
+              "outcome",
+              "toolName",
+              "result"
             ],
             "additionalProperties": false
           }
@@ -1113,6 +1088,71 @@
         },
         "required": [
           "mode"
+        ]
+      },
+      "ChangeModeResult_Output": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "applied"
+                ]
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "supervised",
+                  "semi-auto",
+                  "auto"
+                ]
+              },
+              "expiresAt": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "status",
+              "mode",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending-approval"
+                ]
+              },
+              "requestId": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "supervised",
+                  "semi-auto",
+                  "auto"
+                ]
+              },
+              "hours": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "status",
+              "requestId",
+              "mode",
+              "hours"
+            ],
+            "additionalProperties": false
+          }
         ]
       },
       "ListRunsResponseDto": {
