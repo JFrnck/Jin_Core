@@ -22,6 +22,11 @@ import {
 } from '../db/schema';
 import { ApprovalExecutionService } from '../hitl/approval-execution.service';
 import {
+  MORNING_ALERT_EVENT,
+  type MorningAlertEvent,
+} from '../integrations/canvas/morning-alert.events';
+import { formatMorningAlert } from '../integrations/canvas/morning-alert.format';
+import {
   AUTONOMY_MODE_CHANGED_EVENT,
   type AutonomyModeChangedEvent,
 } from '../autonomy/autonomy.events';
@@ -800,6 +805,15 @@ export class TelegramBotService implements OnModuleInit {
       this.ownerChatId,
       `${event.mode === 'supervised' ? '🟢' : '🟠'} Modo de autonomía: ${event.previousMode} → ${event.mode} (${why[event.reason]}).`,
     );
+  }
+
+  /**
+   * Fase 9.4: alerta matutina de las 06:00. Texto plano SIN `parse_mode`: el
+   * resumen deriva de contenido no confiable (Canvas → LLM).
+   */
+  @OnEvent(MORNING_ALERT_EVENT)
+  async onMorningAlert(event: MorningAlertEvent): Promise<void> {
+    await this.bot.api.sendMessage(this.ownerChatId, formatMorningAlert(event));
   }
 
   /**

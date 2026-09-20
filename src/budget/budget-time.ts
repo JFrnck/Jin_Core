@@ -1,8 +1,9 @@
 /**
  * Fecha local en formato 'YYYY-MM-DD' (BLUEPRINT 9.6: "reset a las 00:00
- * local"). Usa los getters locales de `Date` (no UTC) — asume que la TZ
- * del pod está configurada correctamente; configurar esa TZ es un
- * detalle de despliegue (Jin_Infra), no de este módulo.
+ * local"). Usa los getters locales de `Date` (no UTC) — depende de la TZ
+ * del proceso: Jin_Infra la fija con `TZ=America/Lima` en el Deployment de
+ * jin-core (Fase 9.4; sin eso el reset, el cron de las 00:00 y la alerta de
+ * las 06:00 correrían en UTC).
  */
 export function todayLocalDate(now: Date = new Date()): string {
   const year = now.getFullYear();

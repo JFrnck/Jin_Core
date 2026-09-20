@@ -733,6 +733,48 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
     });
   });
 
+  describe('alerta matutina 06:00 (Fase 9.4)', () => {
+    function capturePayloads(): Record<string, unknown>[] {
+      const payloads: Record<string, unknown>[] = [];
+      service.getBot().api.config.use((_prev, method, payload) => {
+        if (method === 'sendMessage') {
+          payloads.push(payload);
+        }
+        return Promise.resolve({ ok: true, result: true } as never);
+      });
+      return payloads;
+    }
+
+    it('envía el resumen como texto PLANO (sin parse_mode: el contenido no es confiable)', async () => {
+      const payloads = capturePayloads();
+
+      await service.onMorningAlert({
+        kind: 'summary',
+        ranAt: '2026-09-20T05:00:00.000Z',
+        summaryMarkdown: '*Lab 1* [click](http://evil.example)',
+      });
+
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toMatchObject({ chat_id: OWNER_CHAT_ID });
+      expect(String(payloads[0]?.text)).toContain('*Lab 1*');
+      expect(payloads[0]).not.toHaveProperty('parse_mode');
+    });
+
+    it('si la corrida de las 00:00 falló, el mensaje lo dice', async () => {
+      const sentMessages: string[] = [];
+      mockSendMessage(sentMessages);
+
+      await service.onMorningAlert({
+        kind: 'failed',
+        ranAt: '2026-09-20T05:00:00.000Z',
+        error: 'canvas 503',
+      });
+
+      expect(sentMessages[0]).toContain('FALLÓ');
+      expect(sentMessages[0]).toContain('canvas 503');
+    });
+  });
+
   describe('comando /google-oauth-refreshed', () => {
     it('actualiza lastRefreshedAt en GoogleOAuthService y registra auditoría al invocarse por el owner', async () => {
       const sentMessages: string[] = [];
