@@ -85,6 +85,13 @@
       "when": 1789630000000,
       "tag": "0011_autonomy_mode_state",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789720000000,
+      "tag": "0012_shadowing_runs",
+      "breakpoints": true
     }
   ]
 }

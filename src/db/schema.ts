@@ -411,3 +411,24 @@ export const autonomyModeState = pgTable('autonomy_mode_state', {
 });
 
 export type AutonomyModeStateRow = typeof autonomyModeState.$inferSelect;
+
+/**
+ * Fase 9.4: una fila por corrida del Shadowing Académico (cron 00:00).
+ * Se guarda TAMBIÉN la corrida fallida (`status = 'failed'` + `error`): la
+ * alerta de las 06:00 reutiliza el resumen en vez de recalcularlo (cero
+ * llamadas extra al LLM) y necesita saber si la corrida falló para decirlo
+ * explícitamente en vez de enviar un resumen vacío.
+ */
+export const shadowingRuns = pgTable('shadowing_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ranAt: timestamp('ran_at', { withTimezone: true }).notNull().defaultNow(),
+  status: text('status').notNull(), // 'ok' | 'failed' -- CHECK en la migración 0012
+  error: text('error'),
+  summaryMarkdown: text('summary_markdown'),
+  coursesChecked: integer('courses_checked').notNull().default(0),
+  announcementsCount: integer('announcements_count').notNull().default(0),
+  assignmentsCount: integer('assignments_count').notNull().default(0),
+  modelId: text('model_id'),
+});
+
+export type ShadowingRunRow = typeof shadowingRuns.$inferSelect;

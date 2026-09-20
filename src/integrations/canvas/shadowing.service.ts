@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { AuditService } from '../../audit/audit.service';
 import { BudgetGuardedModelRouter } from '../../budget/budget-guarded-router.service';
+import { DB_CONNECTION, type Db } from '../../db/db.module';
+import { shadowingRuns } from '../../db/schema';
 import {
   generateSessionNonce,
   wrapUntrustedContent,
@@ -16,6 +18,8 @@ function computeHash(data: unknown): string {
     .digest('hex');
 }
 
+const MAX_STORED_ERROR_LENGTH = 500;
+
 @Injectable()
 export class ShadowingService {
   private readonly logger = new Logger(ShadowingService.name);
@@ -24,11 +28,16 @@ export class ShadowingService {
     private readonly canvasClient: CanvasClientService,
     private readonly modelRouter: BudgetGuardedModelRouter,
     private readonly auditService: AuditService,
+    @Inject(DB_CONNECTION) private readonly db: Db,
   ) {}
 
   /**
    * Cron nocturno (00:00 local) que revisa automáticamente los cambios en Canvas
    * de las últimas 24 horas y genera el informe de Shadowing Académico.
+   *
+   * Fase 9.4: persiste SIEMPRE la corrida (ok o fallida) para que la alerta de
+   * las 06:00 (`MorningAlertService`) resuma el resultado sin otra llamada al
+   * LLM y diga explícitamente si la corrida falló.
    */
   @Cron('0 0 * * *')
   async handleCron(): Promise<void> {
@@ -41,9 +50,41 @@ export class ShadowingService {
         `Shadowing completado con éxito. Procesados ${result.coursesChecked} cursos, ` +
           `${result.recentAnnouncementsCount} anuncios y ${result.upcomingAssignmentsCount} tareas.`,
       );
+      await this.persistRun({
+        status: 'ok',
+        summaryMarkdown: result.summaryMarkdown,
+        coursesChecked: result.coursesChecked,
+        announcementsCount: result.recentAnnouncementsCount,
+        assignmentsCount: result.upcomingAssignmentsCount,
+        modelId: result.modelId,
+      });
     } catch (err) {
       this.logger.error(
         'Error durante la ejecución del Shadowing Académico nocturno',
+        err instanceof Error ? err.stack : String(err),
+      );
+      await this.persistRun({
+        status: 'failed',
+        error: (err instanceof Error ? err.message : String(err)).slice(
+          0,
+          MAX_STORED_ERROR_LENGTH,
+        ),
+      });
+    }
+  }
+
+  /**
+   * Un fallo al persistir no debe tumbar el cron ni tapar el error original:
+   * se loguea. (Sin fila, las 06:00 dicen "no se ejecutó" -- nunca mienten.)
+   */
+  private async persistRun(
+    row: typeof shadowingRuns.$inferInsert,
+  ): Promise<void> {
+    try {
+      await this.db.insert(shadowingRuns).values(row);
+    } catch (err) {
+      this.logger.error(
+        'No se pudo persistir la corrida de Shadowing (la alerta de las 06:00 dirá que no se ejecutó)',
         err instanceof Error ? err.stack : String(err),
       );
     }

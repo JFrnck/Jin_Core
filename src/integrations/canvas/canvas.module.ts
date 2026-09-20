@@ -7,11 +7,17 @@ import { GoogleCalendarClientService } from '../google/calendar/google-calendar-
 import { GoogleModule } from '../google/google.module';
 import { CanvasClientService } from './canvas-client.service';
 import { CanvasToolsService } from './canvas-tools.service';
+import { MorningAlertService } from './morning-alert.service';
 import { ShadowingService } from './shadowing.service';
 
 @Module({
   imports: [AuditModule, BudgetModule, HitlModule, GoogleModule],
-  providers: [CanvasClientService, CanvasToolsService, ShadowingService],
+  providers: [
+    CanvasClientService,
+    CanvasToolsService,
+    ShadowingService,
+    MorningAlertService,
+  ],
   exports: [CanvasClientService, CanvasToolsService, ShadowingService],
 })
 export class CanvasModule implements OnModuleInit {
