@@ -6,8 +6,14 @@ const listSecretsMock = vi.fn();
 
 // Fase 8.1: mockear el SDK externo (AGENTS.md 6.3), mismo criterio que
 // embedding-provider.spec.ts con el SDK de OpenAI.
+const sdkConstructorArgs: unknown[] = [];
+
 vi.mock('@infisical/sdk', () => ({
   InfisicalSDK: class {
+    constructor(options: unknown) {
+      sdkConstructorArgs.push(options);
+    }
+
     auth() {
       return { universalAuth: { login: loginMock } };
     }
@@ -47,6 +53,7 @@ function baseEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     INFISICAL_CLIENT_SECRET: 'client-secret',
     INFISICAL_PROJECT_ID: 'project-id',
     INFISICAL_ENVIRONMENT: 'prod',
+    INFISICAL_SITE_URL: 'http://infisical.test.local:8080',
     ...overrides,
   };
 }
@@ -55,6 +62,32 @@ describe('loadSecrets', () => {
   beforeEach(() => {
     loginMock.mockReset();
     listSecretsMock.mockReset();
+  });
+
+  it('exige INFISICAL_SITE_URL: sin ella NO cae a la nube de Infisical, lanza', async () => {
+    // Regresión del primer despliegue real (2026-09-21): el Deployment no
+    // definía INFISICAL_SITE_URL, el default de Zod no aplica acá (esto corre
+    // antes de que Nest exista) y el SDK mandó el clientId/secret a
+    // `app.infisical.com`, un TERCERO. Jin es self-hosted: faltar la URL tiene
+    // que ser un fallo ruidoso, nunca una filtración silenciosa.
+    const env = baseEnv();
+    delete env['INFISICAL_SITE_URL'];
+
+    await expect(loadSecrets(env)).rejects.toThrow('INFISICAL_SITE_URL');
+    expect(loginMock).not.toHaveBeenCalled();
+  });
+
+  it('construye el SDK apuntando EXACTAMENTE a la URL configurada', async () => {
+    listSecretsMock.mockResolvedValue({
+      secrets: secretsFrom(ALL_REAL_SECRETS),
+    });
+    sdkConstructorArgs.length = 0;
+
+    await loadSecrets(baseEnv());
+
+    expect(sdkConstructorArgs).toEqual([
+      { siteUrl: 'http://infisical.test.local:8080' },
+    ]);
   });
 
   it('es un no-op si INFISICAL_ENABLED no es "true": no llama al SDK ni toca el env', async () => {
