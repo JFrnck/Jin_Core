@@ -60,6 +60,13 @@ export interface AgentTurnResult {
   readonly pendingApprovals: readonly AgentPendingApproval[];
   readonly iterationsUsed: number;
   /**
+   * Modelos que respondieron en este turno, sin repetir y en orden de uso
+   * (`response.modelId`, el que REALMENTE contestó -- no el pedido). Si el
+   * primary falló y entró el fallback, aparecen los dos ids. Alimenta el pie
+   * "🤖 modelo" del bot de Telegram; NO forma parte del contrato de `/api/chat`.
+   */
+  readonly modelsUsed: readonly string[];
+  /**
    * Presente SOLO cuando el turno comprimió el historial (poda +
    * compresión, docs/RECOMENDACIONES.md #2). `/api/chat` es stateless
    * (Fase 6.1) — el caller es dueño de su propio historial, así que este

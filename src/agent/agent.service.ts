@@ -157,6 +157,7 @@ export class AgentService {
     const pendingApprovals: AgentPendingApproval[] = [];
     const consecutiveFailures = new Map<string, number>();
     let iterationsUsed = 0;
+    const modelsUsed: string[] = [];
 
     while (iterationsUsed < this.config.maxIterationsPerTurn) {
       iterationsUsed += 1;
@@ -173,6 +174,9 @@ export class AgentService {
         undefined,
         input.sessionId,
       );
+      if (!modelsUsed.includes(response.modelId)) {
+        modelsUsed.push(response.modelId);
+      }
 
       if (response.stopReason !== 'tool_use' || !response.toolCalls?.length) {
         return this.finalizeTurn(
@@ -182,6 +186,7 @@ export class AgentService {
           plan,
           pendingApprovals,
           iterationsUsed,
+          modelsUsed,
         );
       }
 
@@ -232,6 +237,7 @@ export class AgentService {
       plan,
       pendingApprovals,
       iterationsUsed,
+      modelsUsed,
     );
   }
 
@@ -253,12 +259,14 @@ export class AgentService {
     plan: AgentPlan,
     pendingApprovals: readonly AgentPendingApproval[],
     iterationsUsed: number,
+    modelsUsed: readonly string[],
   ): Promise<AgentTurnResult> {
     const base: AgentTurnResult = {
       finalResponse,
       plan,
       pendingApprovals,
       iterationsUsed,
+      modelsUsed,
     };
 
     const compactionPlan = planHistoryCompaction(messages, {

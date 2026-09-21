@@ -409,6 +409,7 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
       { requestId: 'req-2', toolName: 'sendEmail' },
     ],
     iterationsUsed: 4,
+    modelsUsed: ['claude-sonnet-5'],
   };
 
   beforeEach(async () => {
@@ -437,7 +438,9 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
       .send({ sessionId: 's1', objective: 'revisa mi correo' })
       .expect(200);
 
-    expect(response.body).toEqual(turnResult);
+    // `modelsUsed` es interno (pie de Telegram): no forma parte del contrato de /api/chat.
+    const { modelsUsed: _omit1, ...expectedBody } = turnResult;
+    expect(response.body).toEqual(expectedBody);
   });
 
   it('POST /api/chat con pendingApprovals/steps vacíos — arrays vacíos no se confunden con ausentes', async () => {
@@ -446,6 +449,7 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
       plan: { steps: [] },
       pendingApprovals: [],
       iterationsUsed: 1,
+      modelsUsed: ['claude-sonnet-5'],
     };
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -463,7 +467,8 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
       .send({ sessionId: 's1', objective: 'nada que hacer' })
       .expect(200);
 
-    expect(response.body).toEqual(emptyResult);
+    const { modelsUsed: _omit2, ...expectedEmpty } = emptyResult;
+    expect(response.body).toEqual(expectedEmpty);
     await emptyApp.close();
   });
 
@@ -503,7 +508,8 @@ describe('ChatController (e2e) — plan anidado, note opcional, arrays vacíos',
       .send({ sessionId: 's1', objective: 'revisa mi correo' })
       .expect(200);
 
-    expect(response.body).toEqual(compactedResult);
+    const { modelsUsed: _omit3, ...expectedCompacted } = compactedResult;
+    expect(response.body).toEqual(expectedCompacted);
     await compactedApp.close();
   });
 });

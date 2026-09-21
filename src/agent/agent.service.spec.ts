@@ -137,8 +137,39 @@ describe('AgentService.runTurn', () => {
       plan: { steps: [] },
       pendingApprovals: [],
       iterationsUsed: 1,
+      modelsUsed: ['claude-sonnet-5'],
     });
     expect(completeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('modelsUsed lista los modelos que respondieron, sin repetir y en orden (visible si hubo fallback)', async () => {
+    completeMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          content: '',
+          stopReason: 'tool_use',
+          toolCalls: [
+            { id: 't1', name: 'searchCorpus', input: { query: 'x' } },
+          ],
+          modelId: 'claude-sonnet-5',
+        }),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse({
+          content: 'listo',
+          modelId: 'claude-haiku-4-5-20251001',
+        }),
+      );
+
+    const result = await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'busca x',
+    });
+
+    expect(result.modelsUsed).toEqual([
+      'claude-sonnet-5',
+      'claude-haiku-4-5-20251001',
+    ]);
   });
 
   it('propaga sessionId a cada llamada de BudgetGuardedModelRouter', async () => {
