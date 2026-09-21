@@ -17,6 +17,20 @@ export interface HourlyUsage {
  * Sin filas de lookback (arranque en frío, servicio recién desplegado)
  * no hay base de comparación → nunca dispara falsos positivos por falta
  * de historial.
+ *
+ * PISO ABSOLUTO (`runawayMinHourlyTokens`): la razón contra el promedio sola
+ * NO basta. El promedio divide entre `runawayLookbackHours` aunque solo
+ * existan una o dos horas de historial, así que en un sistema recién
+ * desplegado sale minúsculo y cualquier conversación normal parece un
+ * desastre. Visto en el primer uso real (2026-09-21): 5 487 tokens (~$0.02)
+ * contra un promedio de ~208 tokens/h = 26x, y el kill switch pausó todo. El
+ * comentario de arriba prometía "nunca falsos positivos por falta de
+ * historial" pero solo cubría el caso de CERO filas, no el de una o dos.
+ *
+ * El mismo defecto afecta a los procesos por lotes legítimos (el análisis
+ * nocturno de Canvas gasta en una hora lo que el resto del día no): el piso
+ * los deja pasar. Un runaway real -- un agente en bucle -- supera el piso en
+ * minutos, y lo que quede por debajo lo frena el tope diario.
  */
 export function isRunawayDetected(
   currentHourUsage: number,
@@ -24,6 +38,11 @@ export function isRunawayDetected(
   config: BudgetConfig,
 ): boolean {
   if (lookbackHours.length === 0) {
+    return false;
+  }
+
+  // Por debajo del piso no es una emergencia, sea cual sea la razón.
+  if (currentHourUsage < config.runawayMinHourlyTokens) {
     return false;
   }
 

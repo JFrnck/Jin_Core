@@ -10,6 +10,7 @@ function validRawConfig(overrides: Record<string, unknown> = {}) {
     daily_max_usd: 10,
     runaway_multiplier: 2,
     runaway_lookback_hours: 24,
+    runaway_min_hourly_tokens: 500_000,
     ...overrides,
   };
 }
@@ -24,6 +25,7 @@ describe('parseBudgetConfig', () => {
       dailyMaxUsd: 10,
       runawayMultiplier: 2,
       runawayLookbackHours: 24,
+      runawayMinHourlyTokens: 500_000,
     });
   });
 
@@ -34,6 +36,16 @@ describe('parseBudgetConfig', () => {
     expect(() => parseBudgetConfig(raw)).toThrow(
       /config\/budget\.yaml inválido/,
     );
+  });
+
+  it('exige el piso del kill switch: sin él el detector se dispara con cualquier uso normal en frío', () => {
+    const raw = validRawConfig() as Record<string, unknown>;
+    delete raw.runaway_min_hourly_tokens;
+
+    expect(() => parseBudgetConfig(raw)).toThrow(/runaway_min_hourly_tokens/);
+    expect(() =>
+      parseBudgetConfig(validRawConfig({ runaway_min_hourly_tokens: 0 })),
+    ).toThrow();
   });
 
   it('lanza si un campo numérico es negativo o cero', () => {
@@ -64,5 +76,7 @@ describe('loadBudgetConfig', () => {
 
     expect(config.dailyMaxUsd).toBe(10);
     expect(config.runawayMultiplier).toBe(2);
+    // El piso real del repo protege del falso positivo del primer uso (2026-09-21).
+    expect(config.runawayMinHourlyTokens).toBe(500_000);
   });
 });

@@ -12,6 +12,7 @@ const BudgetYamlSchema = z.object({
   daily_max_usd: z.number().positive(),
   runaway_multiplier: z.number().positive(),
   runaway_lookback_hours: z.number().int().positive(),
+  runaway_min_hourly_tokens: z.number().int().positive(),
 });
 
 /**
@@ -36,6 +37,7 @@ export function parseBudgetConfig(raw: unknown): BudgetConfig {
     dailyMaxUsd: data.daily_max_usd,
     runawayMultiplier: data.runaway_multiplier,
     runawayLookbackHours: data.runaway_lookback_hours,
+    runawayMinHourlyTokens: data.runaway_min_hourly_tokens,
   };
 }
 

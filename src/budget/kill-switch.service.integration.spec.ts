@@ -35,6 +35,7 @@ const TEST_CONFIG: BudgetConfig = {
   dailyMaxUsd: 10,
   runawayMultiplier: 2,
   runawayLookbackHours: 3,
+  runawayMinHourlyTokens: 100,
 };
 
 function hoursAgo(n: number): Date {

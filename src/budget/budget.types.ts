@@ -5,6 +5,11 @@ export interface BudgetConfig {
   readonly dailyMaxUsd: number;
   readonly runawayMultiplier: number;
   readonly runawayLookbackHours: number;
+  /**
+   * Piso absoluto de tokens en la hora actual por DEBAJO del cual nunca hay
+   * runaway, sin importar la razón contra el promedio. Ver `isRunawayDetected`.
+   */
+  readonly runawayMinHourlyTokens: number;
 }
 
 export interface CheckBeforeCallInput {
