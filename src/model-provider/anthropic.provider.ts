@@ -10,6 +10,7 @@ import type {
   ModelStopReason,
   ModelToolCall,
 } from './model-provider.types';
+import { anthropicModelAcceptsSampling } from './sampling';
 
 function toAnthropicContent(
   content: ModelMessage['content'],
@@ -73,7 +74,12 @@ export class AnthropicProvider implements ModelProviderClient {
     const response = await this.client.messages.create({
       model: modelId,
       max_tokens: request.maxOutputTokens,
-      temperature: request.temperature,
+      // Solo si el modelo lo acepta: Sonnet 5, Opus 5/4.8/4.7 y Fable 5 lo
+      // rechazan con 400 (ver sampling.ts). Ningún otro parámetro de muestreo
+      // se manda nunca.
+      ...(anthropicModelAcceptsSampling(modelId)
+        ? { temperature: request.temperature }
+        : {}),
       // Spread condicional, no `system: request.systemPrompt`: con
       // `exactOptionalPropertyTypes`, el SDK distingue "la clave está
       // ausente" de "la clave está presente con valor undefined", y su
