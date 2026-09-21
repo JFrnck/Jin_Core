@@ -1,5 +1,6 @@
 import {
   pgTable,
+  bigint,
   bigserial,
   boolean,
   date,
@@ -432,3 +433,31 @@ export const shadowingRuns = pgTable('shadowing_runs', {
 });
 
 export type ShadowingRunRow = typeof shadowingRuns.$inferSelect;
+
+/**
+ * Puente Claude Code ↔ owner (ADR 0012). Mensajes entre una sesión de Claude
+ * Code corriendo en la VM y el owner, por un bot de Telegram SEPARADO del de
+ * Jin — el chat de Jin es el canal de aprobaciones y no admite otro emisor.
+ *
+ * Es el registro del puente y a propósito NO toca `auditLog`: esa cadena está
+ * hash-encadenada y existe para acciones HITL, no para mensajería.
+ */
+export const relayMessages = pgTable('relay_messages', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** 'out' = Claude → owner. 'in' = owner → Claude. CHECK en la migración 0013. */
+  direction: text('direction').notNull(),
+  body: text('body').notNull(),
+  /** Opciones ofrecidas en una pregunta (`out`); null en un mensaje simple. */
+  options: jsonb('options').$type<string[]>(),
+  /** En un `in` que responde a una pregunta: el id del `out` que la hizo. */
+  answerTo: uuid('answer_to'),
+  /** `message_id` de Telegram del `out`, para editarlo cuando se responde. */
+  telegramMessageId: bigint('telegram_message_id', { mode: 'number' }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Cuándo Claude leyó este `in` (null = pendiente). Solo aplica a `in`. */
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+});
+
+export type RelayMessageRow = typeof relayMessages.$inferSelect;

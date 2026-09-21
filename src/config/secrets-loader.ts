@@ -29,6 +29,16 @@ const REQUIRED_SECRET_KEYS = [
   'JWT_SECRET',
 ] as const;
 
+/**
+ * Claves que se cargan SI Infisical las tiene, sin fallar cuando no están.
+ * El puente Claude↔owner (ADR 0012) es una función opcional: no puede impedir
+ * que Jin arranque. `env.schema.ts` valida aparte que vayan las dos juntas.
+ */
+const OPTIONAL_SECRET_KEYS = [
+  'TELEGRAM_RELAY_BOT_TOKEN',
+  'RELAY_TOKEN',
+] as const;
+
 function requireVar(env: NodeJS.ProcessEnv, key: string): string {
   const value = env[key];
   if (!value) {
@@ -80,5 +90,10 @@ export async function loadSecrets(
 
   for (const key of REQUIRED_SECRET_KEYS) {
     env[key] = byKey.get(key);
+  }
+
+  for (const key of OPTIONAL_SECRET_KEYS) {
+    const value = byKey.get(key);
+    if (value !== undefined) env[key] = value;
   }
 }

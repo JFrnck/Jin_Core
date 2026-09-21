@@ -576,6 +576,91 @@
           "chat"
         ]
       }
+    },
+    "/api/relay/messages": {
+      "post": {
+        "operationId": "RelayController_send",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendRelayMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayMessageCreatedDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Manda un mensaje (o una pregunta con opciones) del Claude de la VM al owner",
+        "tags": [
+          "relay"
+        ]
+      }
+    },
+    "/api/relay/inbox": {
+      "get": {
+        "operationId": "RelayController_inbox",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayInboxDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Mensajes del owner pendientes de leer — los devuelve UNA sola vez (los marca consumidos)",
+        "tags": [
+          "relay"
+        ]
+      }
+    },
+    "/api/relay/messages/{id}/answer": {
+      "get": {
+        "operationId": "RelayController_answer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayAnswerDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Respuesta del owner a una pregunta concreta (para el modo espera)",
+        "tags": [
+          "relay"
+        ]
+      }
     }
   },
   "info": {
@@ -1741,6 +1826,94 @@
           "plan",
           "pendingApprovals",
           "iterationsUsed"
+        ],
+        "additionalProperties": false
+      },
+      "SendRelayMessageDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "options": {
+            "minItems": 1,
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "RelayMessageCreatedDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "RelayInboxDto_Output": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "answerTo": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "body",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "RelayAnswerDto_Output": {
+        "type": "object",
+        "properties": {
+          "answered": {
+            "type": "boolean"
+          },
+          "body": {
+            "type": "string"
+          },
+          "answeredAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answered"
         ],
         "additionalProperties": false
       }
