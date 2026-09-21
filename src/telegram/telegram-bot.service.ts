@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Cron } from '@nestjs/schedule';
 import { eq } from 'drizzle-orm';
-import { Bot, InlineKeyboard, type Context } from 'grammy';
+import { Bot, GrammyError, InlineKeyboard, type Context } from 'grammy';
 import type { Update } from 'grammy/types';
 import { AgentService } from '../agent/agent.service';
 import { AuditService } from '../audit/audit.service';
@@ -26,6 +26,13 @@ import {
   type MorningAlertEvent,
 } from '../integrations/canvas/morning-alert.events';
 import { formatMorningAlert } from '../integrations/canvas/morning-alert.format';
+import {
+  escapeHtml,
+  htmlToPlain,
+  markdownToTelegramHtml,
+  modelFooter,
+  splitForTelegram,
+} from './telegram-format';
 import {
   AUTONOMY_MODE_CHANGED_EVENT,
   type AutonomyModeChangedEvent,
@@ -533,7 +540,11 @@ export class TelegramBotService implements OnModuleInit {
           })
           .where(eq(telegramSessions.id, session.id));
 
-        await ctx.reply(turnResult.finalResponse);
+        await this.replyRich(
+          ctx,
+          turnResult.finalResponse,
+          modelFooter(turnResult.modelsUsed),
+        );
 
         if (turnResult.pendingApprovals.length > 0) {
           const approvalMsg = turnResult.pendingApprovals
@@ -550,6 +561,45 @@ export class TelegramBotService implements OnModuleInit {
         await ctx.reply(`⚠️ ${msg}`);
       }
     });
+  }
+
+  /**
+   * Responde con el Markdown del LLM ya convertido a HTML de Telegram (ver
+   * `telegram-format.ts`, que también explica por qué NO se usa el
+   * `parse_mode: 'Markdown'` de Telegram ni se emiten enlaces `<a>`). Si
+   * Telegram rechaza el HTML de un trozo (400 "can't parse entities": una
+   * anidación rara que el modelo produjo), ese trozo se reenvía como texto
+   * plano: el mensaje NUNCA se pierde por un problema de formato.
+   */
+  private async replyRich(
+    ctx: Context,
+    markdown: string,
+    footer: string,
+  ): Promise<void> {
+    const html =
+      markdownToTelegramHtml(markdown) +
+      (footer ? `\n\n<i>${escapeHtml(footer)}</i>` : '');
+
+    for (const chunk of splitForTelegram(html)) {
+      try {
+        await ctx.reply(chunk, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        });
+      } catch (err: unknown) {
+        const isParseError =
+          err instanceof GrammyError &&
+          err.error_code === 400 &&
+          err.description.includes("can't parse entities");
+        if (!isParseError) throw err;
+        this.logger.warn(
+          'Telegram rechazó el HTML de la respuesta; se reenvía como texto plano.',
+        );
+        await ctx.reply(htmlToPlain(chunk), {
+          link_preview_options: { is_disabled: true },
+        });
+      }
+    }
   }
 
   private async handleTasksCommand(ctx: Context): Promise<void> {

@@ -10,6 +10,7 @@ describe('ChatController', () => {
       plan: { steps: [] },
       pendingApprovals: [],
       iterationsUsed: 1,
+      modelsUsed: ['claude-sonnet-5'],
     };
     const runTurn = vi.fn().mockResolvedValue(result);
     const controller = new ChatController({

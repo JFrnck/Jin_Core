@@ -865,6 +865,114 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
       );
     });
 
+    // Respuestas del agente: Markdown del LLM -> HTML de Telegram + pie del modelo.
+    describe('formato de la respuesta del agente', () => {
+      function captureAgentReplies(
+        rejectHtmlOnce = false,
+      ): Array<Record<string, unknown>> {
+        const payloads: Array<Record<string, unknown>> = [];
+        let rejected = false;
+        service.getBot().api.config.use((_prev, method, payload) => {
+          if (method === 'sendMessage') {
+            const p = payload as Record<string, unknown>;
+            payloads.push(p);
+            if (rejectHtmlOnce && !rejected && p['parse_mode'] === 'HTML') {
+              rejected = true;
+              return Promise.resolve({
+                ok: false,
+                error_code: 400,
+                description:
+                  "Bad Request: can't parse entities: Unsupported start tag",
+              } as never);
+            }
+          }
+          return Promise.resolve({ ok: true, result: true } as never);
+        });
+        return payloads;
+      }
+
+      it('convierte el Markdown a HTML de Telegram y agrega el pie con el modelo', async () => {
+        vi.mocked(mockAgentService.runTurn!).mockResolvedValueOnce({
+          finalResponse: '**Correo**\n- Leer (`readEmails`)',
+          plan: { steps: [] },
+          pendingApprovals: [],
+          iterationsUsed: 1,
+          modelsUsed: ['claude-sonnet-5'],
+        });
+        const payloads = captureAgentReplies();
+
+        await service.handleWebhookUpdate(createMessageUpdate(30, 'hola'));
+
+        const reply = payloads.find((p) => p['parse_mode'] === 'HTML');
+        expect(reply).toBeDefined();
+        const text = String(reply!['text']);
+        expect(text).toContain('<b>Correo</b>');
+        expect(text).toContain('• Leer (<code>readEmails</code>)');
+        expect(text).not.toContain('**');
+        expect(text).toContain('<i>🤖 claude-sonnet-5</i>');
+        expect(reply!['link_preview_options']).toEqual({ is_disabled: true });
+      });
+
+      it('si hubo fallback, el pie muestra la cadena de modelos', async () => {
+        vi.mocked(mockAgentService.runTurn!).mockResolvedValueOnce({
+          finalResponse: 'ok',
+          plan: { steps: [] },
+          pendingApprovals: [],
+          iterationsUsed: 2,
+          modelsUsed: ['claude-sonnet-5', 'claude-haiku-4-5-20251001'],
+        });
+        const payloads = captureAgentReplies();
+
+        await service.handleWebhookUpdate(createMessageUpdate(31, 'hola'));
+
+        const text = String(
+          payloads.find((p) => p['parse_mode'] === 'HTML')!['text'],
+        );
+        expect(text).toContain('claude-sonnet-5 → claude-haiku-4-5-20251001');
+      });
+
+      it('si Telegram rechaza el HTML, el mensaje NO se pierde: se reenvía como texto plano', async () => {
+        vi.mocked(mockAgentService.runTurn!).mockResolvedValueOnce({
+          finalResponse: '**importante** con `codigo`',
+          plan: { steps: [] },
+          pendingApprovals: [],
+          iterationsUsed: 1,
+          modelsUsed: ['claude-sonnet-5'],
+        });
+        const payloads = captureAgentReplies(true);
+
+        await service.handleWebhookUpdate(createMessageUpdate(32, 'hola'));
+
+        const replies = payloads.filter((p) => p['chat_id'] !== undefined);
+        expect(replies.length).toBeGreaterThanOrEqual(2);
+        const plain = replies.find((p) => p['parse_mode'] === undefined);
+        expect(plain).toBeDefined();
+        expect(String(plain!['text'])).toContain('importante');
+        expect(String(plain!['text'])).not.toContain('<b>');
+      });
+
+      it('una etiqueta HTML escrita por el modelo llega escapada, no como etiqueta', async () => {
+        vi.mocked(mockAgentService.runTurn!).mockResolvedValueOnce({
+          finalResponse:
+            '<a href="https://evil.example">click</a> [x](https://evil.example)',
+          plan: { steps: [] },
+          pendingApprovals: [],
+          iterationsUsed: 1,
+          modelsUsed: ['claude-sonnet-5'],
+        });
+        const payloads = captureAgentReplies();
+
+        await service.handleWebhookUpdate(createMessageUpdate(33, 'hola'));
+
+        const text = String(
+          payloads.find((p) => p['parse_mode'] === 'HTML')!['text'],
+        );
+        expect(text).not.toContain('<a ');
+        expect(text).toContain('&lt;a href=');
+        expect(text).toContain('x (https://evil.example)');
+      });
+    });
+
     it('reconstruye el historial entre turnos continuos en la misma sesión activa', async () => {
       const sentMessages: string[] = [];
       mockSendMessage(sentMessages);
@@ -884,6 +992,7 @@ describe('TelegramBotService (Fase 5.3 completa con cobertura restaurada)', () =
         plan: { steps: [] },
         pendingApprovals: [],
         iterationsUsed: 1,
+        modelsUsed: ['claude-sonnet-5'],
       });
 
       await service.handleWebhookUpdate(
