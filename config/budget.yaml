@@ -5,7 +5,15 @@ session_max_output_tokens: 100000
 daily_max_tokens: 5000000
 daily_max_usd: 10
 # Kill switch: si el consumo de la hora actual supera runaway_multiplier
-# veces el promedio horario de las últimas runaway_lookback_hours, se
-# activa la pausa total (BLUEPRINT §9.6, "hard cap").
+# veces el promedio horario de las últimas runaway_lookback_hours, Y ADEMÁS
+# supera runaway_min_hourly_tokens, se activa la pausa total (BLUEPRINT §9.6,
+# "hard cap").
 runaway_multiplier: 2
 runaway_lookback_hours: 24
+# Piso absoluto (tokens/hora). Sin él, la razón contra el promedio se dispara
+# con cualquier uso normal mientras el historial es corto: el primer uso real
+# (2026-09-21) activó el kill switch con 5 487 tokens (~$0.02) porque el
+# promedio de 24 h era ~208 tokens/h. Un runaway de verdad (un agente en bucle)
+# quema esto en minutos; y el tope diario (daily_max_*) sigue siendo el freno
+# duro de todo lo que quede por debajo del piso.
+runaway_min_hourly_tokens: 500000

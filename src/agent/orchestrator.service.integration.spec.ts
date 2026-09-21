@@ -64,6 +64,7 @@ const TEST_BUDGET_CONFIG: BudgetConfig = {
   dailyMaxUsd: 1000,
   runawayMultiplier: 2,
   runawayLookbackHours: 3,
+  runawayMinHourlyTokens: 100,
 };
 
 const TEST_METRIC_PROVIDERS = [

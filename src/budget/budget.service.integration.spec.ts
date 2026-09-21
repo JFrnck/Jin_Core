@@ -32,6 +32,7 @@ const TEST_CONFIG: BudgetConfig = {
   dailyMaxUsd: 1,
   runawayMultiplier: 2,
   runawayLookbackHours: 24,
+  runawayMinHourlyTokens: 100,
 };
 
 const TEST_PRICES: ModelPrices = {

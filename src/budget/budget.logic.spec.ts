@@ -12,6 +12,7 @@ const CONFIG: BudgetConfig = {
   dailyMaxUsd: 10,
   runawayMultiplier: 2,
   runawayLookbackHours: 24,
+  runawayMinHourlyTokens: 100,
 };
 
 describe('computeDailyUsageRatio', () => {
