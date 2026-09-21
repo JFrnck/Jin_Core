@@ -25,14 +25,14 @@ describe('AnthropicProvider.complete', () => {
 
   it('mapea el primer bloque de texto de la respuesta y los tokens de uso', async () => {
     createMock.mockResolvedValue({
-      model: 'claude-sonnet-5',
+      model: 'claude-haiku-4-5',
       content: [{ type: 'text', text: 'hola desde Claude' }],
       usage: { input_tokens: 12, output_tokens: 34 },
       stop_reason: 'end_turn',
     });
 
     const provider = new AnthropicProvider(fakeConfigService);
-    const result = await provider.complete('claude-sonnet-5', {
+    const result = await provider.complete('claude-haiku-4-5', {
       messages: [{ role: 'user', content: 'hola' }],
       maxOutputTokens: 100,
       temperature: 0.2,
@@ -40,19 +40,73 @@ describe('AnthropicProvider.complete', () => {
 
     expect(result).toEqual({
       content: 'hola desde Claude',
-      modelId: 'claude-sonnet-5',
+      modelId: 'claude-haiku-4-5',
       inputTokens: 12,
       outputTokens: 34,
       stopReason: 'end_turn',
     });
     expect(createMock).toHaveBeenCalledWith({
-      model: 'claude-sonnet-5',
+      model: 'claude-haiku-4-5',
       max_tokens: 100,
       temperature: 0.2,
       system: undefined,
       messages: [{ role: 'user', content: 'hola' }],
     });
   });
+
+  // Regresión (2026-09-21): el chat de Telegram fallaba en el primer mensaje.
+  // La API responde 400 "`temperature` is deprecated for this model" a Sonnet 5,
+  // Opus 5/4.8/4.7 y Fable 5, y el provider lo mandaba siempre, así que el chat
+  // caía al fallback en cada turno y `reasoning_heavy` (Opus 4.8) ni arrancaba.
+  it.each([
+    'claude-sonnet-5',
+    'claude-sonnet-5-20260601',
+    'claude-opus-5',
+    'claude-opus-4-8',
+    'claude-opus-4-7',
+    'claude-fable-5',
+    'claude-fable-5-1',
+  ])(
+    'NO manda temperature a %s (la API lo rechaza con 400)',
+    async (modelId) => {
+      createMock.mockResolvedValue({
+        model: modelId,
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+        stop_reason: 'end_turn',
+      });
+
+      await new AnthropicProvider(fakeConfigService).complete(modelId, {
+        messages: [{ role: 'user', content: 'hola' }],
+        maxOutputTokens: 100,
+        temperature: 0.7,
+      });
+
+      const sent = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(sent).not.toHaveProperty('temperature');
+      expect(sent).toHaveProperty('max_tokens', 100);
+    },
+  );
+
+  it.each(['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'])(
+    'SÍ manda temperature a %s (todavía lo acepta)',
+    async (modelId) => {
+      createMock.mockResolvedValue({
+        model: modelId,
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+        stop_reason: 'end_turn',
+      });
+
+      await new AnthropicProvider(fakeConfigService).complete(modelId, {
+        messages: [{ role: 'user', content: 'hola' }],
+        maxOutputTokens: 100,
+        temperature: 0.7,
+      });
+
+      expect(createMock.mock.calls[0]?.[0]).toHaveProperty('temperature', 0.7);
+    },
+  );
 
   it('devuelve string vacío si la respuesta no trae ningún bloque de texto', async () => {
     createMock.mockResolvedValue({

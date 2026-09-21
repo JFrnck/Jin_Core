@@ -36,4 +36,48 @@ describe('computeCostUsd', () => {
       computeCostUsd(prices, 'modelo-inexistente', 100, 100),
     ).toThrow(/No hay precio configurado/);
   });
+
+  // Regresión (2026-09-21): la API devuelve en `response.model` el id CON fecha
+  // (`claude-haiku-4-5-20251001`) aunque se pida por alias. El cálculo de costo
+  // de una llamada que SÍ se ejecutó explotaba con "No hay precio configurado".
+  describe('snapshots con fecha', () => {
+    const withHaiku: ModelPrices = {
+      ...prices,
+      'claude-haiku-4-5': { inputPerMillion: 1, outputPerMillion: 5 },
+    };
+
+    it('un id con sufijo de fecha usa el precio de su alias', () => {
+      const cost = computeCostUsd(
+        withHaiku,
+        'claude-haiku-4-5-20251001',
+        1_000_000,
+        1_000_000,
+      );
+      expect(cost).toBeCloseTo(6, 6);
+    });
+
+    it('el precio exacto gana sobre el alias', () => {
+      const exact: ModelPrices = {
+        ...withHaiku,
+        'claude-haiku-4-5-20251001': {
+          inputPerMillion: 9,
+          outputPerMillion: 9,
+        },
+      };
+      expect(
+        computeCostUsd(exact, 'claude-haiku-4-5-20251001', 1_000_000, 0),
+      ).toBeCloseTo(9, 6);
+    });
+
+    it('NO hereda precio por prefijo suelto: un modelo desconocido sigue siendo un error', () => {
+      // `claude-sonnet-5-5` no es un snapshot de `claude-sonnet-5`.
+      expect(() => computeCostUsd(prices, 'claude-sonnet-5-5', 1, 1)).toThrow(
+        /No hay precio configurado/,
+      );
+      // Sufijo de fecha de un modelo SIN alias configurado: error, no 0.
+      expect(() =>
+        computeCostUsd(prices, 'claude-opus-9-20260101', 1, 1),
+      ).toThrow(/No hay precio configurado/);
+    });
+  });
 });
