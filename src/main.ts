@@ -3,16 +3,20 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
-import { AppModule } from './app.module';
 import { loadSecrets } from './config/secrets-loader';
 import { FeatureFlagsService } from './feature-flags/feature-flags.service';
 
 async function bootstrap() {
-  // Fase 8.1: debe correr ANTES de crear la app — `ConfigModule.forRoot`
-  // (dentro de AppModule) lee `process.env` en ese momento, así que
-  // `validateEnv()` ve los secretos de Infisical ya inyectados sin que
-  // el schema sepa de dónde vinieron. No-op si INFISICAL_ENABLED!='true'.
+  // Fase 8.1: debe correr ANTES de que se evalúe `AppModule`. OJO: no basta con
+  // llamarlo antes de `NestFactory.create()`. `ConfigModule.forRoot({ validate })`
+  // vive en los argumentos del decorador `@Module` de `ConfigModule`, así que se
+  // ejecuta cuando Node IMPORTA ese archivo -- un `import { AppModule }` estático
+  // arriba lo dispara antes de que `bootstrap()` corra y `validateEnv()` ve un
+  // `process.env` sin los secretos de Infisical (Configuración de entorno inválida,
+  // CrashLoopBackOff en el primer despliegue real, 2026-09-20). Por eso el import
+  // es dinámico y va después. No-op si INFISICAL_ENABLED!='true'.
   await loadSecrets();
+  const { AppModule } = await import('./app.module.js');
 
   const app = await NestFactory.create(AppModule);
 
