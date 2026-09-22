@@ -16,6 +16,12 @@ export default defineConfig({
       REDIS_URL: 'redis://localhost:6379',
       OWNER_PASSWORD_HASH: '$argon2id$v=19$m=65536,t=3,p=4$fake$fake',
       JWT_SECRET: 'e2e-test-secret-at-least-32-characters-long',
+      // Puente Claude↔owner (ADR 0012) ENCENDIDO a propósito: con el puente
+      // apagado, el guard devuelve 503 a todo y los tests de autenticación
+      // pasarían sin comprobar nada. El bot no llega a hablar con Telegram
+      // (token falso, mismo caso que TELEGRAM_BOT_TOKEN de arriba).
+      TELEGRAM_RELAY_BOT_TOKEN: '1:e2e-relay-bot-token',
+      RELAY_TOKEN: 'e2e-relay-token-at-least-32-characters-long',
     },
   },
   plugins: [swc.vite()],

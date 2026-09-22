@@ -2,7 +2,12 @@ import { z } from 'zod';
 
 // Única fuente de verdad de qué variables de entorno existen y su forma
 // (AGENTS.md 8.4). Nada más en el repo debe leer `process.env` directo.
-export const EnvSchema = z.object({
+//
+// El objeto va separado del `.refine()` de abajo porque zod no deja hacer
+// `.pick()` sobre un schema con refinements, y `MigrationEnvSchema` necesita
+// justamente eso. Al estar en la misma variable, importar este módulo
+// lanzaba — y como lo importa `validateEnv`, Core moría en el arranque.
+const EnvObjectSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
@@ -43,6 +48,16 @@ export const EnvSchema = z.object({
       1,
       'TELEGRAM_WEBHOOK_SECRET es requerida (Secret token para el webhook)',
     ),
+  // Puente Claude Code ↔ owner (ADR 0012). OPCIONALES a propósito: si faltan,
+  // el puente queda apagado y el resto de Jin arranca igual. Hacerlas
+  // requeridas dejaría el pod en CrashLoopBackOff por una función nueva que
+  // ni siquiera es parte del núcleo — exactamente lo que pasó con
+  // INFISICAL_SITE_URL en el primer despliegue real.
+  TELEGRAM_RELAY_BOT_TOKEN: z.string().min(1).optional(),
+  RELAY_TOKEN: z
+    .string()
+    .min(32, 'RELAY_TOKEN debe tener al menos 32 caracteres')
+    .optional(),
   // src/integrations/google: requeridas, no opcionales (AGENTS.md 8.4 fail-fast)
   GOOGLE_CLIENT_ID: z
     .string()
@@ -115,6 +130,20 @@ export const EnvSchema = z.object({
   INFISICAL_ENVIRONMENT: z.string().min(1).default('prod'),
 });
 
+// Media configuración es peor que ninguna: con bot pero sin token de API,
+// el puente escucha y nadie puede hablarle; con token pero sin bot, el CLI
+// acepta mensajes que no llegan a ningún lado. Fail-fast al arrancar.
+export const EnvSchema = EnvObjectSchema.refine(
+  (env) =>
+    (env.TELEGRAM_RELAY_BOT_TOKEN === undefined) ===
+    (env.RELAY_TOKEN === undefined),
+  {
+    message:
+      'El puente Claude↔owner necesita TELEGRAM_RELAY_BOT_TOKEN y RELAY_TOKEN juntas, o ninguna de las dos.',
+    path: ['RELAY_TOKEN'],
+  },
+);
+
 export type Env = z.infer<typeof EnvSchema>;
 
 /**
@@ -143,7 +172,7 @@ export function validateEnv(config: Record<string, unknown>): Env {
  * Además el migrador nunca debe ser bloqueado (ni tener acceso) por
  * credenciales que no usa.
  */
-export const MigrationEnvSchema = EnvSchema.pick({ DATABASE_URL: true });
+export const MigrationEnvSchema = EnvObjectSchema.pick({ DATABASE_URL: true });
 
 export type MigrationEnv = z.infer<typeof MigrationEnvSchema>;
 

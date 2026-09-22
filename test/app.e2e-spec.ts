@@ -26,6 +26,7 @@ import type { Ticket, TicketComment } from '../src/agent/orchestrator.types';
 import { ExecutorClientService } from '../src/executor-client/executor-client.service';
 import type { PreviewServiceInfo } from '../src/executor-client/executor-client.service';
 import { HealthService } from '../src/health/health.service';
+import { RelayService } from '../src/relay/relay.service';
 import type { HealthReport } from '../src/health/health.service';
 
 describe('AppController (e2e)', () => {
@@ -730,5 +731,82 @@ describe('HealthController (e2e) — pipeline real: guard global + status code',
       postgres: 'down',
       redis: 'up',
     });
+  });
+});
+
+describe('RelayController (e2e) — el puente es una puerta aparte, con su propia llave', () => {
+  let app: INestApplication<App>;
+  let ownerJwt: string;
+
+  const RELAY_TOKEN = 'e2e-relay-token-at-least-32-characters-long';
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(RelayService)
+      .useValue({
+        enabled: true,
+        send: () =>
+          Promise.resolve({ id: '11111111-1111-4111-8111-111111111111' }),
+        inbox: () => Promise.resolve([]),
+        answer: () => Promise.resolve({ answered: false }),
+      })
+      .compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+
+    const jwtService = moduleFixture.get(JwtService);
+    ownerJwt = await jwtService.signAsync({ sub: 'owner' });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it('sin credenciales → 401 (no queda abierto por ser @Public())', () => {
+    return request(app.getHttpServer()).get('/api/relay/inbox').expect(401);
+  });
+
+  it('el JWT del owner NO abre el puente: son credenciales distintas', () => {
+    // La otra mitad de la frontera (ver relay.isolation.spec.ts): el token del
+    // puente tampoco abre el resto de la API. Si un día alguien "unifica" la
+    // autenticación, este test cae.
+    return request(app.getHttpServer())
+      .get('/api/relay/inbox')
+      .set('Authorization', `Bearer ${ownerJwt}`)
+      .expect(401);
+  });
+
+  it('el RELAY_TOKEN no abre ninguna otra puerta de la API', () => {
+    return request(app.getHttpServer())
+      .get('/api/budget')
+      .set('Authorization', `Bearer ${RELAY_TOKEN}`)
+      .expect(401);
+  });
+
+  it('con el RELAY_TOKEN correcto → 200', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/relay/inbox')
+      .set('Authorization', `Bearer ${RELAY_TOKEN}`)
+      .expect(200);
+
+    expect(response.body).toEqual({ messages: [] });
+  });
+
+  it('POST /api/relay/messages con más opciones de las permitidas → 400', () => {
+    return request(app.getHttpServer())
+      .post('/api/relay/messages')
+      .set('Authorization', `Bearer ${RELAY_TOKEN}`)
+      .send({ body: '¿cuál?', options: ['a', 'b', 'c', 'd', 'e', 'f'] })
+      .expect(400);
+  });
+
+  it('un id que no es UUID → 400, no un 500 desde Postgres', () => {
+    return request(app.getHttpServer())
+      .get('/api/relay/messages/no-soy-un-uuid/answer')
+      .set('Authorization', `Bearer ${RELAY_TOKEN}`)
+      .expect(400);
   });
 });
