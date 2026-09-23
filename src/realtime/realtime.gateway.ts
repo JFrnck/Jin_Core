@@ -15,6 +15,10 @@ import {
   PENDING_APPROVAL_CREATED_EVENT,
   type PendingApprovalCreatedEvent,
 } from '../hitl/dual-confirm.service';
+import {
+  RELAY_MESSAGE_CREATED_EVENT,
+  type RelayMessageCreatedEvent,
+} from '../relay/relay.service';
 
 // Mismos umbrales que `TelegramBotService.checkDailyBudgetAlert()` (Fase
 // 4.1) — repetido acá a propósito, no extraído a un servicio compartido:
@@ -64,6 +68,14 @@ export class RealtimeGateway implements OnGatewayConnection {
   @OnEvent(PENDING_APPROVAL_CREATED_EVENT)
   handlePendingApprovalCreated(event: PendingApprovalCreatedEvent): void {
     this.server.emit('pending-approval:new', event);
+  }
+
+  // Puente Claude Code ↔ owner (ADR 0012): un mensaje nuevo en cualquier
+  // dirección (Claude → owner por Telegram/CLI, u owner → Claude desde el
+  // dashboard) empuja esto para que `/bridge` se actualice sin polling.
+  @OnEvent(RELAY_MESSAGE_CREATED_EVENT)
+  handleRelayMessageCreated(event: RelayMessageCreatedEvent): void {
+    this.server.emit('bridge:new-message', event);
   }
 
   @Cron('*/5 * * * *')
