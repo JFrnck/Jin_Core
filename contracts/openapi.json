@@ -661,6 +661,73 @@
           "relay"
         ]
       }
+    },
+    "/api/bridge/messages": {
+      "get": {
+        "operationId": "RelayDashboardController_messages",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 500,
+              "exclusiveMinimum": true,
+              "default": 50,
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayHistoryDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Historial del puente para el dashboard (ambas direcciones) — lectura pura, no consume la cola que lee el CLI de la VM",
+        "tags": [
+          "relay"
+        ]
+      }
+    },
+    "/api/bridge/reply": {
+      "post": {
+        "operationId": "RelayDashboardController_reply",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelayReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelayReplyCreatedDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El owner responde a Claude desde el dashboard — mismo rol que una respuesta por Telegram",
+        "tags": [
+          "relay"
+        ]
+      }
     }
   },
   "info": {
@@ -1835,11 +1902,11 @@
           "body": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 4000
+            "maxLength": 50000
           },
           "options": {
             "minItems": 1,
-            "maxItems": 5,
+            "maxItems": 10,
             "type": "array",
             "items": {
               "type": "string",
@@ -1914,6 +1981,89 @@
         },
         "required": [
           "answered"
+        ],
+        "additionalProperties": false
+      },
+      "RelayHistoryDto_Output": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": [
+                    "in",
+                    "out"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "bodyHtml": {
+                  "type": "string"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "answerTo": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "direction",
+                "body",
+                "bodyHtml",
+                "createdAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "RelayReplyDto": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "answerTo": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "body"
+        ]
+      },
+      "RelayReplyCreatedDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "additionalProperties": false
       }

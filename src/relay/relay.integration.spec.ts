@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { sql } from 'drizzle-orm';
 import {
@@ -46,10 +47,14 @@ describe('puente Claude↔owner (integración, Postgres real)', () => {
     }).compile();
 
     store = moduleRef.get(RelayStore);
-    service = new RelayService(store, {
-      deliver,
-      enabled: true,
-    } as unknown as RelayBotService);
+    // eventEmitter: no lo mide este test (eso lo cubre relay.service.spec.ts
+    // con mocks) -- acá alcanza con que exista, para que `send()`/`reply()`
+    // no revienten al llamar `.emit()`.
+    service = new RelayService(
+      store,
+      { deliver, enabled: true } as unknown as RelayBotService,
+      { emit: vi.fn() } as unknown as EventEmitter2,
+    );
   }, 60_000);
 
   afterAll(async () => {

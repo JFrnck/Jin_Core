@@ -78,6 +78,21 @@ export class RelayStore {
       .returning();
   }
 
+  /**
+   * Historial para el dashboard (`GET /api/bridge/messages`) — a diferencia
+   * de `consumePending`, es una lectura pura: no marca nada como consumido,
+   * así que el owner puede mirar la pantalla sin afectar la cola que lee
+   * el CLI de la VM.
+   */
+  async listRecent(limit: number): Promise<RelayMessageRow[]> {
+    const rows = await this.db
+      .select()
+      .from(relayMessages)
+      .orderBy(desc(relayMessages.createdAt))
+      .limit(limit);
+    return rows.reverse();
+  }
+
   async findOutbound(id: string): Promise<RelayMessageRow | undefined> {
     const [row] = await this.db
       .select()

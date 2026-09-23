@@ -1,8 +1,9 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RelayMessageRow } from '../db/schema';
 import { RelayQuotaExceededError } from './errors';
 import type { RelayBotService } from './relay-bot.service';
-import { RelayService } from './relay.service';
+import { RELAY_MESSAGE_CREATED_EVENT, RelayService } from './relay.service';
 import type { RelayStore } from './relay.store';
 
 function row(overrides: Partial<RelayMessageRow> = {}): RelayMessageRow {
@@ -26,8 +27,11 @@ describe('RelayService', () => {
     consumePending: ReturnType<typeof vi.fn>;
     findAnswer: ReturnType<typeof vi.fn>;
     outQuotaExceeded: ReturnType<typeof vi.fn>;
+    insertInbound: ReturnType<typeof vi.fn>;
+    listRecent: ReturnType<typeof vi.fn>;
   };
   let bot: { deliver: ReturnType<typeof vi.fn>; enabled: boolean };
+  let eventEmitter: { emit: ReturnType<typeof vi.fn> };
   let service: RelayService;
 
   beforeEach(() => {
@@ -37,11 +41,15 @@ describe('RelayService', () => {
       consumePending: vi.fn().mockResolvedValue([]),
       findAnswer: vi.fn().mockResolvedValue(undefined),
       outQuotaExceeded: vi.fn().mockResolvedValue(false),
+      insertInbound: vi.fn().mockResolvedValue(row({ id: 'in-1', direction: 'in' })),
+      listRecent: vi.fn().mockResolvedValue([]),
     };
     bot = { deliver: vi.fn().mockResolvedValue(555), enabled: true };
+    eventEmitter = { emit: vi.fn() };
     service = new RelayService(
       store as unknown as RelayStore,
       bot as unknown as RelayBotService,
+      eventEmitter as unknown as EventEmitter2,
     );
   });
 
@@ -125,5 +133,66 @@ describe('RelayService', () => {
       body: 'Sí, repina',
       answeredAt: '2026-09-21T12:00:00.000Z',
     });
+  });
+
+  it('send() emite RELAY_MESSAGE_CREATED_EVENT con direction "out"', async () => {
+    await service.send({ body: 'hola' });
+
+    expect(eventEmitter.emit).toHaveBeenCalledWith(RELAY_MESSAGE_CREATED_EVENT, {
+      id: 'q-1',
+      direction: 'out',
+    });
+  });
+
+  it('reply() guarda la respuesta del owner y emite el evento con direction "in"', async () => {
+    const result = await service.reply({ body: 'dale, segui', answerTo: 'q-1' });
+
+    expect(result).toEqual({ id: 'in-1' });
+    expect(store.insertInbound).toHaveBeenCalledWith({
+      body: 'dale, segui',
+      answerTo: 'q-1',
+    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith(RELAY_MESSAGE_CREATED_EVENT, {
+      id: 'in-1',
+      direction: 'in',
+    });
+  });
+
+  it('reply() sin cuota: un Claude en bucle no bloquea al owner mandando su propio mensaje', async () => {
+    store.outQuotaExceeded.mockResolvedValue(true);
+
+    await service.reply({ body: 'sin límite' });
+
+    expect(store.insertInbound).toHaveBeenCalledTimes(1);
+  });
+
+  it('history() incluye ambas direcciones y bodyHtml con el markdown ya renderizado', async () => {
+    store.listRecent.mockResolvedValue([
+      row({ id: 'o-1', direction: 'out', body: '**hola**' }),
+      row({ id: 'i-1', direction: 'in', body: 'dale', answerTo: 'o-1' }),
+    ]);
+
+    const messages = await service.history();
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        id: 'o-1',
+        direction: 'out',
+        body: '**hola**',
+        bodyHtml: '<b>hola</b>',
+      }),
+      expect.objectContaining({
+        id: 'i-1',
+        direction: 'in',
+        body: 'dale',
+        answerTo: 'o-1',
+      }),
+    ]);
+  });
+
+  it('history() no consume nada — a diferencia de inbox(), es solo lectura', async () => {
+    await service.history();
+
+    expect(store.consumePending).not.toHaveBeenCalled();
   });
 });

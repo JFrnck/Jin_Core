@@ -16,10 +16,13 @@ import { Public } from '../auth/public.decorator';
 import { RelayDisabledError } from './errors';
 import { RelayService } from './relay.service';
 import { RelayTokenGuard } from './relay-token.guard';
-import { MAX_OPTIONS } from './relay.types';
+import { MAX_BODY_LENGTH, MAX_OPTIONS } from './relay.types';
 
 const SendRelayMessageSchema = z.object({
-  body: z.string().min(1).max(4000),
+  // Ver el comentario de MAX_BODY_LENGTH: no es el límite de Telegram (ese
+  // ya lo maneja `RelayBotService.deliver()` troceando), es solo una cota
+  // de sanidad para el payload.
+  body: z.string().min(1).max(MAX_BODY_LENGTH),
   /**
    * Con opciones, el owner recibe botones y su respuesta queda correlacionada
    * con esta pregunta. Sin opciones, es un aviso suelto.

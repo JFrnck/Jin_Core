@@ -796,10 +796,14 @@ describe('RelayController (e2e) — el puente es una puerta aparte, con su propi
   });
 
   it('POST /api/relay/messages con más opciones de las permitidas → 400', () => {
+    // MAX_OPTIONS = 10 (relay.types.ts) -- 11 opciones excede el tope.
     return request(app.getHttpServer())
       .post('/api/relay/messages')
       .set('Authorization', `Bearer ${RELAY_TOKEN}`)
-      .send({ body: '¿cuál?', options: ['a', 'b', 'c', 'd', 'e', 'f'] })
+      .send({
+        body: '¿cuál?',
+        options: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'],
+      })
       .expect(400);
   });
 
