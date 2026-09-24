@@ -237,6 +237,30 @@ describe('AnthropicProvider.complete', () => {
     );
   });
 
+  // Regresión (2026-09-24): un refusal del clasificador de seguridad de
+  // Anthropic (content vacío, stop_reason: 'refusal') se mapeaba a
+  // 'end_turn' porque ModelStopReason no lo distinguía — AgentService no
+  // tenía forma de saber que no era una respuesta normal, y reenviaba el
+  // string vacío al owner tal cual.
+  it('refleja stopReason "refusal" en vez de colapsarlo a "end_turn"', async () => {
+    createMock.mockResolvedValue({
+      model: 'claude-sonnet-5',
+      content: [],
+      usage: { input_tokens: 8, output_tokens: 0 },
+      stop_reason: 'refusal',
+    });
+
+    const provider = new AnthropicProvider(fakeConfigService);
+    const result = await provider.complete('claude-sonnet-5', {
+      messages: [{ role: 'user', content: 'hola' }],
+      maxOutputTokens: 100,
+      temperature: 0.2,
+    });
+
+    expect(result.stopReason).toBe('refusal');
+    expect(result.content).toBe('');
+  });
+
   it('incluye system solo cuando systemPrompt está definido', async () => {
     createMock.mockResolvedValue({
       model: 'claude-sonnet-5',
