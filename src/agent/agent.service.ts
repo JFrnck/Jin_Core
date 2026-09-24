@@ -12,6 +12,7 @@ import {
 } from '../hitl/notify.events';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type {
+  ModelCompletionResponse,
   ModelMessage,
   ModelMessageContentBlock,
   ModelToolCall,
@@ -182,7 +183,7 @@ export class AgentService {
         return this.finalizeTurn(
           input.sessionId,
           messages,
-          response.content,
+          this.resolveFinalResponseText(response),
           plan,
           pendingApprovals,
           iterationsUsed,
@@ -239,6 +240,35 @@ export class AgentService {
       iterationsUsed,
       modelsUsed,
     );
+  }
+
+  /**
+   * `stopReason: 'refusal'` (clasificador de seguridad de Anthropic corta
+   * la respuesta, `content` viene vacío o casi vacío) nunca debe llegar al
+   * owner como un mensaje en blanco — antes de este fix, `finalizeTurn`
+   * reenviaba `response.content` tal cual, y en Telegram/WS el owner solo
+   * veía el footer de modelo sin texto (bug real, encontrado 2026-09-24
+   * reproduciendo localmente un pedido de deploy con Vite+React+Tailwind
+   * que dispara el refusal de forma consistente). Mismo criterio que ya
+   * exige `buildSystemPrompt`: "nunca inventes que algo se logró cuando no
+   * fue así" — acá aplica a Jin mismo, no solo al contenido que genera.
+   */
+  private resolveFinalResponseText(response: ModelCompletionResponse): string {
+    if (
+      response.stopReason === 'refusal' ||
+      response.content.trim().length === 0
+    ) {
+      this.logger.warn(
+        `Turno sin texto útil del modelo (stopReason=${response.stopReason}, modelo=${response.modelId}) — probablemente el clasificador de seguridad de Anthropic cortó la respuesta.`,
+      );
+      return (
+        'No pude generar una respuesta para este pedido: el modelo cortó la ' +
+        'respuesta sin devolver contenido (probablemente su propio filtro de ' +
+        'seguridad, no un error de Jin). Probá reformular el objetivo o ' +
+        'dividirlo en pasos más chicos.'
+      );
+    }
+    return response.content;
   }
 
   /**

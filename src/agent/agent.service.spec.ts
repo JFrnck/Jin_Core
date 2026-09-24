@@ -142,6 +142,33 @@ describe('AgentService.runTurn', () => {
     expect(completeMock).toHaveBeenCalledTimes(1);
   });
 
+  it('stopReason "refusal" (clasificador de seguridad de Anthropic): nunca reenvía un finalResponse vacío al owner', async () => {
+    completeMock.mockResolvedValue(
+      fakeResponse({ content: '', stopReason: 'refusal' }),
+    );
+
+    const result = await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'levantá una app con vite, react y tailwind',
+    });
+
+    expect(result.finalResponse).not.toBe('');
+    expect(result.finalResponse.toLowerCase()).toContain('no pude generar');
+  });
+
+  it('content vacío sin ser un refusal explícito: mismo mensaje de fallback (nunca un mensaje en blanco)', async () => {
+    completeMock.mockResolvedValue(
+      fakeResponse({ content: '', stopReason: 'end_turn' }),
+    );
+
+    const result = await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'hola',
+    });
+
+    expect(result.finalResponse).not.toBe('');
+  });
+
   it('modelsUsed lista los modelos que respondieron, sin repetir y en orden (visible si hubo fallback)', async () => {
     completeMock
       .mockResolvedValueOnce(
