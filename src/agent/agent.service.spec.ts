@@ -15,8 +15,13 @@ import type {
   ModelMessageContentBlock,
 } from '../model-provider/model-provider.types';
 import type { AgentConfig } from './agent-config.schema';
+import type { AgentProgressEvent } from './agent-progress.types';
 import { AgentService } from './agent.service';
 import type { HistoryCompactionService } from './history-compaction.service';
+
+function fakeProgressListener() {
+  return vi.fn<(event: AgentProgressEvent) => void>();
+}
 
 function getRequestArg(
   mock: ReturnType<typeof vi.fn>,
@@ -53,7 +58,11 @@ function fakeResponse(
 
 describe('AgentService.runTurn', () => {
   let completeMock: ReturnType<typeof vi.fn>;
-  let mockRouter: { complete: ReturnType<typeof vi.fn> };
+  let completeStreamMock: ReturnType<typeof vi.fn>;
+  let mockRouter: {
+    complete: ReturnType<typeof vi.fn>;
+    completeStream: ReturnType<typeof vi.fn>;
+  };
   let toolExecutorRegistry: ToolExecutorRegistry;
   let mockDualConfirm: Partial<DualConfirmService>;
   let mockAuditService: Partial<AuditService>;
@@ -67,7 +76,11 @@ describe('AgentService.runTurn', () => {
 
   beforeEach(() => {
     completeMock = vi.fn();
-    mockRouter = { complete: completeMock };
+    // Sin implementación default: los tests de streaming la asignan
+    // puntualmente. Si algo llama completeStream sin querer y sin mock,
+    // esto falla ruidosamente en vez de devolver undefined en silencio.
+    completeStreamMock = vi.fn();
+    mockRouter = { complete: completeMock, completeStream: completeStreamMock };
     toolExecutorRegistry = new ToolExecutorRegistry();
     mockDualConfirm = {
       createPendingApproval: vi.fn().mockResolvedValue(undefined),
@@ -727,6 +740,220 @@ describe('AgentService.runTurn', () => {
 
     expect(result.iterationsUsed).toBe(config.maxIterationsPerTurn);
     expect(result.finalResponse).toMatch(/límite de iteraciones/);
+  });
+
+  describe('streaming en vivo (onProgress) — plan de streaming del chat web', () => {
+    it('sin onProgress: completeStream NUNCA se invoca, solo complete() (garantía de no tocar Telegram/REST)', async () => {
+      completeMock.mockResolvedValue(fakeResponse({ content: 'listo' }));
+
+      await service.runTurn({ sessionId: 'sess-1', objective: 'hola' });
+
+      expect(completeMock).toHaveBeenCalledTimes(1);
+      expect(completeStreamMock).not.toHaveBeenCalled();
+    });
+
+    it('con onProgress: usa completeStream() y reenvía los deltas como eventos text-delta con el iteration correcto', async () => {
+      completeStreamMock.mockImplementation(
+        (
+          _taskProfile: string,
+          _request: unknown,
+          onDelta: (delta: string, snapshot: string) => void,
+        ) => {
+          onDelta('Hola', 'Hola');
+          onDelta(', mundo', 'Hola, mundo');
+          // Valor plano, no envuelto en Promise: `mockImplementation` en un
+          // `vi.fn()` sin genéricos infiere un callback que devuelve
+          // `void` — devolver una Promise explícita ahí dispara
+          // `no-misused-promises`. `await` en el caller real funciona
+          // igual con un valor plano que con una Promise.
+          return fakeResponse({ content: 'Hola, mundo' });
+        },
+      );
+      const onProgress = fakeProgressListener();
+
+      const result = await service.runTurn({
+        sessionId: 'sess-1',
+        objective: 'saludame',
+        onProgress,
+      });
+
+      expect(result.finalResponse).toBe('Hola, mundo');
+      expect(completeMock).not.toHaveBeenCalled();
+      expect(onProgress).toHaveBeenCalledWith({
+        type: 'text-delta',
+        iteration: 1,
+        delta: 'Hola',
+        snapshot: 'Hola',
+      });
+      expect(onProgress).toHaveBeenCalledWith({
+        type: 'text-delta',
+        iteration: 1,
+        delta: ', mundo',
+        snapshot: 'Hola, mundo',
+      });
+    });
+
+    it('declarePlan/updatePlanStep con onProgress: emite un evento "plan" con el AgentPlan completo en cada paso', async () => {
+      completeStreamMock
+        .mockResolvedValueOnce(
+          fakeResponse({
+            stopReason: 'tool_use',
+            toolCalls: [
+              {
+                id: 'call-1',
+                name: 'declarePlan',
+                input: { steps: ['buscar el evento', 'borrarlo'] },
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(
+          fakeResponse({
+            stopReason: 'tool_use',
+            toolCalls: [
+              {
+                id: 'call-2',
+                name: 'updatePlanStep',
+                input: { stepIndex: 0, status: 'done' },
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(fakeResponse({ content: 'listo' }));
+      const onProgress = fakeProgressListener();
+
+      await service.runTurn({
+        sessionId: 'sess-1',
+        objective: 'borra mi evento de mañana',
+        onProgress,
+      });
+
+      const planEvents = onProgress.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.type === 'plan');
+      expect(planEvents).toEqual([
+        {
+          type: 'plan',
+          plan: {
+            steps: [
+              { description: 'buscar el evento', status: 'pending' },
+              { description: 'borrarlo', status: 'pending' },
+            ],
+          },
+        },
+        {
+          type: 'plan',
+          plan: {
+            steps: [
+              { description: 'buscar el evento', status: 'done' },
+              { description: 'borrarlo', status: 'pending' },
+            ],
+          },
+        },
+      ]);
+    });
+
+    it('tool real con onProgress: tool-call-started seguido de exactamente un tool-call-finished con el mismo toolCallId, por resultado (success/error/deferred)', async () => {
+      // Niveles estáticos reales del registry (src/tools/registry.ts):
+      // listCalendarEvents/readEmails son 'auto' (ejecutan ya), sendEmail
+      // es 'confirm' (se difiere sin ejecutar) — así el caso "deferred"
+      // ejercita la rama real de HITL, no una tool inexistente.
+      const successExecutor = vi.fn().mockResolvedValue({ ok: true });
+      toolExecutorRegistry.register('listCalendarEvents', successExecutor);
+      const errorExecutor = vi.fn().mockRejectedValue(new Error('API caída'));
+      toolExecutorRegistry.register('readEmails', errorExecutor);
+
+      completeStreamMock
+        .mockResolvedValueOnce(
+          fakeResponse({
+            stopReason: 'tool_use',
+            toolCalls: [
+              { id: 'call-ok', name: 'listCalendarEvents', input: {} },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(
+          fakeResponse({
+            stopReason: 'tool_use',
+            toolCalls: [{ id: 'call-err', name: 'readEmails', input: {} }],
+          }),
+        )
+        .mockResolvedValueOnce(
+          fakeResponse({
+            stopReason: 'tool_use',
+            toolCalls: [
+              {
+                id: 'call-deferred',
+                name: 'sendEmail',
+                input: { to: 'x@y.com', subject: 'hola', body: 'mundo' },
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(fakeResponse({ content: 'listo' }));
+      const onProgress = fakeProgressListener();
+
+      await service.runTurn({
+        sessionId: 'sess-1',
+        objective: 'algo',
+        onProgress,
+      });
+
+      const events = onProgress.mock.calls.map(([event]) => event);
+      const byToolCallId = (id: string) =>
+        events.filter(
+          (e) =>
+            (e.type === 'tool-call-started' ||
+              e.type === 'tool-call-finished') &&
+            e.toolCallId === id,
+        );
+
+      expect(byToolCallId('call-ok').map((e) => e.type)).toEqual([
+        'tool-call-started',
+        'tool-call-finished',
+      ]);
+      expect(
+        byToolCallId('call-ok').find((e) => e.type === 'tool-call-finished'),
+      ).toEqual(
+        expect.objectContaining({
+          toolName: 'listCalendarEvents',
+          outcome: 'success',
+        }),
+      );
+
+      expect(byToolCallId('call-err').map((e) => e.type)).toEqual([
+        'tool-call-started',
+        'tool-call-finished',
+      ]);
+      expect(
+        byToolCallId('call-err').find((e) => e.type === 'tool-call-finished'),
+      ).toEqual(
+        expect.objectContaining({ toolName: 'readEmails', outcome: 'error' }),
+      );
+
+      expect(byToolCallId('call-deferred').map((e) => e.type)).toEqual([
+        'tool-call-started',
+        'tool-call-finished',
+      ]);
+      expect(
+        byToolCallId('call-deferred').find(
+          (e) => e.type === 'tool-call-finished',
+        ),
+      ).toEqual(expect.objectContaining({ outcome: 'deferred' }));
+    });
+
+    it('un error de completeStream (ej. StreamAlreadyPartiallyEmittedError) se propaga fuera de runTurn sin ser atrapado', async () => {
+      const boom = new Error('stream interrumpido a mitad de camino');
+      completeStreamMock.mockRejectedValue(boom);
+
+      await expect(
+        service.runTurn({
+          sessionId: 'sess-1',
+          objective: 'algo',
+          onProgress: fakeProgressListener(),
+        }),
+      ).rejects.toThrow(boom);
+    });
   });
 
   describe('compresión de historial (docs/RECOMENDACIONES.md #2)', () => {

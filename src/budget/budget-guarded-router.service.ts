@@ -4,6 +4,7 @@ import type {
   ModelCompletionRequest,
   ModelCompletionResponse,
   ModelMessage,
+  ModelStreamDeltaListener,
   SelectModelHints,
   TaskProfile,
 } from '../model-provider/model-provider.types';
@@ -60,6 +61,58 @@ export class BudgetGuardedModelRouter {
       estimatedInputTokens,
       budgetRemaining,
     });
+
+    await this.budgetService.recordUsage({
+      sessionId: effectiveSessionId,
+      modelId: response.modelId,
+      taskProfile,
+      inputTokens: response.inputTokens,
+      outputTokens: response.outputTokens,
+    });
+
+    return response;
+  }
+
+  /**
+   * Variante en streaming de `complete()` (plan de streaming en vivo del
+   * chat web) — mismo check-before-call/record-after-call que arriba, sin
+   * cambios de lógica de presupuesto: `recordUsage` sigue leyendo los
+   * tokens FINALES del `ModelCompletionResponse` que resuelve
+   * `modelRouter.completeStream(...)`, exactamente igual que con
+   * `complete()`. Si la promesa rechaza (p.ej.
+   * `StreamAlreadyPartiallyEmittedError`), `recordUsage` simplemente no
+   * se llama — mismo gap que ya existe hoy si `complete()` rechaza, no es
+   * una regresión nueva.
+   */
+  async completeStream(
+    taskProfile: TaskProfile,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
+    hints?: SelectModelHints,
+    sessionId?: string,
+  ): Promise<ModelCompletionResponse> {
+    if (await this.killSwitchService.isActive()) {
+      throw new KillSwitchActiveError(
+        'todas las llamadas al ModelProvider están pausadas',
+      );
+    }
+
+    const effectiveSessionId = sessionId ?? randomUUID();
+    const estimatedInputTokens =
+      hints?.estimatedInputTokens ?? this.estimateRequestTokens(request);
+
+    const { budgetRemaining } = await this.budgetService.checkBeforeCall({
+      sessionId: effectiveSessionId,
+      estimatedInputTokens,
+      maxOutputTokens: request.maxOutputTokens,
+    });
+
+    const response = await this.modelRouter.completeStream(
+      taskProfile,
+      request,
+      onDelta,
+      { ...hints, estimatedInputTokens, budgetRemaining },
+    );
 
     await this.budgetService.recordUsage({
       sessionId: effectiveSessionId,

@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AllProvidersFailedError } from './errors';
+import {
+  AllProvidersFailedError,
+  StreamAlreadyPartiallyEmittedError,
+} from './errors';
+import type { ModelStreamDeltaListener } from './model-provider.types';
 
 export interface FailoverContext {
   readonly taskProfile: string;
@@ -54,6 +58,86 @@ export class FailoverService {
           fallbackError,
         );
       }
+    }
+  }
+
+  /**
+   * Variante en streaming de `executeWithFailover` (plan de streaming en
+   * vivo del chat web). Misma política de retry-once-luego-fallback, con
+   * UNA restricción nueva: apenas `onDelta` se disparó al menos una vez
+   * en el intento actual, ese intento queda "comprometido" — el owner ya
+   * vio texto parcial de ESE modelo. Un fallo después de eso nunca
+   * reintenta ni cae a fallback (mezclaría texto de dos modelos en la
+   * misma respuesta); se corta con `StreamAlreadyPartiallyEmittedError`.
+   * Si el fallo ocurre antes del primer delta, el comportamiento es
+   * idéntico al de `executeWithFailover`.
+   */
+  async executeWithFailoverStream<T>(
+    context: FailoverContext,
+    callPrimary: (onDelta: ModelStreamDeltaListener) => Promise<T>,
+    callFallback: (onDelta: ModelStreamDeltaListener) => Promise<T>,
+    onDelta: ModelStreamDeltaListener,
+  ): Promise<T> {
+    let emittedAny = false;
+    const guardedOnDelta: ModelStreamDeltaListener = (delta, snapshot) => {
+      emittedAny = true;
+      onDelta(delta, snapshot);
+    };
+
+    try {
+      return await this.retryOnceStream(
+        callPrimary,
+        guardedOnDelta,
+        () => emittedAny,
+      );
+    } catch (primaryError) {
+      if (emittedAny) {
+        throw new StreamAlreadyPartiallyEmittedError(
+          context.taskProfile,
+          context.primaryModelId,
+          primaryError,
+        );
+      }
+
+      this.logger.warn(
+        `Model failover: ${context.primaryModelId} → ${context.fallbackModelId} ` +
+          `(task=${context.taskProfile}, reason=${this.describeError(primaryError)})`,
+      );
+
+      try {
+        return await callFallback(guardedOnDelta);
+      } catch (fallbackError) {
+        if (emittedAny) {
+          throw new StreamAlreadyPartiallyEmittedError(
+            context.taskProfile,
+            context.fallbackModelId,
+            fallbackError,
+          );
+        }
+        throw new AllProvidersFailedError(
+          context.taskProfile,
+          context.primaryModelId,
+          context.fallbackModelId,
+          fallbackError,
+        );
+      }
+    }
+  }
+
+  private async retryOnceStream<T>(
+    fn: (onDelta: ModelStreamDeltaListener) => Promise<T>,
+    onDelta: ModelStreamDeltaListener,
+    hasEmitted: () => boolean,
+  ): Promise<T> {
+    try {
+      return await fn(onDelta);
+    } catch (err) {
+      // Ya se emitió al menos un delta en este mismo intento: no
+      // reintentar (repetiría la llamada y podría duplicar/mezclar texto
+      // ya mostrado). El caller decide qué error lanzar con `emittedAny`.
+      if (hasEmitted()) throw err;
+      await this.sleep(RETRY_BACKOFF_MS);
+      return fn(onDelta);
     }
   }
 
