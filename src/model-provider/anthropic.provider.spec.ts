@@ -7,12 +7,39 @@ import { AnthropicProvider } from './anthropic.provider';
 // automáticamente, así que el mock aplica antes de que AnthropicProvider
 // construya el cliente real.
 const createMock = vi.fn();
+const streamMock = vi.fn();
 
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
-    messages = { create: createMock };
+    messages = { create: createMock, stream: streamMock };
   },
 }));
+
+/** Fake mínimo de `MessageStream`: soporta `.on('text', cb)` y `.finalMessage()`. */
+function fakeMessageStream(
+  textDeltas: ReadonlyArray<readonly [string, string]>,
+  resolveWith: { message: unknown } | { error: unknown },
+) {
+  const textListeners: Array<(delta: string, snapshot: string) => void> = [];
+  return {
+    on(event: string, cb: (...args: unknown[]) => void) {
+      if (event === 'text') {
+        textListeners.push(cb);
+      }
+      return this;
+    },
+    // No `async`: sin await real adentro, y un throw síncrono acá sigue
+    // rechazando la promesa de `completeStream()` igual (se propaga a
+    // través del `await stream.finalMessage()` real del provider).
+    finalMessage() {
+      for (const [delta, snapshot] of textDeltas) {
+        for (const cb of textListeners) cb(delta, snapshot);
+      }
+      if ('error' in resolveWith) throw resolveWith.error;
+      return resolveWith.message;
+    },
+  };
+}
 
 const fakeConfigService = {
   get: vi.fn().mockReturnValue('fake-anthropic-key'),
@@ -21,6 +48,7 @@ const fakeConfigService = {
 describe('AnthropicProvider.complete', () => {
   beforeEach(() => {
     createMock.mockReset();
+    streamMock.mockReset();
   });
 
   it('mapea el primer bloque de texto de la respuesta y los tokens de uso', async () => {
@@ -279,5 +307,118 @@ describe('AnthropicProvider.complete', () => {
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({ system: 'sos un asistente académico' }),
     );
+  });
+});
+
+describe('AnthropicProvider.completeStream', () => {
+  beforeEach(() => {
+    createMock.mockReset();
+    streamMock.mockReset();
+  });
+
+  it('reenvía cada delta en orden con el snapshot acumulado y resuelve con el mismo shape que complete()', async () => {
+    const onDelta = vi.fn();
+    streamMock.mockReturnValue(
+      fakeMessageStream(
+        [
+          ['Hola', 'Hola'],
+          [', ¿en qué', 'Hola, ¿en qué'],
+          [' te ayudo?', 'Hola, ¿en qué te ayudo?'],
+        ],
+        {
+          message: {
+            model: 'claude-sonnet-5',
+            content: [{ type: 'text', text: 'Hola, ¿en qué te ayudo?' }],
+            usage: { input_tokens: 10, output_tokens: 8 },
+            stop_reason: 'end_turn',
+          },
+        },
+      ),
+    );
+
+    const provider = new AnthropicProvider(fakeConfigService);
+    const result = await provider.completeStream(
+      'claude-sonnet-5',
+      {
+        messages: [{ role: 'user', content: 'hola' }],
+        maxOutputTokens: 100,
+        temperature: 0.7,
+      },
+      onDelta,
+    );
+
+    expect(onDelta.mock.calls).toEqual([
+      ['Hola', 'Hola'],
+      [', ¿en qué', 'Hola, ¿en qué'],
+      [' te ayudo?', 'Hola, ¿en qué te ayudo?'],
+    ]);
+    expect(result).toEqual({
+      content: 'Hola, ¿en qué te ayudo?',
+      modelId: 'claude-sonnet-5',
+      inputTokens: 10,
+      outputTokens: 8,
+      stopReason: 'end_turn',
+    });
+    // Mismos params que complete() (ej. sin temperature para Sonnet 5 — sampling.ts).
+    expect(streamMock).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'claude-sonnet-5', max_tokens: 100 }),
+    );
+    expect(streamMock.mock.calls[0]?.[0]).not.toHaveProperty('temperature');
+  });
+
+  it('parsea tool_use del mensaje final igual que complete()', async () => {
+    streamMock.mockReturnValue(
+      fakeMessageStream([], {
+        message: {
+          model: 'claude-sonnet-5',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'call-1',
+              name: 'listCalendarEvents',
+              input: { maxResults: 5 },
+            },
+          ],
+          usage: { input_tokens: 5, output_tokens: 3 },
+          stop_reason: 'tool_use',
+        },
+      }),
+    );
+
+    const provider = new AnthropicProvider(fakeConfigService);
+    const result = await provider.completeStream(
+      'claude-sonnet-5',
+      {
+        messages: [{ role: 'user', content: 'lista mis eventos' }],
+        maxOutputTokens: 100,
+        temperature: 0.2,
+      },
+      vi.fn(),
+    );
+
+    expect(result.stopReason).toBe('tool_use');
+    expect(result.toolCalls).toEqual([
+      { id: 'call-1', name: 'listCalendarEvents', input: { maxResults: 5 } },
+    ]);
+  });
+
+  it('si finalMessage() rechaza, completeStream() rechaza sin swallow', async () => {
+    const boom = new Error('conexión perdida a mitad de stream');
+    streamMock.mockReturnValue(
+      fakeMessageStream([['hola', 'hola']], { error: boom }),
+    );
+
+    const provider = new AnthropicProvider(fakeConfigService);
+    await expect(
+      provider.completeStream(
+        'claude-sonnet-5',
+        {
+          messages: [{ role: 'user', content: 'hola' }],
+          maxOutputTokens: 100,
+          temperature: 0.2,
+        },
+        vi.fn(),
+      ),
+    ).rejects.toThrow(boom);
   });
 });

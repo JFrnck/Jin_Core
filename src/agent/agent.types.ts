@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { ModelMessage } from '../model-provider/model-provider.types';
+import type { AgentProgressListener } from './agent-progress.types';
 
 /**
  * Plan-and-solve (Fase 5.1, requisito explícito del owner): el modelo
@@ -51,6 +52,14 @@ export interface AgentTurnInput {
    * hardcodeado que usaba el loop antes de esta fase.
    */
   readonly actorLabel?: string;
+  /**
+   * Streaming en vivo del turno (plan de la sesión): SOLO `ChatGateway`
+   * (chat web por WebSocket) lo pasa. Telegram y `POST /api/chat` nunca
+   * lo pasan — su comportamiento no cambia en absoluto (mismo camino
+   * atómico de siempre en `runTurn`). Opcional a propósito, sin default
+   * distinto de `undefined`.
+   */
+  readonly onProgress?: AgentProgressListener;
 }
 
 export interface AgentTurnResult {
