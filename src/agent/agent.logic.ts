@@ -51,3 +51,20 @@ export function computeInputsHash(data: unknown): string {
 export function stringifyToolResult(result: unknown): string {
   return typeof result === 'string' ? result : JSON.stringify(result);
 }
+
+/**
+ * Fecha y hora actuales para el system prompt. Sin esto el modelo no sabe
+ * qué día ni qué hora es ("¿qué hora es en Lima?" → "no tengo reloj"), y
+ * tampoco puede razonar "mañana", "esta semana" o "vence en 2 horas" sobre
+ * datos de Canvas/Gmail/Calendar. Usa la TZ del proceso (Jin_Infra fija
+ * `TZ=America/Lima`, ver `budget-time.ts`) y la nombra explícitamente.
+ */
+export function describeCurrentDateTime(now: Date = new Date()): string {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const local = new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone,
+  }).format(now);
+  return `${local} (zona horaria ${timeZone}; UTC ${now.toISOString()})`;
+}
