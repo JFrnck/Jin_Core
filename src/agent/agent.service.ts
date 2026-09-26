@@ -30,6 +30,7 @@ import {
   buildToolCallKey,
   computeInputsHash,
   declarePlan,
+  describeCurrentDateTime,
   stringifyToolResult,
   updatePlanStep,
 } from './agent.logic';
@@ -102,6 +103,9 @@ function buildSystemPrompt(sessionNonce: string): string {
     'un fallo, ajustando el enfoque (autocorrección). Si un intento se ' +
     'agota sin éxito, decilo explícitamente en tu respuesta final: nunca ' +
     'inventes que algo se logró cuando no fue así.\n\n' +
+    `Fecha y hora actuales: ${describeCurrentDateTime()}. Usalas para ` +
+    'responder la hora o la fecha y para razonar plazos ("mañana", ' +
+    '"esta semana"); para otra ciudad, convertí desde esta.\n\n' +
     buildSessionUntrustedContentInstruction(sessionNonce)
   );
 }

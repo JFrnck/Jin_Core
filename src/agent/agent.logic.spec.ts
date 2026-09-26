@@ -3,6 +3,7 @@ import {
   buildToolCallKey,
   computeInputsHash,
   declarePlan,
+  describeCurrentDateTime,
   stringifyToolResult,
   updatePlanStep,
 } from './agent.logic';
@@ -99,5 +100,16 @@ describe('stringifyToolResult', () => {
   it('serializa a JSON cualquier otro tipo', () => {
     expect(stringifyToolResult({ events: [] })).toBe('{"events":[]}');
     expect(stringifyToolResult(42)).toBe('42');
+  });
+});
+
+describe('describeCurrentDateTime', () => {
+  it('da la fecha y hora locales con la zona horaria del proceso y el instante UTC', () => {
+    const now = new Date('2026-09-26T17:05:00.000Z');
+    const text = describeCurrentDateTime(now);
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(text).toContain(`zona horaria ${timeZone}`);
+    expect(text).toContain('UTC 2026-09-26T17:05:00.000Z');
+    expect(text).toContain('2026');
   });
 });
