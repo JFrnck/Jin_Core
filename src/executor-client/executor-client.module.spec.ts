@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import { ExecutorClientModule } from './executor-client.module';
-import type { ExecutorClientService } from './executor-client.service';
+import type {
+  ExecutorClientService,
+  PreviewServiceInfo,
+  StartPreviewServiceInput,
+} from './executor-client.service';
 
 describe('ExecutorClientModule', () => {
   it('registra el executor de runCode en ToolExecutorRegistry al iniciar', async () => {
@@ -62,6 +66,28 @@ describe('ExecutorClientModule', () => {
     expect(executorClientService.startPreviewService).toHaveBeenCalledWith(
       payload,
     );
+  });
+
+  it('startPreviewService con template "static": el Executor recibe el servidor fijo de Jin', async () => {
+    const registry = new ToolExecutorRegistry();
+    const startPreviewService =
+      vi.fn<(input: StartPreviewServiceInput) => Promise<PreviewServiceInfo>>();
+    new ExecutorClientModule(registry, {
+      startPreviewService,
+    } as unknown as ExecutorClientService).onModuleInit();
+
+    await registry.execute('startPreviewService', {
+      template: 'static',
+      files: { 'index.html': '<h1>hola</h1>' },
+      ttlSeconds: 3600,
+    });
+
+    expect(startPreviewService).toHaveBeenCalledTimes(1);
+    const request = startPreviewService.mock.calls[0]![0];
+    expect(request.command).toEqual(['node', '.jin/static-server.mjs']);
+    expect(request.port).toBe(8080);
+    expect(request.files['index.html']).toBe('<h1>hola</h1>');
+    expect(request.files['.jin/static-server.mjs']).toContain('createServer');
   });
 
   it('registra stopPreviewService (notify) — ejecuta ya, sin esperar aprobación', async () => {

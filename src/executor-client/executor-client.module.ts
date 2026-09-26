@@ -4,8 +4,11 @@ import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import {
   ExecutorClientService,
   type RunCodeInput,
-  type StartPreviewServiceInput,
 } from './executor-client.service';
+import {
+  expandPreviewTemplate,
+  type PreviewServiceToolInput,
+} from './preview-template.logic';
 import { PreviewServicesController } from './preview-services.controller';
 
 @Module({
@@ -40,7 +43,9 @@ export class ExecutorClientModule implements OnModuleInit {
     this.toolExecutorRegistry.register(
       'startPreviewService',
       async (payload) => {
-        const input = payload as StartPreviewServiceInput;
+        // `template: "static"` agrega el servidor fijo de Jin (ver
+        // preview-template.logic.ts); sin template, command/port del modelo.
+        const input = expandPreviewTemplate(payload as PreviewServiceToolInput);
         return this.executorClientService.startPreviewService(input);
       },
     );

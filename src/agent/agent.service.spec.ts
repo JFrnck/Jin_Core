@@ -107,6 +107,7 @@ describe('AgentService.runTurn', () => {
       // ejercitan la compresión — los que sí, la overridean puntualmente.
       maxHistoryTokens: 1_000_000,
       preserveLastTurns: 6,
+      maxOutputTokens: 8000,
     };
 
     service = new AgentService(
@@ -719,6 +720,7 @@ describe('AgentService.runTurn', () => {
           ...config,
           maxHistoryTokens: 10,
           preserveLastTurns: 1,
+          maxOutputTokens: 8000,
         },
       );
     });

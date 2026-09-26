@@ -91,7 +91,6 @@ const UpdatePlanStepInputSchema = z.object({
   note: z.string().optional(),
 });
 
-const CHAT_MAX_OUTPUT_TOKENS = 2000;
 const CHAT_TEMPERATURE = 0.7;
 
 function buildSystemPrompt(sessionNonce: string): string {
@@ -167,7 +166,7 @@ export class AgentService {
         {
           systemPrompt,
           messages,
-          maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+          maxOutputTokens: this.config.maxOutputTokens,
           temperature: CHAT_TEMPERATURE,
           tools,
         },

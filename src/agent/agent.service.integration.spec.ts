@@ -56,6 +56,7 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
     // historial (fuera de su alcance), solo necesita que nunca dispare.
     maxHistoryTokens: 1_000_000,
     preserveLastTurns: 6,
+    maxOutputTokens: 8000,
   };
   const historyCompactionService = {
     compact: vi.fn(),

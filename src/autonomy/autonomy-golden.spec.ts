@@ -107,6 +107,7 @@ describe('golden set — el LLM no puede alterar el modo de autonomía (ADR 0010
         maxConcurrentSubAgents: 3,
         maxHistoryTokens: 1_000_000,
         preserveLastTurns: 6,
+        maxOutputTokens: 8000,
       };
       service = new AgentService(
         { complete: completeMock } as unknown as BudgetGuardedModelRouter,
