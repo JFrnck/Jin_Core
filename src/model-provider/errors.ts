@@ -48,3 +48,22 @@ export class UnknownModelVendorError extends JinError {
     );
   }
 }
+
+/**
+ * Streaming en vivo del chat web (plan de la sesión): una vez que ya se
+ * emitió al menos un delta de texto al socket del owner, un fallo del
+ * primary NO puede reintentarse ni caer a fallback en silencio — el
+ * owner ya vio texto parcial de un modelo específico, y mezclarlo con
+ * texto de otro modelo en la misma respuesta sería peor que cortar el
+ * turno. `FailoverService.executeWithFailoverStream` la lanza en ese
+ * caso puntual; el catch ya existente de `ChatGateway.handleMessage` la
+ * recibe como cualquier otro error de turno (`chat:error`).
+ */
+export class StreamAlreadyPartiallyEmittedError extends JinError {
+  constructor(taskProfile: string, modelId: string, cause: unknown) {
+    super(
+      `El modelo "${modelId}" (profile "${taskProfile}") falló después de emitir contenido parcial al cliente — no se reintenta ni se cae a fallback para no mezclar texto de dos modelos en la misma respuesta.`,
+      { code: 'MODEL_PROVIDER_STREAM_INTERRUPTED', httpStatus: 502, cause },
+    );
+  }
+}

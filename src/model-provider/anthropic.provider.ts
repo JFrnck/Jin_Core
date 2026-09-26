@@ -8,6 +8,7 @@ import type {
   ModelMessage,
   ModelProviderClient,
   ModelStopReason,
+  ModelStreamDeltaListener,
   ModelToolCall,
 } from './model-provider.types';
 import { anthropicModelAcceptsSampling } from './sampling';
@@ -51,6 +52,30 @@ function toModelStopReason(
   return 'end_turn';
 }
 
+/** Mapea la respuesta cruda del SDK al contrato propio — compartido por `complete()` y `completeStream()` (`.finalMessage()` del stream trae el mismo shape que `.create()`). */
+function toCompletionResponse(
+  message: Anthropic.Messages.Message,
+): ModelCompletionResponse {
+  const textParts: string[] = [];
+  const toolCalls: ModelToolCall[] = [];
+  for (const block of message.content) {
+    if (block.type === 'text') {
+      textParts.push(block.text);
+    } else if (block.type === 'tool_use') {
+      toolCalls.push({ id: block.id, name: block.name, input: block.input });
+    }
+  }
+
+  return {
+    content: textParts.join(''),
+    modelId: message.model,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    stopReason: toModelStopReason(message.stop_reason),
+    ...(toolCalls.length > 0 ? { toolCalls } : {}),
+  };
+}
+
 @Injectable()
 export class AnthropicProvider implements ModelProviderClient {
   readonly vendor = 'anthropic' as const;
@@ -68,11 +93,11 @@ export class AnthropicProvider implements ModelProviderClient {
     });
   }
 
-  async complete(
-    modelId: string,
-    request: ModelCompletionRequest,
-  ): Promise<ModelCompletionResponse> {
-    const response = await this.client.messages.create({
+  // Sin anotación de retorno explícita: `MessageCreateParamsBase` no está
+  // exportado por el SDK (solo sus subtipos streaming/non-streaming) — el
+  // shape estructural inferido acá es válido para `.create()` Y `.stream()`.
+  private buildCreateParams(modelId: string, request: ModelCompletionRequest) {
+    return {
       model: modelId,
       max_tokens: request.maxOutputTokens,
       // Solo si el modelo lo acepta: Sonnet 5, Opus 5/4.8/4.7 y Fable 5 lo
@@ -101,25 +126,39 @@ export class AnthropicProvider implements ModelProviderClient {
             })),
           }
         : {}),
-    });
-
-    const textParts: string[] = [];
-    const toolCalls: ModelToolCall[] = [];
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        textParts.push(block.text);
-      } else if (block.type === 'tool_use') {
-        toolCalls.push({ id: block.id, name: block.name, input: block.input });
-      }
-    }
-
-    return {
-      content: textParts.join(''),
-      modelId: response.model,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      stopReason: toModelStopReason(response.stop_reason),
-      ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
+  }
+
+  async complete(
+    modelId: string,
+    request: ModelCompletionRequest,
+  ): Promise<ModelCompletionResponse> {
+    const response = await this.client.messages.create(
+      this.buildCreateParams(modelId, request),
+    );
+    return toCompletionResponse(response);
+  }
+
+  /**
+   * Variante en streaming (Fase de streaming en vivo del chat web — ver
+   * plan de la sesión). Reenvía cada delta de texto por `onDelta` a medida
+   * que llega, y resuelve con el MISMO shape que `complete()` una vez que
+   * el SDK arma el `Message` final (`.finalMessage()`) — así
+   * `BudgetGuardedModelRouter`/`FailoverService` no necesitan saber que
+   * hubo streaming de por medio. Sin try/catch propio: si `finalMessage()`
+   * rechaza (error de red, rate limit, refusal a mitad de stream, etc.),
+   * el rechazo se propaga tal cual al caller.
+   */
+  async completeStream(
+    modelId: string,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
+  ): Promise<ModelCompletionResponse> {
+    const stream = this.client.messages.stream(
+      this.buildCreateParams(modelId, request),
+    );
+    stream.on('text', (delta, snapshot) => onDelta(delta, snapshot));
+    const finalMessage = await stream.finalMessage();
+    return toCompletionResponse(finalMessage);
   }
 }

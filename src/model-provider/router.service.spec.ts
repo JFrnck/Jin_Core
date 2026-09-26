@@ -270,3 +270,104 @@ describe('ModelRouterService.complete', () => {
     );
   });
 });
+
+describe('ModelRouterService.completeStream', () => {
+  it('delega a AnthropicProvider.completeStream cuando el provider lo soporta', async () => {
+    const onDeltaFromProvider = vi.fn();
+    const anthropicCompleteStream = vi
+      .fn()
+      .mockImplementation(
+        (
+          _modelId: string,
+          _request: ModelCompletionRequest,
+          onDelta: (d: string, s: string) => void,
+        ) => {
+          onDelta('Hola', 'Hola');
+          return fakeResponse('claude-sonnet-5');
+        },
+      );
+    const anthropicProvider = {
+      complete: vi.fn(),
+      completeStream: anthropicCompleteStream,
+    } as unknown as AnthropicProvider;
+    const googleProvider = { complete: vi.fn() } as unknown as GoogleProvider;
+    const failoverService = {
+      executeWithFailoverStream: vi.fn(
+        (
+          _context,
+          callPrimary: (onDelta: (d: string, s: string) => void) => unknown,
+        ) => callPrimary(onDeltaFromProvider),
+      ),
+    } as unknown as FailoverService;
+
+    const router = new ModelRouterService(
+      PROFILES,
+      anthropicProvider,
+      googleProvider,
+      failoverService,
+      NO_OP_FEATURE_FLAGS,
+    );
+
+    const result = await router.completeStream(
+      'coding_default',
+      REQUEST,
+      vi.fn(),
+    );
+
+    expect(result.modelId).toBe('claude-sonnet-5');
+    expect(anthropicCompleteStream).toHaveBeenCalledWith(
+      'claude-sonnet-5',
+      REQUEST,
+      onDeltaFromProvider,
+    );
+    expect(onDeltaFromProvider).toHaveBeenCalledWith('Hola', 'Hola');
+  });
+
+  it('degrada a complete() + un único delta con el contenido completo cuando el provider NO soporta completeStream (hoy, Google)', async () => {
+    const onDeltaFromProvider = vi.fn();
+    const googleComplete = vi.fn().mockResolvedValue({
+      content: 'respuesta completa de Gemini',
+      modelId: 'gemini-3.1-pro',
+      inputTokens: 4,
+      outputTokens: 6,
+      stopReason: 'end_turn' as const,
+    });
+    const googleProvider = {
+      complete: googleComplete,
+      // Sin `completeStream` — GoogleProvider no lo implementa hoy.
+    } as unknown as GoogleProvider;
+    const anthropicProvider = {
+      complete: vi.fn(),
+    } as unknown as AnthropicProvider;
+    const failoverService = {
+      executeWithFailoverStream: vi.fn(
+        (
+          _context,
+          callPrimary: (onDelta: (d: string, s: string) => void) => unknown,
+        ) => callPrimary(onDeltaFromProvider),
+      ),
+    } as unknown as FailoverService;
+
+    const router = new ModelRouterService(
+      PROFILES,
+      anthropicProvider,
+      googleProvider,
+      failoverService,
+      NO_OP_FEATURE_FLAGS,
+    );
+
+    const result = await router.completeStream(
+      'long_context',
+      REQUEST,
+      vi.fn(),
+    );
+
+    expect(result.modelId).toBe('gemini-3.1-pro');
+    expect(googleComplete).toHaveBeenCalledWith('gemini-3.1-pro', REQUEST);
+    expect(onDeltaFromProvider).toHaveBeenCalledTimes(1);
+    expect(onDeltaFromProvider).toHaveBeenCalledWith(
+      'respuesta completa de Gemini',
+      'respuesta completa de Gemini',
+    );
+  });
+});

@@ -26,6 +26,7 @@ import {
 } from '../security/injection-sanitizer';
 import { getToolDefinition, listRegisteredTools } from '../tools/registry';
 import type { AgentConfig } from './agent-config.schema';
+import type { AgentProgressListener } from './agent-progress.types';
 import { AGENT_CONFIG } from './agent.tokens';
 import {
   buildToolCallKey,
@@ -107,6 +108,22 @@ function buildSystemPrompt(sessionNonce: string): string {
   );
 }
 
+// Cap defensivo para el evento `tool-call-started` (streaming en vivo):
+// un input grande (ej. contenido de un archivo) no debería mandar un
+// frame de WS gigante al chat web.
+const PROGRESS_INPUT_MAX_CHARS = 4000;
+
+function truncateForProgress(input: unknown): unknown {
+  const serialized = JSON.stringify(input);
+  if (
+    serialized === undefined ||
+    serialized.length <= PROGRESS_INPUT_MAX_CHARS
+  ) {
+    return input;
+  }
+  return `${serialized.slice(0, PROGRESS_INPUT_MAX_CHARS)}…[truncado]`;
+}
+
 function buildToolResultBlock(
   toolCallId: string,
   output: string,
@@ -162,19 +179,44 @@ export class AgentService {
 
     while (iterationsUsed < this.config.maxIterationsPerTurn) {
       iterationsUsed += 1;
+      const currentIteration = iterationsUsed;
 
-      const response = await this.budgetGuardedRouter.complete(
-        'chat_conversational',
-        {
-          systemPrompt,
-          messages,
-          maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
-          temperature: CHAT_TEMPERATURE,
-          tools,
-        },
-        undefined,
-        input.sessionId,
-      );
+      // Rama según `input.onProgress` en vez de un único camino "siempre
+      // streaming con callback no-op": así Telegram y `POST /api/chat`
+      // nunca tocan `messages.stream()` del SDK, ni siquiera indirectamente
+      // (garantía fuerte de "no tocar Telegram", ver plan de la sesión).
+      const response = input.onProgress
+        ? await this.budgetGuardedRouter.completeStream(
+            'chat_conversational',
+            {
+              systemPrompt,
+              messages,
+              maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+              temperature: CHAT_TEMPERATURE,
+              tools,
+            },
+            (delta, snapshot) =>
+              input.onProgress?.({
+                type: 'text-delta',
+                iteration: currentIteration,
+                delta,
+                snapshot,
+              }),
+            undefined,
+            input.sessionId,
+          )
+        : await this.budgetGuardedRouter.complete(
+            'chat_conversational',
+            {
+              systemPrompt,
+              messages,
+              maxOutputTokens: CHAT_MAX_OUTPUT_TOKENS,
+              temperature: CHAT_TEMPERATURE,
+              tools,
+            },
+            undefined,
+            input.sessionId,
+          );
       if (!modelsUsed.includes(response.modelId)) {
         modelsUsed.push(response.modelId);
       }
@@ -205,10 +247,12 @@ export class AgentService {
       for (const call of response.toolCalls) {
         if (call.name === DECLARE_PLAN_TOOL_NAME) {
           plan = this.handleDeclarePlan(call, toolResultBlocks);
+          input.onProgress?.({ type: 'plan', plan });
           continue;
         }
         if (call.name === UPDATE_PLAN_STEP_TOOL_NAME) {
           plan = this.handleUpdatePlanStep(call, plan, toolResultBlocks);
+          input.onProgress?.({ type: 'plan', plan });
           continue;
         }
 
@@ -225,6 +269,7 @@ export class AgentService {
           pendingApprovals,
           toolResultBlocks,
           messages,
+          input.onProgress,
         );
       }
 
@@ -410,7 +455,27 @@ export class AgentService {
     pendingApprovals: AgentPendingApproval[],
     toolResultBlocks: ModelMessageContentBlock[],
     messages: readonly ModelMessage[],
+    onProgress: AgentProgressListener | undefined,
   ): Promise<void> {
+    onProgress?.({
+      type: 'tool-call-started',
+      toolCallId: call.id,
+      toolName: call.name,
+      input: truncateForProgress(call.input),
+    });
+    const finish = (
+      outcome: 'success' | 'error' | 'deferred',
+      summary?: string,
+    ): void => {
+      onProgress?.({
+        type: 'tool-call-finished',
+        toolCallId: call.id,
+        toolName: call.name,
+        outcome,
+        ...(summary !== undefined ? { summary } : {}),
+      });
+    };
+
     // Fase 9.5: chequeo único de integración apagada, antes de clasificar
     // o contar fallos -- una integración desactivada no es un "fallo" de
     // la tool, es una decisión operativa del owner (config/feature-flags.yaml).
@@ -419,13 +484,9 @@ export class AgentService {
       toolDefinition?.integration &&
       !this.featureFlagsService.isIntegrationEnabled(toolDefinition.integration)
     ) {
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `La integración "${toolDefinition.integration}" está desactivada (feature flag). No se ejecutó "${call.name}".`,
-          true,
-        ),
-      );
+      const summary = `La integración "${toolDefinition.integration}" está desactivada (feature flag). No se ejecutó "${call.name}".`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
       return;
     }
 
@@ -433,13 +494,9 @@ export class AgentService {
     const priorFailures = consecutiveFailures.get(failureKey) ?? 0;
 
     if (priorFailures >= this.config.maxConsecutiveToolFailures) {
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `Este intento exacto de "${call.name}" ya falló ${priorFailures} veces seguidas — no se reintenta más. Probá un enfoque distinto o reportá el fallo.`,
-          true,
-        ),
-      );
+      const summary = `Este intento exacto de "${call.name}" ya falló ${priorFailures} veces seguidas — no se reintenta más. Probá un enfoque distinto o reportá el fallo.`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
       return;
     }
 
@@ -472,12 +529,9 @@ export class AgentService {
           toolName: call.name,
         });
         consecutiveFailures.delete(failureKey);
-        toolResultBlocks.push(
-          buildToolResultBlock(
-            call.id,
-            `Acción diferida — requiere aprobación humana (requestId: ${decision.requestId}). No se ejecutó todavía.`,
-          ),
-        );
+        const summary = `Acción diferida — requiere aprobación humana (requestId: ${decision.requestId}). No se ejecutó todavía.`;
+        toolResultBlocks.push(buildToolResultBlock(call.id, summary));
+        finish('deferred', summary);
         return;
       }
 
@@ -521,19 +575,16 @@ export class AgentService {
         sessionNonce,
       );
       toolResultBlocks.push(buildToolResultBlock(call.id, sanitized));
+      finish('success');
     } catch (err: unknown) {
       consecutiveFailures.set(failureKey, priorFailures + 1);
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(
         `Tool "${call.name}" falló (intento ${priorFailures + 1}): ${msg}`,
       );
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `Error ejecutando ${call.name}: ${msg}`,
-          true,
-        ),
-      );
+      const summary = `Error ejecutando ${call.name}: ${msg}`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
     }
   }
 }

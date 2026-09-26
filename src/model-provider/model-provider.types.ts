@@ -138,10 +138,29 @@ export interface ModelCompletionResponse {
   readonly stopReason: ModelStopReason;
 }
 
+/** Delta de texto incremental de un turno en streaming — `snapshot` es el texto acumulado completo hasta ese punto, no solo el incremento. */
+export type ModelStreamDeltaListener = (
+  delta: string,
+  snapshot: string,
+) => void;
+
 export interface ModelProviderClient {
   readonly vendor: 'anthropic' | 'google';
   complete(
     modelId: string,
     request: ModelCompletionRequest,
+  ): Promise<ModelCompletionResponse>;
+  /**
+   * Variante en streaming de `complete()`, opcional a propósito: no todos
+   * los vendors la soportan (hoy, ninguno de Google) — `ModelRouterService`
+   * degrada a `complete()` + un único delta cuando falta. Misma forma de
+   * retorno que `complete()`: el caller (budget, failover) sigue viendo un
+   * `ModelCompletionResponse` atómico al resolver, `onDelta` es solo un
+   * canal lateral para el texto en vivo.
+   */
+  completeStream?(
+    modelId: string,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
   ): Promise<ModelCompletionResponse>;
 }

@@ -16,9 +16,12 @@ const CHAT_ACTOR_LABEL = 'web-chat';
 
 /**
  * Contraparte WS de `POST /api/chat` — mismo `AgentService.runTurn()`,
- * mismo body, sin persistencia server-side. La respuesta llega completa
- * cuando el turno termina, no token por token: `ModelCompletionResponse`
- * no soporta streaming hoy (hallazgo real, ver ADR 0007).
+ * mismo body, sin persistencia server-side. A diferencia de `POST
+ * /api/chat` (atómico), este gateway SÍ pasa `onProgress`: emite
+ * `chat:progress` (plan/tool-call-started/tool-call-finished/text-delta,
+ * ver `agent-progress.types.ts`) en vivo mientras el turno corre, además
+ * del `chat:response`/`chat:error` final de siempre. Streaming exclusivo
+ * de este namespace — Telegram y `POST /api/chat` no lo tocan.
  */
 @WebSocketGateway({ namespace: '/chat' })
 export class ChatGateway implements OnGatewayConnection {
@@ -61,6 +64,7 @@ export class ChatGateway implements OnGatewayConnection {
         objective: parsed.data.objective,
         actorLabel: CHAT_ACTOR_LABEL,
         ...(history !== undefined ? { history } : {}),
+        onProgress: (event) => client.emit('chat:progress', event),
       });
       client.emit('chat:response', result);
     } catch (err: unknown) {
