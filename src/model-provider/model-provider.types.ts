@@ -121,9 +121,13 @@ export interface ModelCompletionRequest {
 /**
  * Por qué el modelo dejó de generar. `'tool_use'` es el único caso donde
  * `toolCalls` viene poblado — el agent loop (`src/agent/`) es el único
- * consumidor de este campo hoy.
+ * consumidor de este campo hoy. `'refusal'`: el clasificador de seguridad
+ * de Anthropic cortó la respuesta — `content` puede venir vacío o casi
+ * vacío; el agent loop (`AgentService.runTurn`) lo distingue de un
+ * `'end_turn'` normal para nunca reenviar un mensaje vacío al owner.
  */
-export type ModelStopReason = 'end_turn' | 'tool_use' | 'max_tokens';
+export type ModelStopReason =
+  'end_turn' | 'tool_use' | 'max_tokens' | 'refusal';
 
 export interface ModelCompletionResponse {
   readonly content: string;

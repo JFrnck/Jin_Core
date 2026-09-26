@@ -47,6 +47,7 @@ function toModelStopReason(
 ): ModelStopReason {
   if (stopReason === 'tool_use') return 'tool_use';
   if (stopReason === 'max_tokens') return 'max_tokens';
+  if (stopReason === 'refusal') return 'refusal';
   return 'end_turn';
 }
 
