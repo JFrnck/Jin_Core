@@ -728,6 +728,145 @@
           "relay"
         ]
       }
+    },
+    "/api/push/status": {
+      "get": {
+        "operationId": "PushController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "¿Está encendido push (claves APNs cargadas)?",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/push/device": {
+      "put": {
+        "operationId": "PushController_registerDevice",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Registra (o actualiza) este iPhone y sus preferencias",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/push/device/{token}": {
+      "delete": {
+        "operationId": "PushController_unregisterDevice",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Deja de avisar a este iPhone (cerrar sesión)",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/push/activity": {
+      "put": {
+        "operationId": "PushController_registerActivityToken",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterActivityTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Token de una Live Activity (update) o para iniciarlas por push (start)",
+        "tags": [
+          "push"
+        ]
+      }
+    },
+    "/api/push/test": {
+      "post": {
+        "operationId": "PushController_test",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushTestResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Manda un aviso de prueba a los iPhones registrados",
+        "tags": [
+          "push"
+        ]
+      }
     }
   },
   "info": {
@@ -1704,6 +1843,9 @@
                 "content"
               ]
             }
+          },
+          "notifyWhenDone": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2064,6 +2206,107 @@
         },
         "required": [
           "id"
+        ],
+        "additionalProperties": false
+      },
+      "PushStatusDto_Output": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "additionalProperties": false
+      },
+      "RegisterDeviceDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64,200}$"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "production"
+            ]
+          },
+          "preferences": {
+            "default": {},
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          }
+        },
+        "required": [
+          "token",
+          "environment"
+        ]
+      },
+      "RegisterActivityTokenDto": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "update",
+              "start"
+            ]
+          },
+          "token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64,200}$"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "sandbox",
+              "production"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "referenceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "purpose",
+          "token",
+          "environment"
+        ]
+      },
+      "PushTestResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "sent": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "enabled",
+          "sent",
+          "failed"
         ],
         "additionalProperties": false
       }

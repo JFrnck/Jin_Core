@@ -10,6 +10,7 @@ import { loadBudgetConfig } from './budget-config.schema';
 import { BudgetGuardedModelRouter } from './budget-guarded-router.service';
 import { BUDGET_CONFIG, MODEL_PRICES } from './budget.tokens';
 import type { BudgetConfig } from './budget.types';
+import { BudgetAlertMonitor } from './budget-alert.monitor';
 import { BudgetService } from './budget.service';
 import { KillSwitchService } from './kill-switch.service';
 
@@ -31,6 +32,7 @@ const MODELS_CONFIG_PATH = join(process.cwd(), 'config', 'models.yaml');
     BudgetService,
     KillSwitchService,
     BudgetGuardedModelRouter,
+    BudgetAlertMonitor,
   ],
   exports: [BudgetService, KillSwitchService, BudgetGuardedModelRouter],
 })

@@ -58,6 +58,24 @@ const EnvObjectSchema = z.object({
     .string()
     .min(32, 'RELAY_TOKEN debe tener al menos 32 caracteres')
     .optional(),
+  // Notificaciones push de la app iOS (ADR 0014). OPCIONALES por el mismo
+  // motivo que el puente: sin la cuenta Apple Developer de pago no hay clave
+  // APNs, y Jin tiene que arrancar igual (push queda apagado, no falla).
+  APNS_KEY_ID: z
+    .string()
+    .length(10, 'APNS_KEY_ID son 10 caracteres')
+    .optional(),
+  APNS_TEAM_ID: z
+    .string()
+    .length(10, 'APNS_TEAM_ID son 10 caracteres')
+    .optional(),
+  /** Contenido del .p8 (PEM). Se aceptan saltos de línea escapados como `\n`. */
+  APNS_PRIVATE_KEY: z
+    .string()
+    .min(1)
+    .transform((key) => key.replace(/\\n/g, '\n'))
+    .optional(),
+  APNS_BUNDLE_ID: z.string().min(1).default('com.jeanfranck.jin'),
   // src/integrations/google: requeridas, no opcionales (AGENTS.md 8.4 fail-fast)
   GOOGLE_CLIENT_ID: z
     .string()
@@ -141,6 +159,22 @@ export const EnvSchema = EnvObjectSchema.refine(
     message:
       'El puente Claude↔owner necesita TELEGRAM_RELAY_BOT_TOKEN y RELAY_TOKEN juntas, o ninguna de las dos.',
     path: ['RELAY_TOKEN'],
+  },
+).refine(
+  // Misma lógica que el puente: una clave APNs a medias no firma nada y
+  // haría creer que push está encendido.
+  (env) => {
+    const present = [
+      env.APNS_KEY_ID,
+      env.APNS_TEAM_ID,
+      env.APNS_PRIVATE_KEY,
+    ].filter((value) => value !== undefined).length;
+    return present === 0 || present === 3;
+  },
+  {
+    message:
+      'Push (APNs) necesita APNS_KEY_ID, APNS_TEAM_ID y APNS_PRIVATE_KEY juntas, o ninguna.',
+    path: ['APNS_PRIVATE_KEY'],
   },
 );
 

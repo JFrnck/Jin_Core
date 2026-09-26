@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { KillSwitchActiveError } from '../budget/errors';
 import { KillSwitchService } from '../budget/kill-switch.service';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
@@ -9,6 +10,10 @@ import { AgentService } from './agent.service';
 import { AGENT_CONFIG } from './agent.tokens';
 import { computeInputsHash } from './agent.logic';
 import { LedgerRepository } from './ledger.repository';
+import {
+  ORCHESTRATION_RUN_CHANGED_EVENT,
+  type OrchestrationRunChangedEvent,
+} from './orchestrator.events';
 import {
   buildBoardContextMessages,
   chunk,
@@ -46,7 +51,15 @@ export class OrchestratorService {
     private readonly hitlPolicyService: HitlPolicyService,
     private readonly killSwitchService: KillSwitchService,
     @Inject(AGENT_CONFIG) private readonly config: AgentConfig,
+    // Opcional: los tests construyen el servicio sin él; en la app lo pone Nest.
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
+
+  /** Avisa que el run cambió (Live Activity por push, ADR 0014). Nunca lanza. */
+  private changed(runId: string): void {
+    const event: OrchestrationRunChangedEvent = { runId };
+    this.eventEmitter?.emit(ORCHESTRATION_RUN_CHANGED_EVENT, event);
+  }
 
   async runObjective(input: {
     sessionId: string;
@@ -63,10 +76,12 @@ export class OrchestratorService {
       listRegisteredTools(),
     );
     let tickets = await this.ledger.createTickets(runId, drafts);
+    this.changed(runId);
 
     const killed = await this.runBatchesUntilDone(runId, tickets);
     if (killed) {
       await this.ledger.completeRun(runId, 'killed', null);
+      this.changed(runId);
       return {
         runId,
         status: 'killed',
@@ -87,6 +102,7 @@ export class OrchestratorService {
       runId,
       reconciliationResult,
     );
+    if (pendingApprovals.length > 0) this.changed(runId);
 
     tickets = await this.ledger.getTickets(runId);
     const finalStatus = computeRunStatus(tickets, reconciliationResult);
@@ -95,6 +111,7 @@ export class OrchestratorService {
       finalStatus,
       reconciliationResult.finalResponse,
     );
+    this.changed(runId);
 
     return {
       runId,
@@ -157,6 +174,7 @@ export class OrchestratorService {
   ): Promise<void> {
     await this.ledger.updateTicketStatus(ticket.id, 'in-progress');
     await this.ledger.assignSubAgent(ticket.id, ticket.id);
+    this.changed(runId);
 
     const siblings = await this.ledger.getCompletedSiblings(runId, ticket.id);
     const history = buildBoardContextMessages(siblings);
@@ -183,6 +201,7 @@ export class OrchestratorService {
         result.pendingApprovals.length > 0 ? 'blocked' : 'done',
         result.finalResponse,
       );
+      this.changed(runId);
     } catch (err: unknown) {
       if (err instanceof KillSwitchActiveError) {
         throw err;
@@ -196,6 +215,7 @@ export class OrchestratorService {
         kind: 'note',
         body: `Sub-agente falló: ${msg}`,
       });
+      this.changed(runId);
     }
   }
 

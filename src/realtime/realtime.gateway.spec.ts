@@ -1,7 +1,5 @@
 import { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BudgetService } from '../budget/budget.service';
-import type { KillSwitchService } from '../budget/kill-switch.service';
 import { RealtimeGateway } from './realtime.gateway';
 
 function buildSocket(overrides?: {
@@ -24,19 +22,11 @@ function buildSocket(overrides?: {
 
 describe('RealtimeGateway', () => {
   let jwtService: JwtService;
-  let budgetService: Partial<BudgetService>;
-  let killSwitchService: Partial<KillSwitchService>;
   let gateway: RealtimeGateway;
 
   beforeEach(() => {
     jwtService = new JwtService({ secret: 'a'.repeat(32) });
-    budgetService = { getDailyUsageRatio: vi.fn().mockResolvedValue(0) };
-    killSwitchService = { isActive: vi.fn().mockResolvedValue(false) };
-    gateway = new RealtimeGateway(
-      jwtService,
-      budgetService as BudgetService,
-      killSwitchService as KillSwitchService,
-    );
+    gateway = new RealtimeGateway(jwtService);
   });
 
   it('desconecta un cliente sin token', async () => {
@@ -75,5 +65,19 @@ describe('RealtimeGateway', () => {
     gateway.handlePendingApprovalCreated(event);
 
     expect(emit).toHaveBeenCalledWith('pending-approval:new', event);
+  });
+
+  it('reenvía los eventos de BudgetAlertMonitor como budget:alert y kill-switch:activated', () => {
+    const emit = vi.fn();
+    Object.assign(gateway, { server: { emit } });
+
+    gateway.handleBudgetThresholdCrossed({ ratio: 0.83, threshold: 0.8 });
+    gateway.handleKillSwitchActivated();
+
+    expect(emit).toHaveBeenCalledWith('budget:alert', {
+      ratio: 0.83,
+      threshold: 0.8,
+    });
+    expect(emit).toHaveBeenCalledWith('kill-switch:activated', {});
   });
 });

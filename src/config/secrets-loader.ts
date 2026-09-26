@@ -37,6 +37,10 @@ const REQUIRED_SECRET_KEYS = [
 const OPTIONAL_SECRET_KEYS = [
   'TELEGRAM_RELAY_BOT_TOKEN',
   'RELAY_TOKEN',
+  // Push iOS (ADR 0014): solo existen cuando haya cuenta Apple Developer.
+  'APNS_KEY_ID',
+  'APNS_TEAM_ID',
+  'APNS_PRIVATE_KEY',
 ] as const;
 
 function requireVar(env: NodeJS.ProcessEnv, key: string): string {

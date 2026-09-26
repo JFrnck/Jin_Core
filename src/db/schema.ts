@@ -461,3 +461,44 @@ export const relayMessages = pgTable('relay_messages', {
 });
 
 export type RelayMessageRow = typeof relayMessages.$inferSelect;
+
+/**
+ * Notificaciones push de la app iOS (ADR 0014, migración 0014). Un iPhone
+ * registrado: token de APNs, entorno (sandbox/production) y las preferencias
+ * de Ajustes. No toca `audit_log`: push solo avisa, nunca decide.
+ */
+export const pushDevices = pgTable('push_devices', {
+  token: text('token').primaryKey(),
+  /** 'sandbox' | 'production' — CHECK en la migración 0014. */
+  environment: text('environment').notNull(),
+  preferences: jsonb('preferences')
+    .$type<Record<string, boolean>>()
+    .notNull()
+    .default({}),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type PushDeviceRow = typeof pushDevices.$inferSelect;
+
+/**
+ * Tokens de Live Activities: 'update' (una actividad en curso, con su
+ * `kind`/`referenceId`) o 'start' (push-to-start, uno por dispositivo).
+ */
+export const pushActivityTokens = pgTable('push_activity_tokens', {
+  token: text('token').primaryKey(),
+  environment: text('environment').notNull(),
+  /** 'update' | 'start' — CHECK en la migración 0014. */
+  purpose: text('purpose').notNull(),
+  kind: text('kind'),
+  referenceId: text('reference_id'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type PushActivityTokenRow = typeof pushActivityTokens.$inferSelect;

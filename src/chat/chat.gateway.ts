@@ -1,4 +1,5 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -10,6 +11,10 @@ import {
 import type { Socket } from 'socket.io';
 import { AgentService } from '../agent/agent.service';
 import { extractWsToken } from '../auth/ws-token';
+import {
+  CHAT_TURN_FINISHED_EVENT,
+  type ChatTurnFinishedEvent,
+} from './chat.events';
 import { ChatBodySchema, toModelMessages } from './model-message.schema';
 
 const CHAT_ACTOR_LABEL = 'web-chat';
@@ -30,6 +35,8 @@ export class ChatGateway implements OnGatewayConnection {
   constructor(
     private readonly agentService: AgentService,
     private readonly jwtService: JwtService,
+    // Opcional: los tests construyen el gateway sin él; en la app lo pone Nest.
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
@@ -67,10 +74,34 @@ export class ChatGateway implements OnGatewayConnection {
         onProgress: (event) => client.emit('chat:progress', event),
       });
       client.emit('chat:response', result);
+      this.notifyIfGone(client, parsed.data, true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`Error en turno de chat WS: ${message}`);
       client.emit('chat:error', { message });
+      this.notifyIfGone(client, parsed.data, false);
     }
+  }
+
+  /**
+   * Si la app lo pidió y ya no está escuchando, el resultado se perdería en
+   * silencio: se avisa por push para que el owner vuelva a abrirla.
+   */
+  private notifyIfGone(
+    client: Socket,
+    body: {
+      sessionId: string;
+      objective: string;
+      notifyWhenDone?: boolean | undefined;
+    },
+    ok: boolean,
+  ): void {
+    if (!body.notifyWhenDone || client.connected) return;
+    const event: ChatTurnFinishedEvent = {
+      sessionId: body.sessionId,
+      objective: body.objective,
+      ok,
+    };
+    this.eventEmitter?.emit(CHAT_TURN_FINISHED_EVENT, event);
   }
 }
