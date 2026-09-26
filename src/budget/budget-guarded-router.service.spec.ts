@@ -241,3 +241,110 @@ describe('BudgetGuardedModelRouter.complete', () => {
     );
   });
 });
+
+describe('BudgetGuardedModelRouter.completeStream', () => {
+  it('hace checkBeforeCall/recordUsage igual que complete(), reenviando los deltas del router', async () => {
+    const onDeltaFromCaller = vi.fn();
+    const modelRouterCompleteStream = vi
+      .fn()
+      .mockImplementation(
+        (
+          _taskProfile: string,
+          _request: ModelCompletionRequest,
+          onDelta: (d: string, s: string) => void,
+        ) => {
+          onDelta('Hola', 'Hola');
+          return fakeResponse();
+        },
+      );
+    const modelRouter = {
+      completeStream: modelRouterCompleteStream,
+    } as unknown as ModelRouterService;
+    const checkBeforeCall = vi.fn().mockResolvedValue({ budgetRemaining: 1 });
+    const recordUsage = vi.fn().mockResolvedValue(undefined);
+    const budgetService = {
+      checkBeforeCall,
+      recordUsage,
+    } as unknown as BudgetService;
+    const killSwitchService = {
+      isActive: vi.fn().mockResolvedValue(false),
+    } as unknown as KillSwitchService;
+
+    const guarded = new BudgetGuardedModelRouter(
+      modelRouter,
+      budgetService,
+      killSwitchService,
+    );
+
+    const result = await guarded.completeStream(
+      'chat_conversational',
+      REQUEST,
+      onDeltaFromCaller,
+    );
+
+    expect(checkBeforeCall).toHaveBeenCalledTimes(1);
+    expect(onDeltaFromCaller).toHaveBeenCalledWith('Hola', 'Hola');
+    expect(recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'claude-sonnet-5',
+        inputTokens: 10,
+        outputTokens: 10,
+      }),
+    );
+    expect(result).toEqual(fakeResponse());
+  });
+
+  it('lanza KillSwitchActiveError sin consultar el budget ni el router', async () => {
+    const modelRouterCompleteStream = vi.fn();
+    const modelRouter = {
+      completeStream: modelRouterCompleteStream,
+    } as unknown as ModelRouterService;
+    const checkBeforeCall = vi.fn();
+    const budgetService = {
+      checkBeforeCall,
+      recordUsage: vi.fn(),
+    } as unknown as BudgetService;
+    const killSwitchService = {
+      isActive: vi.fn().mockResolvedValue(true),
+    } as unknown as KillSwitchService;
+
+    const guarded = new BudgetGuardedModelRouter(
+      modelRouter,
+      budgetService,
+      killSwitchService,
+    );
+
+    await expect(
+      guarded.completeStream('chat_conversational', REQUEST, vi.fn()),
+    ).rejects.toThrow(KillSwitchActiveError);
+    expect(checkBeforeCall).not.toHaveBeenCalled();
+    expect(modelRouterCompleteStream).not.toHaveBeenCalled();
+  });
+
+  it('si modelRouter.completeStream rechaza (ej. StreamAlreadyPartiallyEmittedError), recordUsage NO se llama', async () => {
+    const modelRouter = {
+      completeStream: vi
+        .fn()
+        .mockRejectedValue(new Error('stream interrumpido')),
+    } as unknown as ModelRouterService;
+    const recordUsage = vi.fn();
+    const budgetService = {
+      checkBeforeCall: vi.fn().mockResolvedValue({ budgetRemaining: 1 }),
+      recordUsage,
+    } as unknown as BudgetService;
+    const killSwitchService = {
+      isActive: vi.fn().mockResolvedValue(false),
+    } as unknown as KillSwitchService;
+
+    const guarded = new BudgetGuardedModelRouter(
+      modelRouter,
+      budgetService,
+      killSwitchService,
+    );
+
+    await expect(
+      guarded.completeStream('chat_conversational', REQUEST, vi.fn()),
+    ).rejects.toThrow('stream interrumpido');
+    expect(recordUsage).not.toHaveBeenCalled();
+  });
+});

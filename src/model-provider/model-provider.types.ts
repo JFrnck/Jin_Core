@@ -121,9 +121,13 @@ export interface ModelCompletionRequest {
 /**
  * Por qué el modelo dejó de generar. `'tool_use'` es el único caso donde
  * `toolCalls` viene poblado — el agent loop (`src/agent/`) es el único
- * consumidor de este campo hoy.
+ * consumidor de este campo hoy. `'refusal'`: el clasificador de seguridad
+ * de Anthropic cortó la respuesta — `content` puede venir vacío o casi
+ * vacío; el agent loop (`AgentService.runTurn`) lo distingue de un
+ * `'end_turn'` normal para nunca reenviar un mensaje vacío al owner.
  */
-export type ModelStopReason = 'end_turn' | 'tool_use' | 'max_tokens';
+export type ModelStopReason =
+  'end_turn' | 'tool_use' | 'max_tokens' | 'refusal';
 
 export interface ModelCompletionResponse {
   readonly content: string;
@@ -134,10 +138,29 @@ export interface ModelCompletionResponse {
   readonly stopReason: ModelStopReason;
 }
 
+/** Delta de texto incremental de un turno en streaming — `snapshot` es el texto acumulado completo hasta ese punto, no solo el incremento. */
+export type ModelStreamDeltaListener = (
+  delta: string,
+  snapshot: string,
+) => void;
+
 export interface ModelProviderClient {
   readonly vendor: 'anthropic' | 'google';
   complete(
     modelId: string,
     request: ModelCompletionRequest,
+  ): Promise<ModelCompletionResponse>;
+  /**
+   * Variante en streaming de `complete()`, opcional a propósito: no todos
+   * los vendors la soportan (hoy, ninguno de Google) — `ModelRouterService`
+   * degrada a `complete()` + un único delta cuando falta. Misma forma de
+   * retorno que `complete()`: el caller (budget, failover) sigue viendo un
+   * `ModelCompletionResponse` atómico al resolver, `onDelta` es solo un
+   * canal lateral para el texto en vivo.
+   */
+  completeStream?(
+    modelId: string,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
   ): Promise<ModelCompletionResponse>;
 }

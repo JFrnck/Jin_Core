@@ -12,6 +12,7 @@ import {
 } from '../hitl/notify.events';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import type {
+  ModelCompletionResponse,
   ModelMessage,
   ModelMessageContentBlock,
   ModelToolCall,
@@ -25,11 +26,13 @@ import {
 } from '../security/injection-sanitizer';
 import { getToolDefinition, listRegisteredTools } from '../tools/registry';
 import type { AgentConfig } from './agent-config.schema';
+import type { AgentProgressListener } from './agent-progress.types';
 import { AGENT_CONFIG } from './agent.tokens';
 import {
   buildToolCallKey,
   computeInputsHash,
   declarePlan,
+  describeCurrentDateTime,
   stringifyToolResult,
   updatePlanStep,
 } from './agent.logic';
@@ -101,8 +104,27 @@ function buildSystemPrompt(sessionNonce: string): string {
     'un fallo, ajustando el enfoque (autocorrección). Si un intento se ' +
     'agota sin éxito, decilo explícitamente en tu respuesta final: nunca ' +
     'inventes que algo se logró cuando no fue así.\n\n' +
+    `Fecha y hora actuales: ${describeCurrentDateTime()}. Usalas para ` +
+    'responder la hora o la fecha y para razonar plazos ("mañana", ' +
+    '"esta semana"); para otra ciudad, convertí desde esta.\n\n' +
     buildSessionUntrustedContentInstruction(sessionNonce)
   );
+}
+
+// Cap defensivo para el evento `tool-call-started` (streaming en vivo):
+// un input grande (ej. contenido de un archivo) no debería mandar un
+// frame de WS gigante al chat web.
+const PROGRESS_INPUT_MAX_CHARS = 4000;
+
+function truncateForProgress(input: unknown): unknown {
+  const serialized = JSON.stringify(input);
+  if (
+    serialized === undefined ||
+    serialized.length <= PROGRESS_INPUT_MAX_CHARS
+  ) {
+    return input;
+  }
+  return `${serialized.slice(0, PROGRESS_INPUT_MAX_CHARS)}…[truncado]`;
 }
 
 function buildToolResultBlock(
@@ -160,19 +182,44 @@ export class AgentService {
 
     while (iterationsUsed < this.config.maxIterationsPerTurn) {
       iterationsUsed += 1;
+      const currentIteration = iterationsUsed;
 
-      const response = await this.budgetGuardedRouter.complete(
-        'chat_conversational',
-        {
-          systemPrompt,
-          messages,
-          maxOutputTokens: this.config.maxOutputTokens,
-          temperature: CHAT_TEMPERATURE,
-          tools,
-        },
-        undefined,
-        input.sessionId,
-      );
+      // Rama según `input.onProgress` en vez de un único camino "siempre
+      // streaming con callback no-op": así Telegram y `POST /api/chat`
+      // nunca tocan `messages.stream()` del SDK, ni siquiera indirectamente
+      // (garantía fuerte de "no tocar Telegram", ver plan de la sesión).
+      const response = input.onProgress
+        ? await this.budgetGuardedRouter.completeStream(
+            'chat_conversational',
+            {
+              systemPrompt,
+              messages,
+              maxOutputTokens: this.config.maxOutputTokens,
+              temperature: CHAT_TEMPERATURE,
+              tools,
+            },
+            (delta, snapshot) =>
+              input.onProgress?.({
+                type: 'text-delta',
+                iteration: currentIteration,
+                delta,
+                snapshot,
+              }),
+            undefined,
+            input.sessionId,
+          )
+        : await this.budgetGuardedRouter.complete(
+            'chat_conversational',
+            {
+              systemPrompt,
+              messages,
+              maxOutputTokens: this.config.maxOutputTokens,
+              temperature: CHAT_TEMPERATURE,
+              tools,
+            },
+            undefined,
+            input.sessionId,
+          );
       if (!modelsUsed.includes(response.modelId)) {
         modelsUsed.push(response.modelId);
       }
@@ -181,7 +228,7 @@ export class AgentService {
         return this.finalizeTurn(
           input.sessionId,
           messages,
-          response.content,
+          this.resolveFinalResponseText(response),
           plan,
           pendingApprovals,
           iterationsUsed,
@@ -203,10 +250,12 @@ export class AgentService {
       for (const call of response.toolCalls) {
         if (call.name === DECLARE_PLAN_TOOL_NAME) {
           plan = this.handleDeclarePlan(call, toolResultBlocks);
+          input.onProgress?.({ type: 'plan', plan });
           continue;
         }
         if (call.name === UPDATE_PLAN_STEP_TOOL_NAME) {
           plan = this.handleUpdatePlanStep(call, plan, toolResultBlocks);
+          input.onProgress?.({ type: 'plan', plan });
           continue;
         }
 
@@ -223,6 +272,7 @@ export class AgentService {
           pendingApprovals,
           toolResultBlocks,
           messages,
+          input.onProgress,
         );
       }
 
@@ -238,6 +288,35 @@ export class AgentService {
       iterationsUsed,
       modelsUsed,
     );
+  }
+
+  /**
+   * `stopReason: 'refusal'` (clasificador de seguridad de Anthropic corta
+   * la respuesta, `content` viene vacío o casi vacío) nunca debe llegar al
+   * owner como un mensaje en blanco — antes de este fix, `finalizeTurn`
+   * reenviaba `response.content` tal cual, y en Telegram/WS el owner solo
+   * veía el footer de modelo sin texto (bug real, encontrado 2026-09-24
+   * reproduciendo localmente un pedido de deploy con Vite+React+Tailwind
+   * que dispara el refusal de forma consistente). Mismo criterio que ya
+   * exige `buildSystemPrompt`: "nunca inventes que algo se logró cuando no
+   * fue así" — acá aplica a Jin mismo, no solo al contenido que genera.
+   */
+  private resolveFinalResponseText(response: ModelCompletionResponse): string {
+    if (
+      response.stopReason === 'refusal' ||
+      response.content.trim().length === 0
+    ) {
+      this.logger.warn(
+        `Turno sin texto útil del modelo (stopReason=${response.stopReason}, modelo=${response.modelId}) — probablemente el clasificador de seguridad de Anthropic cortó la respuesta.`,
+      );
+      return (
+        'No pude generar una respuesta para este pedido: el modelo cortó la ' +
+        'respuesta sin devolver contenido (probablemente su propio filtro de ' +
+        'seguridad, no un error de Jin). Probá reformular el objetivo o ' +
+        'dividirlo en pasos más chicos.'
+      );
+    }
+    return response.content;
   }
 
   /**
@@ -379,7 +458,27 @@ export class AgentService {
     pendingApprovals: AgentPendingApproval[],
     toolResultBlocks: ModelMessageContentBlock[],
     messages: readonly ModelMessage[],
+    onProgress: AgentProgressListener | undefined,
   ): Promise<void> {
+    onProgress?.({
+      type: 'tool-call-started',
+      toolCallId: call.id,
+      toolName: call.name,
+      input: truncateForProgress(call.input),
+    });
+    const finish = (
+      outcome: 'success' | 'error' | 'deferred',
+      summary?: string,
+    ): void => {
+      onProgress?.({
+        type: 'tool-call-finished',
+        toolCallId: call.id,
+        toolName: call.name,
+        outcome,
+        ...(summary !== undefined ? { summary } : {}),
+      });
+    };
+
     // Fase 9.5: chequeo único de integración apagada, antes de clasificar
     // o contar fallos -- una integración desactivada no es un "fallo" de
     // la tool, es una decisión operativa del owner (config/feature-flags.yaml).
@@ -388,13 +487,9 @@ export class AgentService {
       toolDefinition?.integration &&
       !this.featureFlagsService.isIntegrationEnabled(toolDefinition.integration)
     ) {
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `La integración "${toolDefinition.integration}" está desactivada (feature flag). No se ejecutó "${call.name}".`,
-          true,
-        ),
-      );
+      const summary = `La integración "${toolDefinition.integration}" está desactivada (feature flag). No se ejecutó "${call.name}".`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
       return;
     }
 
@@ -402,13 +497,9 @@ export class AgentService {
     const priorFailures = consecutiveFailures.get(failureKey) ?? 0;
 
     if (priorFailures >= this.config.maxConsecutiveToolFailures) {
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `Este intento exacto de "${call.name}" ya falló ${priorFailures} veces seguidas — no se reintenta más. Probá un enfoque distinto o reportá el fallo.`,
-          true,
-        ),
-      );
+      const summary = `Este intento exacto de "${call.name}" ya falló ${priorFailures} veces seguidas — no se reintenta más. Probá un enfoque distinto o reportá el fallo.`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
       return;
     }
 
@@ -441,12 +532,9 @@ export class AgentService {
           toolName: call.name,
         });
         consecutiveFailures.delete(failureKey);
-        toolResultBlocks.push(
-          buildToolResultBlock(
-            call.id,
-            `Acción diferida — requiere aprobación humana (requestId: ${decision.requestId}). No se ejecutó todavía.`,
-          ),
-        );
+        const summary = `Acción diferida — requiere aprobación humana (requestId: ${decision.requestId}). No se ejecutó todavía.`;
+        toolResultBlocks.push(buildToolResultBlock(call.id, summary));
+        finish('deferred', summary);
         return;
       }
 
@@ -490,19 +578,16 @@ export class AgentService {
         sessionNonce,
       );
       toolResultBlocks.push(buildToolResultBlock(call.id, sanitized));
+      finish('success');
     } catch (err: unknown) {
       consecutiveFailures.set(failureKey, priorFailures + 1);
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.warn(
         `Tool "${call.name}" falló (intento ${priorFailures + 1}): ${msg}`,
       );
-      toolResultBlocks.push(
-        buildToolResultBlock(
-          call.id,
-          `Error ejecutando ${call.name}: ${msg}`,
-          true,
-        ),
-      );
+      const summary = `Error ejecutando ${call.name}: ${msg}`;
+      toolResultBlocks.push(buildToolResultBlock(call.id, summary, true));
+      finish('error', summary);
     }
   }
 }

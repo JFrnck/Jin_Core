@@ -7,6 +7,7 @@ import type {
   ModelCompletionResponse,
   ModelProviderClient,
   ModelsConfig,
+  ModelStreamDeltaListener,
   SelectModelHints,
   TaskProfile,
 } from './model-provider.types';
@@ -39,6 +40,80 @@ export class ModelRouterService {
     request: ModelCompletionRequest,
     hints?: SelectModelHints,
   ): Promise<ModelCompletionResponse> {
+    const { selected, secondaryModelId } = this.resolveCandidates(
+      taskProfile,
+      hints,
+    );
+
+    return this.failoverService.executeWithFailover(
+      {
+        taskProfile,
+        primaryModelId: selected.modelId,
+        fallbackModelId: secondaryModelId,
+      },
+      () =>
+        this.providerFor(selected.modelId).complete(selected.modelId, request),
+      () =>
+        this.providerFor(secondaryModelId).complete(secondaryModelId, request),
+    );
+  }
+
+  /**
+   * Variante en streaming de `complete()` (plan de streaming en vivo del
+   * chat web). Misma selección primary/fallback; cada llamada individual
+   * pasa por `completeOrStream`, que degrada a `complete()` + un único
+   * delta si el provider elegido no implementa `completeStream` (hoy,
+   * cualquier modelo `gemini-*` — `GoogleProvider` no lo soporta).
+   */
+  async completeStream(
+    taskProfile: TaskProfile,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
+    hints?: SelectModelHints,
+  ): Promise<ModelCompletionResponse> {
+    const { selected, secondaryModelId } = this.resolveCandidates(
+      taskProfile,
+      hints,
+    );
+
+    return this.failoverService.executeWithFailoverStream(
+      {
+        taskProfile,
+        primaryModelId: selected.modelId,
+        fallbackModelId: secondaryModelId,
+      },
+      (onDeltaFn) =>
+        this.completeOrStream(selected.modelId, request, onDeltaFn),
+      (onDeltaFn) =>
+        this.completeOrStream(secondaryModelId, request, onDeltaFn),
+      onDelta,
+    );
+  }
+
+  private async completeOrStream(
+    modelId: string,
+    request: ModelCompletionRequest,
+    onDelta: ModelStreamDeltaListener,
+  ): Promise<ModelCompletionResponse> {
+    const provider = this.providerFor(modelId);
+    if (provider.completeStream) {
+      return provider.completeStream(modelId, request, onDelta);
+    }
+    // Degradación: provider sin streaming (hoy, GoogleProvider) — se
+    // resuelve atómico y se manda UN solo delta con el texto completo,
+    // así el consumidor (AgentService) no necesita dos caminos distintos.
+    const response = await provider.complete(modelId, request);
+    onDelta(response.content, response.content);
+    return response;
+  }
+
+  private resolveCandidates(
+    taskProfile: TaskProfile,
+    hints?: SelectModelHints,
+  ): {
+    readonly selected: ReturnType<typeof selectModel>;
+    readonly secondaryModelId: string;
+  } {
     // Fase 9.5 (BLUEPRINT §12.3): override hot de `primary` sobre
     // config/models.yaml -- regla de oro #5 intacta, sigue siendo
     // 100% config-driven, solo con una segunda capa encima de la
@@ -61,17 +136,7 @@ export class ModelRouterService {
     const secondaryModelId =
       selected.modelId === profile.primary ? profile.fallback : profile.primary;
 
-    return this.failoverService.executeWithFailover(
-      {
-        taskProfile,
-        primaryModelId: selected.modelId,
-        fallbackModelId: secondaryModelId,
-      },
-      () =>
-        this.providerFor(selected.modelId).complete(selected.modelId, request),
-      () =>
-        this.providerFor(secondaryModelId).complete(secondaryModelId, request),
-    );
+    return { selected, secondaryModelId };
   }
 
   private providerFor(modelId: string): ModelProviderClient {
