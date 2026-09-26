@@ -2226,7 +2226,7 @@
         "properties": {
           "token": {
             "type": "string",
-            "pattern": "^[0-9a-f]{64,200}$"
+            "pattern": "^[0-9a-f]{64,512}$"
           },
           "environment": {
             "type": "string",
@@ -2260,7 +2260,7 @@
           },
           "token": {
             "type": "string",
-            "pattern": "^[0-9a-f]{64,200}$"
+            "pattern": "^[0-9a-f]{64,512}$"
           },
           "environment": {
             "type": "string",
