@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentService } from '../agent/agent.service';
 import type { AgentTurnInput, AgentTurnResult } from '../agent/agent.types';
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import type { JwtService } from '@nestjs/jwt';
+import { CHAT_TURN_FINISHED_EVENT } from './chat.events';
 import { ChatGateway } from './chat.gateway';
 
 function fakeClient() {
@@ -122,5 +124,44 @@ describe('ChatGateway.handleMessage', () => {
     expect(client.emit).toHaveBeenCalledWith('chat:error', {
       message: 'Payload inválido.',
     });
+  });
+
+  it('notifyWhenDone: emite chat.turn.finished solo si el socket ya no está', async () => {
+    const result: AgentTurnResult = {
+      finalResponse: 'listo',
+      plan: { steps: [] },
+      pendingApprovals: [],
+      iterationsUsed: 1,
+      modelsUsed: ['claude-sonnet-5'],
+    };
+    const emit = vi.fn();
+    const gateway = new ChatGateway(
+      { runTurn: vi.fn().mockResolvedValue(result) } as unknown as AgentService,
+      {} as JwtService,
+      { emit } as unknown as EventEmitter2,
+    );
+
+    const gone = { emit: vi.fn(), connected: false };
+    await gateway.handleMessage(
+      { sessionId: 's1', objective: 'agenda', notifyWhenDone: true },
+      gone as never,
+    );
+    expect(emit).toHaveBeenCalledWith(CHAT_TURN_FINISHED_EVENT, {
+      sessionId: 's1',
+      objective: 'agenda',
+      ok: true,
+    });
+
+    emit.mockClear();
+    const present = { emit: vi.fn(), connected: true };
+    await gateway.handleMessage(
+      { sessionId: 's1', objective: 'agenda', notifyWhenDone: true },
+      present as never,
+    );
+    await gateway.handleMessage(
+      { sessionId: 's1', objective: 'agenda' },
+      gone as never,
+    );
+    expect(emit).not.toHaveBeenCalled();
   });
 });

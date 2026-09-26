@@ -30,6 +30,7 @@ import { ModelProviderModule } from './model-provider/model-provider.module';
 import { OrchestratorModule } from './agent/orchestrator.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { PushModule } from './push/push.module';
 import { RelayModule } from './relay/relay.module';
 import { TelegramModule } from './telegram/telegram.module';
 
@@ -61,6 +62,7 @@ import { TelegramModule } from './telegram/telegram.module';
     ChatModule,
     RealtimeModule,
     RelayModule,
+    PushModule,
   ],
   controllers: [AppController],
   providers: [

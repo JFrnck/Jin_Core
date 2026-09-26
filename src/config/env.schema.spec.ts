@@ -104,3 +104,31 @@ describe('puente Claude↔owner: TELEGRAM_RELAY_BOT_TOKEN + RELAY_TOKEN', () => 
     ).not.toThrow();
   });
 });
+
+describe('push iOS: APNS_KEY_ID + APNS_TEAM_ID + APNS_PRIVATE_KEY (ADR 0014)', () => {
+  const KEYS = {
+    APNS_KEY_ID: 'ABC123DEFG',
+    APNS_TEAM_ID: 'TEAM123456',
+    APNS_PRIVATE_KEY:
+      '-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----',
+  };
+
+  it('sin ninguna: push apagado, Jin arranca igual', () => {
+    const env = validateEnv(BASE_ENV);
+    expect(env.APNS_KEY_ID).toBeUndefined();
+    expect(env.APNS_BUNDLE_ID).toBe('com.jeanfranck.jin');
+  });
+
+  it('con las tres: los \\n escapados de la clave se vuelven saltos de línea', () => {
+    const env = validateEnv({ ...BASE_ENV, ...KEYS });
+    expect(env.APNS_PRIVATE_KEY).toBe(
+      '-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----',
+    );
+  });
+
+  it('a medias falla al arrancar: una clave incompleta no firma nada', () => {
+    expect(() =>
+      validateEnv({ ...BASE_ENV, APNS_KEY_ID: KEYS.APNS_KEY_ID }),
+    ).toThrow(/APNS_KEY_ID, APNS_TEAM_ID y APNS_PRIVATE_KEY/);
+  });
+});

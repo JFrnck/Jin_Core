@@ -1,0 +1,31 @@
+{
+  "title": "Preparar semana de parciales",
+  "detail": "Choca con la asesoría",
+  "startsAt": 812109600,
+  "ready": false,
+  "badge": "1/4",
+  "segments": [
+    "done",
+    "running",
+    "conflict",
+    "pending"
+  ],
+  "agents": [
+    {
+      "id": "sub-3",
+      "ticket": "Material de laboratorio",
+      "working": false
+    },
+    {
+      "id": "sub-1",
+      "ticket": "Bloque de estudio",
+      "working": true
+    },
+    {
+      "id": "sub-2",
+      "ticket": "Mover asesoría",
+      "working": false
+    }
+  ],
+  "phase": "conflict"
+}

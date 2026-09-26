@@ -38,6 +38,11 @@ export const ChatBodySchema = z.object({
   sessionId: z.string().min(1),
   objective: z.string().min(1),
   history: z.array(ModelMessageSchema).optional(),
+  /**
+   * La app iOS lo manda: si el turno termina y el socket ya no está (la app
+   * pasó a segundo plano), se avisa por push (ADR 0014). La web no lo usa.
+   */
+  notifyWhenDone: z.boolean().optional(),
 });
 
 export type ChatBody = z.infer<typeof ChatBodySchema>;
