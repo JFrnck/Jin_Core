@@ -8,6 +8,7 @@ export interface AgentConfig {
   readonly maxConcurrentSubAgents: number;
   readonly maxHistoryTokens: number;
   readonly preserveLastTurns: number;
+  readonly maxOutputTokens: number;
 }
 
 // Espejo snake_case de config/agent.yaml — mismo patrón que
@@ -20,6 +21,7 @@ const AgentYamlSchema = z.object({
   // .min(1), no solo .positive(): 0 rompería la garantía de que el turno
   // actual nunca se comprime a sí mismo (ver comentario en agent.yaml).
   preserve_last_turns: z.number().int().min(1),
+  max_output_tokens: z.number().int().positive().max(32000),
 });
 
 /**
@@ -42,6 +44,7 @@ export function parseAgentConfig(raw: unknown): AgentConfig {
     maxConcurrentSubAgents: data.max_concurrent_sub_agents,
     maxHistoryTokens: data.max_history_tokens,
     preserveLastTurns: data.preserve_last_turns,
+    maxOutputTokens: data.max_output_tokens,
   };
 }
 

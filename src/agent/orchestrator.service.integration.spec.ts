@@ -111,6 +111,7 @@ describe('OrchestratorService (integración, Postgres real + ModelRouterService 
       // historial (fuera de su alcance), solo necesita que nunca dispare.
       maxHistoryTokens: 1_000_000,
       preserveLastTurns: 6,
+      maxOutputTokens: 8000,
     };
     completeMock = vi.fn<CompleteFn>();
 

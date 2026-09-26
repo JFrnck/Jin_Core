@@ -22,3 +22,8 @@ max_history_tokens: 30000
 # de compresión el mismo turno en que se generó. No puede ser 0 (ver
 # validación en agent-config.schema.ts).
 preserve_last_turns: 6
+# Tope de tokens de salida por llamada del agent loop (chat). 2000 no
+# alcanzaba para una tool call con archivos (ej. startPreviewService con un
+# index.html): la respuesta se cortaba. El presupuesto de sesión/día
+# (config/budget.yaml) sigue siendo el freno real de costo.
+max_output_tokens: 8000

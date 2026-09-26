@@ -88,6 +88,7 @@ describe('golden set — el loop del agente no ejecuta ni cambia de nivel por co
       maxConcurrentSubAgents: 3,
       maxHistoryTokens: 1_000_000,
       preserveLastTurns: 6,
+      maxOutputTokens: 8000,
     };
 
     const featureFlags = {

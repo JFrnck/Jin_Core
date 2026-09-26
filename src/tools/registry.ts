@@ -387,7 +387,8 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     name: 'startPreviewService',
     hitlLevel: 'confirm',
     description:
-      'Levanta un pod de servicio de larga vida (ej. npm run dev) expuesto bajo https://<slug>.jinserver.com, con TTL obligatorio. Requiere 1 aprobación: expone código de agentes a internet, aunque sea en el dominio sandbox.',
+      'Levanta un pod de servicio de larga vida expuesto bajo https://<slug>.jinserver.com, con TTL obligatorio. Requiere 1 aprobación: expone código de agentes a internet, aunque sea en el dominio sandbox. ' +
+      'El pod NO tiene internet (no hay npm install): para una web o mini-app usá template: "static" con un index.html; cargá React, Tailwind u otras librerías desde un CDN en el HTML (ej. <script src="https://cdn.tailwindcss.com">, import de https://esm.sh/react) y escribí JSX con <script type="text/babel"> o JS plano. Mantené el proyecto chico (pocos archivos). Solo sin template se usan command y port, y solo si el comando no necesita instalar dependencias.',
     timeoutBehavior: 'discard',
     inputSchema: {
       type: 'object',
@@ -397,12 +398,22 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
           additionalProperties: { type: 'string' },
           description: 'Mapa ruta relativa -> contenido del proyecto a servir.',
         },
+        template: {
+          type: 'string',
+          enum: ['static'],
+          description:
+            'Recomendado. "static": Jin sirve los archivos con su propio servidor (necesita index.html); no se pasan command ni port.',
+        },
         command: {
           type: 'array',
           items: { type: 'string' },
-          description: 'argv del proceso principal, ej. ["npm","run","dev"].',
+          description:
+            'Solo sin template: argv del proceso principal (sin dependencias que instalar), ej. ["node","server.mjs"].',
         },
-        port: { type: 'number', description: 'Puerto que expone el proceso.' },
+        port: {
+          type: 'number',
+          description: 'Solo sin template: puerto que expone el proceso.',
+        },
         ttlSeconds: {
           type: 'number',
           description:
@@ -414,7 +425,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
             'Nombre legible cosmético — la entropía real del subdominio la agrega el Executor.',
         },
       },
-      required: ['files', 'command', 'port', 'ttlSeconds'],
+      required: ['files', 'ttlSeconds'],
     },
   }),
   Object.freeze({

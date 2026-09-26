@@ -9,6 +9,7 @@ function validRawConfig(overrides: Record<string, unknown> = {}) {
     max_concurrent_sub_agents: 3,
     max_history_tokens: 30_000,
     preserve_last_turns: 6,
+    max_output_tokens: 8000,
     ...overrides,
   };
 }
@@ -22,6 +23,7 @@ describe('parseAgentConfig', () => {
       maxConcurrentSubAgents: 3,
       maxHistoryTokens: 30_000,
       preserveLastTurns: 6,
+      maxOutputTokens: 8000,
     });
   });
 
@@ -47,6 +49,15 @@ describe('parseAgentConfig', () => {
     ).toThrow();
     expect(() =>
       parseAgentConfig(validRawConfig({ max_history_tokens: 0 })),
+    ).toThrow();
+    expect(() =>
+      parseAgentConfig(validRawConfig({ max_output_tokens: 0 })),
+    ).toThrow();
+  });
+
+  it('lanza si max_output_tokens supera el techo de cordura (32000)', () => {
+    expect(() =>
+      parseAgentConfig(validRawConfig({ max_output_tokens: 64_000 })),
     ).toThrow();
   });
 
@@ -75,5 +86,6 @@ describe('loadAgentConfig', () => {
     expect(config.maxConcurrentSubAgents).toBe(3);
     expect(config.maxHistoryTokens).toBe(30_000);
     expect(config.preserveLastTurns).toBe(6);
+    expect(config.maxOutputTokens).toBe(8000);
   });
 });
