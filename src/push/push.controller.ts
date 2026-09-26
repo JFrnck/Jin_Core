@@ -17,10 +17,14 @@ import { PushService } from './push.service';
 import { PushStore } from './push.store';
 import { APNS_ENVIRONMENTS, PUSH_KINDS } from './push.types';
 
-/** Tokens de APNs: hexadecimales (32 bytes hoy; Apple dice que pueden crecer). */
+/**
+ * Tokens de APNs en hexadecimal. Los de dispositivo miden 32 bytes; los de
+ * Live Activity push-to-start, 128 (visto en iOS 26: 256 caracteres), y
+ * Apple avisa que pueden crecer.
+ */
 const ApnsTokenSchema = z
   .string()
-  .regex(/^[0-9a-f]{64,200}$/i, 'token de APNs inválido');
+  .regex(/^[0-9a-f]{64,512}$/i, 'token de APNs inválido');
 
 const RegisterDeviceSchema = z.object({
   token: ApnsTokenSchema,
