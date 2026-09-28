@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { desc, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, sql } from 'drizzle-orm';
 import { JinError } from '../common/errors/jin-error';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { auditLog, type AuditLogRow, type NewAuditLogRow } from '../db/schema';
@@ -13,6 +13,8 @@ export interface ListRecentInput {
   // criterio que `JinError.httpStatus`). `id` (bigserial, como string) de
   // la última fila de la página anterior — más viejo que este cursor.
   readonly cursor: string | undefined;
+  /** Solo las filas de una acción (la aprobación/decisión que las originó). */
+  readonly requestId?: string | undefined;
 }
 
 export interface ListRecentResult {
@@ -157,7 +159,12 @@ export class AuditService {
     const rows = await this.db
       .select()
       .from(auditLog)
-      .where(input.cursor ? lt(auditLog.id, BigInt(input.cursor)) : undefined)
+      .where(
+        and(
+          input.cursor ? lt(auditLog.id, BigInt(input.cursor)) : undefined,
+          input.requestId ? eq(auditLog.requestId, input.requestId) : undefined,
+        ),
+      )
       .orderBy(desc(auditLog.id))
       .limit(input.limit + 1);
 

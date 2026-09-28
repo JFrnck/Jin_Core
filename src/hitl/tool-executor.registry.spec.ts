@@ -14,7 +14,24 @@ describe('ToolExecutorRegistry', () => {
     const result = await registry.execute('sendEmail', { to: 'a@b.com' });
 
     expect(result).toBe('resultado');
-    expect(executor).toHaveBeenCalledWith({ to: 'a@b.com' });
+    expect(executor).toHaveBeenCalledWith({ to: 'a@b.com' }, undefined);
+  });
+
+  it('le pasa al executor el contexto de quien ejecuta (p. ej. la aprobación), aparte del payload', async () => {
+    const registry = new ToolExecutorRegistry();
+    const executor = vi.fn().mockResolvedValue('ok');
+    registry.register('sendEmail', executor);
+
+    await registry.execute(
+      'sendEmail',
+      { to: 'a@b.com' },
+      { requestId: 'req-1' },
+    );
+
+    expect(executor).toHaveBeenCalledWith(
+      { to: 'a@b.com' },
+      { requestId: 'req-1' },
+    );
   });
 
   it('lanza ToolExecutorAlreadyRegisteredError ante doble registro del mismo toolName', () => {

@@ -41,7 +41,9 @@ describe('RelayService', () => {
       consumePending: vi.fn().mockResolvedValue([]),
       findAnswer: vi.fn().mockResolvedValue(undefined),
       outQuotaExceeded: vi.fn().mockResolvedValue(false),
-      insertInbound: vi.fn().mockResolvedValue(row({ id: 'in-1', direction: 'in' })),
+      insertInbound: vi
+        .fn()
+        .mockResolvedValue(row({ id: 'in-1', direction: 'in' })),
       listRecent: vi.fn().mockResolvedValue([]),
     };
     bot = { deliver: vi.fn().mockResolvedValue(555), enabled: true };
@@ -138,24 +140,33 @@ describe('RelayService', () => {
   it('send() emite RELAY_MESSAGE_CREATED_EVENT con direction "out"', async () => {
     await service.send({ body: 'hola' });
 
-    expect(eventEmitter.emit).toHaveBeenCalledWith(RELAY_MESSAGE_CREATED_EVENT, {
-      id: 'q-1',
-      direction: 'out',
-    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      RELAY_MESSAGE_CREATED_EVENT,
+      {
+        id: 'q-1',
+        direction: 'out',
+      },
+    );
   });
 
   it('reply() guarda la respuesta del owner y emite el evento con direction "in"', async () => {
-    const result = await service.reply({ body: 'dale, segui', answerTo: 'q-1' });
+    const result = await service.reply({
+      body: 'dale, segui',
+      answerTo: 'q-1',
+    });
 
     expect(result).toEqual({ id: 'in-1' });
     expect(store.insertInbound).toHaveBeenCalledWith({
       body: 'dale, segui',
       answerTo: 'q-1',
     });
-    expect(eventEmitter.emit).toHaveBeenCalledWith(RELAY_MESSAGE_CREATED_EVENT, {
-      id: 'in-1',
-      direction: 'in',
-    });
+    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      RELAY_MESSAGE_CREATED_EVENT,
+      {
+        id: 'in-1',
+        direction: 'in',
+      },
+    );
   });
 
   it('reply() sin cuota: un Claude en bucle no bloquea al owner mandando su propio mensaje', async () => {

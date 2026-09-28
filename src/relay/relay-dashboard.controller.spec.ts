@@ -3,7 +3,9 @@ import { RelayDashboardController } from './relay-dashboard.controller';
 import type { RelayHistoryMessage } from './relay.types';
 import type { RelayService } from './relay.service';
 
-function buildController(overrides?: Partial<RelayService>): RelayDashboardController {
+function buildController(
+  overrides?: Partial<RelayService>,
+): RelayDashboardController {
   const relayService: Partial<RelayService> = {
     history: vi.fn().mockResolvedValue([]),
     reply: vi.fn().mockResolvedValue({ id: 'in-1' }),

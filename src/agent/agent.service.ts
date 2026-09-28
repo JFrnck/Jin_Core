@@ -541,6 +541,7 @@ export class AgentService {
       const result = await this.toolExecutorRegistry.execute(
         call.name,
         call.input,
+        { requestId: decision.requestId },
       );
       consecutiveFailures.delete(failureKey);
 

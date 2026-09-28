@@ -186,7 +186,10 @@ describe('AgentService.runTurn (integración, Postgres real)', () => {
       objective: 'lista mis eventos',
     });
 
-    expect(executor).toHaveBeenCalledWith({});
+    expect(executor).toHaveBeenCalledWith(
+      {},
+      { requestId: expect.any(String) as string },
+    );
 
     const auditRows = await testDb.db.select().from(auditLog);
     expect(auditRows).toHaveLength(1);

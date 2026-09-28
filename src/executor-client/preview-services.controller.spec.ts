@@ -3,11 +3,13 @@ import type {
   ExecutorClientService,
   PreviewServiceInfo,
 } from './executor-client.service';
+import type { AuditService } from '../audit/audit.service';
 import type { OwnerPreviewPublishService } from './owner-preview-publish.service';
 import { PreviewServicesController } from './preview-services.controller';
 
 function buildController(
   overrides?: Partial<ExecutorClientService>,
+  audit: Partial<AuditService> = { recordToolCall: vi.fn() },
 ): PreviewServicesController {
   const service: Partial<ExecutorClientService> = {
     listPreviewServices: vi.fn().mockResolvedValue([]),
@@ -17,8 +19,58 @@ function buildController(
   return new PreviewServicesController(
     service as ExecutorClientService,
     {} as OwnerPreviewPublishService,
+    audit as AuditService,
   );
 }
+
+describe('PreviewServicesController.exportFiles', () => {
+  it('audita que el owner leyó el pod ANTES de pedirle los archivos al Executor', async () => {
+    const order: string[] = [];
+    const recordToolCall = vi.fn().mockImplementation(() => {
+      order.push('audit');
+      return Promise.resolve({});
+    });
+    const exportPreviewFiles = vi.fn().mockImplementation(() => {
+      order.push('export');
+      return Promise.resolve({
+        files: { 'index.html': '<h1>x</h1>' },
+        skipped: [{ path: 'node_modules/', reason: 'omitida' }],
+      });
+    });
+    const controller = buildController(
+      { exportPreviewFiles },
+      { recordToolCall },
+    );
+
+    const result = await controller.exportFiles('svc-1', { dir: 'src' });
+
+    expect(order).toEqual(['audit', 'export']);
+    expect(recordToolCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'owner:api',
+        toolName: 'exportPreviewFiles',
+        approvalStatus: 'auto',
+      }),
+    );
+    expect(exportPreviewFiles).toHaveBeenCalledWith('svc-1', 'src');
+    expect(result.files).toEqual({ 'index.html': '<h1>x</h1>' });
+    expect(result.skipped).toEqual([
+      { path: 'node_modules/', reason: 'omitida' },
+    ]);
+  });
+
+  it('fail-closed: si el audit falla no se lee el pod', async () => {
+    const exportPreviewFiles = vi.fn();
+    const controller = buildController(
+      { exportPreviewFiles },
+      { recordToolCall: vi.fn().mockRejectedValue(new Error('audit caído')) },
+    );
+    await expect(controller.exportFiles('svc-1', { dir: '.' })).rejects.toThrow(
+      'audit caído',
+    );
+    expect(exportPreviewFiles).not.toHaveBeenCalled();
+  });
+});
 
 describe('PreviewServicesController', () => {
   it('list delega en ExecutorClientService.listPreviewServices y devuelve un array mutable', async () => {

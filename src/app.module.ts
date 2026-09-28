@@ -18,6 +18,7 @@ import { ConfigModule } from './config';
 import { CorpusModule } from './corpus/corpus.module';
 import { DbModule } from './db/db.module';
 import { ExecutorClientModule } from './executor-client/executor-client.module';
+import { TerminalModule } from './terminal/terminal.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { HealthModule } from './health/health.module';
 import { HitlModule } from './hitl/hitl.module';
@@ -58,6 +59,7 @@ import { TelegramModule } from './telegram/telegram.module';
     OrchestratorModule,
     TelegramModule,
     ExecutorClientModule,
+    TerminalModule,
     AuthModule,
     ChatModule,
     RealtimeModule,

@@ -36,6 +36,41 @@ describe('ExecutorClientModule', () => {
     });
   });
 
+  it('startPreviewService: la aprobación que lo originó viene del contexto, y un requestId dentro del payload (que puede escribir el modelo) se ignora', async () => {
+    const registry = new ToolExecutorRegistry();
+    const startPreviewService = vi.fn().mockResolvedValue({ id: 'svc-1' });
+    new ExecutorClientModule(registry, {
+      startPreviewService,
+    } as unknown as ExecutorClientService).onModuleInit();
+
+    await registry.execute(
+      'startPreviewService',
+      {
+        template: 'static',
+        files: { 'index.html': 'x' },
+        ttlSeconds: 3600,
+        requestId: 'falsificado-por-el-modelo',
+      },
+      { requestId: '11111111-1111-4111-8111-111111111111' },
+    );
+    expect(startPreviewService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: '11111111-1111-4111-8111-111111111111',
+      }),
+    );
+
+    startPreviewService.mockClear();
+    await registry.execute('startPreviewService', {
+      template: 'static',
+      files: { 'index.html': 'x' },
+      ttlSeconds: 3600,
+      requestId: 'falsificado-por-el-modelo',
+    });
+    expect(startPreviewService.mock.calls[0]?.[0]).not.toHaveProperty(
+      'requestId',
+    );
+  });
+
   it('registra startPreviewService (Fase 5.5, ADR 0006) — pasa el payload completo tal cual', async () => {
     const registry = new ToolExecutorRegistry();
     const mockInfo = {

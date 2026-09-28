@@ -45,11 +45,16 @@ export class ExecutorClientModule implements OnModuleInit {
     // ejecuta ya, vía este mismo registry).
     this.toolExecutorRegistry.register(
       'startPreviewService',
-      async (payload) => {
+      async (payload, context) => {
         // `template: "static"` agrega el servidor fijo de Jin (ver
         // preview-template.logic.ts); sin template, command/port del modelo.
         const input = expandPreviewTemplate(payload as PreviewServiceToolInput);
-        return this.executorClientService.startPreviewService(input);
+        // El id de la aprobación viene del contexto (lo pone quien ejecuta),
+        // NUNCA del payload: el payload lo puede escribir el modelo.
+        return this.executorClientService.startPreviewService({
+          ...input,
+          ...(context?.requestId ? { requestId: context.requestId } : {}),
+        });
       },
     );
     this.toolExecutorRegistry.register(

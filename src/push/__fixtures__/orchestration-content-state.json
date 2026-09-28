@@ -4,12 +4,7 @@
   "startsAt": 812109600,
   "ready": false,
   "badge": "1/4",
-  "segments": [
-    "done",
-    "running",
-    "conflict",
-    "pending"
-  ],
+  "segments": ["done", "running", "conflict", "pending"],
   "agents": [
     {
       "id": "sub-3",

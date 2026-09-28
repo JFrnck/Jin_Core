@@ -381,7 +381,11 @@ describe('AgentService.runTurn', () => {
       objective: 'lista mis eventos',
     });
 
-    expect(executor).toHaveBeenCalledWith({});
+    // El segundo argumento es el contexto (lo pone el agente, no el modelo).
+    expect(executor).toHaveBeenCalledWith(
+      {},
+      { requestId: expect.any(String) as string },
+    );
     expect(mockAuditService.recordToolCall).toHaveBeenCalledWith(
       expect.objectContaining({
         toolName: 'listCalendarEvents',

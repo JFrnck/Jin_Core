@@ -103,6 +103,7 @@ export class ApprovalExecutionService {
       result = await this.toolExecutorRegistry.execute(
         claimed.toolName,
         claimed.payload,
+        { requestId },
       );
     } catch (err: unknown) {
       // No se reintenta sola: el pendiente vuelve a estar disponible y
