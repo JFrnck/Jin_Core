@@ -250,6 +250,9 @@ export class TerminalController {
     });
 
     res.status(upstream.status);
+    // Le dice a la app que esta respuesta es del servidor del owner: un 404 sin la
+    // marca es un fallo de Jin (sesión, puerto), no de su app.
+    res.setHeader('x-jin-proxied', '1');
     for (const name of PREVIEW_RESPONSE_HEADERS) {
       const value = upstream.headers.get(name);
       if (value !== null) res.setHeader(name, value);

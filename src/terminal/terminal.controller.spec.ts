@@ -230,6 +230,7 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
     );
 
     expect(res.statusCode).toBe(404);
+    expect(res.headers['x-jin-proxied']).toBe('1');
     expect(res.headers['content-type']).toBe('text/plain');
     expect(res.headers['Cache-Control']).toBe('no-store');
     expect(res.headers['set-cookie']).toBeUndefined();
