@@ -4,6 +4,7 @@ import {
   ExposeTerminalSchema,
   ImportTerminalSchema,
   StartTerminalSchema,
+  WorkspaceIdSchema,
 } from './terminal.schemas';
 
 describe('schemas de la terminal', () => {
@@ -58,5 +59,13 @@ describe('schemas de la terminal', () => {
     expect(ExposeTerminalSchema.safeParse({ dir: '../etc' }).success).toBe(
       false,
     );
+  });
+
+  it('id de proyecto: un UUID cualquiera, normalizado a minúsculas; cualquier otra cosa se rechaza', () => {
+    const upper = '11111111-1111-4111-8111-111111111111'.toUpperCase();
+    expect(WorkspaceIdSchema.parse(upper)).toBe(upper.toLowerCase());
+    for (const bad of ['no-es-un-uuid', '../etc/passwd', '', '12345']) {
+      expect(WorkspaceIdSchema.safeParse(bad).success).toBe(false);
+    }
   });
 });

@@ -44,7 +44,8 @@ describe('TerminalExecutorClient', () => {
     fetchMock.mockImplementation(() => Promise.resolve(json({ ok: true })));
     const c = client();
     await c.list();
-    await c.stop('a/b');
+    await c.stopPod('a/b');
+    await c.deleteWorkspace('a/b');
     await c.exportFiles('s1', 'app/dist');
     await c.importFiles('s1', { 'a.js': '1' });
 
@@ -53,20 +54,22 @@ describe('TerminalExecutorClient', () => {
         `${(call[1] as { method: string }).method} ${call[0] as string}`,
     );
     expect(urls).toEqual([
-      'GET http://jin-executor:3001/terminal/sessions',
-      'DELETE http://jin-executor:3001/terminal/sessions/a%2Fb',
-      'GET http://jin-executor:3001/terminal/sessions/s1/files?dir=app%2Fdist',
-      'PUT http://jin-executor:3001/terminal/sessions/s1/files',
+      'GET http://jin-executor:3001/terminal/workspaces',
+      'DELETE http://jin-executor:3001/terminal/workspaces/a%2Fb/pod',
+      'DELETE http://jin-executor:3001/terminal/workspaces/a%2Fb',
+      'GET http://jin-executor:3001/terminal/workspaces/s1/files?dir=app%2Fdist',
+      'PUT http://jin-executor:3001/terminal/workspaces/s1/files',
     ]);
   });
 
-  it('start manda archivos y TTL como JSON', async () => {
+  it('start manda al workspace correcto, con archivos y TTL como JSON', async () => {
     fetchMock.mockResolvedValue(json({ id: 's1' }));
-    await client().start({ files: { 'a.js': '1' }, ttlSeconds: 3600 });
-    const init = fetchMock.mock.calls[0]?.[1] as {
-      body: string;
-      headers: Record<string, string>;
-    };
+    await client().start('s1', { files: { 'a.js': '1' }, ttlSeconds: 3600 });
+    const [url, init] = fetchMock.mock.calls[0] as [
+      string,
+      { body: string; headers: Record<string, string> },
+    ];
+    expect(url).toBe('http://jin-executor:3001/terminal/workspaces/s1/start');
     expect(JSON.parse(init.body)).toEqual({
       files: { 'a.js': '1' },
       ttlSeconds: 3600,
@@ -79,8 +82,8 @@ describe('TerminalExecutorClient', () => {
       json(
         {
           statusCode: 429,
-          code: 'TERMINAL_LIMIT_REACHED',
-          message: 'Ya hay 1 sesión(es)',
+          code: 'TERMINAL_WORKSPACE_LIMIT_REACHED',
+          message: 'Ya hay 10 proyecto(s)',
         },
         429,
       ),
@@ -91,7 +94,7 @@ describe('TerminalExecutorClient', () => {
     expect(error).toBeInstanceOf(TerminalUpstreamError);
     expect((error as TerminalUpstreamError).httpStatus).toBe(429);
     expect((error as TerminalUpstreamError).message).toBe(
-      'Ya hay 1 sesión(es)',
+      'Ya hay 10 proyecto(s)',
     );
   });
 
@@ -143,10 +146,10 @@ describe('TerminalExecutorClient', () => {
         `${(call[1] as { method: string }).method} ${call[0] as string}`,
     );
     expect(calls).toEqual([
-      'POST http://jin-executor:3001/terminal/sessions/s1/services',
-      'GET http://jin-executor:3001/terminal/sessions/s1/services',
-      'DELETE http://jin-executor:3001/terminal/sessions/s1/services/5173',
-      'GET http://jin-executor:3001/terminal/sessions/s1/services/5173/logs',
+      'POST http://jin-executor:3001/terminal/workspaces/s1/services',
+      'GET http://jin-executor:3001/terminal/workspaces/s1/services',
+      'DELETE http://jin-executor:3001/terminal/workspaces/s1/services/5173',
+      'GET http://jin-executor:3001/terminal/workspaces/s1/services/5173/logs',
     ]);
   });
 
@@ -175,12 +178,9 @@ describe('TerminalExecutorClient', () => {
       }
     });
 
-    it('un fallo del propio Executor (sin la marca: sesión inexistente, puerto inválido) sale como error con su mensaje', async () => {
+    it('un fallo del propio Executor (sin la marca: workspace inexistente, puerto inválido) sale como error con su mensaje', async () => {
       fetchMock.mockResolvedValueOnce(
-        json(
-          { statusCode: 404, message: 'No existe la sesión de terminal s1' },
-          404,
-        ),
+        json({ statusCode: 404, message: 'No existe el workspace s1' }, 404),
       );
       const error = await client()
         .proxy('s1', 5173, request(new AbortController().signal))
@@ -200,7 +200,7 @@ describe('TerminalExecutorClient', () => {
         { redirect: string; signal: AbortSignal },
       ];
       expect(url).toBe(
-        'http://jin-executor:3001/terminal/sessions/s1/proxy/5173/src/main.js?t=1',
+        'http://jin-executor:3001/terminal/workspaces/s1/proxy/5173/src/main.js?t=1',
       );
       expect(init.redirect).toBe('manual');
       expect(init.signal).toBe(controller.signal);

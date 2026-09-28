@@ -10,6 +10,7 @@ import {
 import { STATIC_SERVER_SOURCE } from '../executor-client/preview-template.logic';
 import {
   AUDIT_COMMAND_PREVIEW_LENGTH,
+  DELETE_TERMINAL_WORKSPACE_TOOL,
   EXPOSE_TERMINAL_SESSION_TOOL,
   RUN_TERMINAL_COMMAND_TOOL,
   START_TERMINAL_SESSION_TOOL,
@@ -22,11 +23,11 @@ import {
   type TerminalExportResult,
   type TerminalServiceInfo,
   type TerminalServiceStart,
-  type TerminalSessionInfo,
+  type TerminalWorkspaceInfo,
 } from './terminal-executor.client';
 import {
   ExposeApprovedPayloadSchema,
-  StartTerminalSchema,
+  StartTerminalApprovedPayloadSchema,
   TERMINAL_STATIC_PORT,
   type ExecTerminalInput,
   type ExposeTerminalInput,
@@ -46,16 +47,20 @@ function ttlLabel(seconds: number): string {
 }
 
 /**
- * La terminal del owner (ADR 0016).
+ * La terminal del owner (ADR 0016 ampliada, 2026-09-28): hasta 10 proyectos
+ * con disco propio (`workspaceId` = el id del proyecto en la app), de los
+ * que solo 1-3 tienen un pod corriendo a la vez.
  *
- * - **Abrir una sesión y publicar un build** quedan como aprobaciones
- *   pendientes de nivel `confirm` FIJO (tools virtuales: el modelo no las ve
- *   y ningún modo de autonomía las relaja). Es lo que HITL vigila: crear un
- *   pod con salida a un registro y exponer un link público.
+ * - **Abrir o reanudar el pod de un workspace, y publicar un build** quedan
+ *   como aprobaciones pendientes de nivel `confirm` FIJO (tools virtuales:
+ *   el modelo no las ve y ningún modo de autonomía las relaja). Es lo que
+ *   HITL vigila: crear un pod con salida a un registro y exponer un link
+ *   público — el mismo riesgo exista o no ya el disco del proyecto.
  * - **Cada comando** que teclea el owner se audita ANTES de ejecutarse
- *   (fail-closed: si el audit falla, el comando no corre), pero no pide
- *   aprobación uno por uno: lo escribe el owner y corre en un sandbox sin más
- *   red que el proxy de npm. La aprobación es de la sesión.
+ *   (fail-closed), pero no pide aprobación uno por uno.
+ * - **Detener el pod y borrar el disco de un workspace** solo destruyen algo
+ *   que ya es del owner (nada nuevo se crea, no hay egress nuevo): quedan
+ *   en el audit, sin aprobación — igual que `stopPreviewService`.
  */
 @Injectable()
 export class OwnerTerminalService implements OnModuleInit {
@@ -79,56 +84,62 @@ export class OwnerTerminalService implements OnModuleInit {
 
   // ── Aprobaciones ───────────────────────────────────────────────────────
 
-  async requestSession(
+  async requestStart(
+    workspaceId: string,
     input: StartTerminalInput,
   ): Promise<PendingTerminalApproval> {
     // Falla rápido: no vale la pena una aprobación si el Executor igual la rechazaría.
-    const alive = (await this.executor.list()).filter(
-      (session) =>
-        session.status === 'running' || session.status === 'starting',
+    const existing = (await this.executor.list()).find(
+      (workspace) => workspace.id === workspaceId,
     );
-    if (alive.length > 0) {
+    if (
+      existing &&
+      (existing.status === 'running' || existing.status === 'starting')
+    ) {
       throw new TerminalUpstreamError(
         409,
-        'Ya hay una sesión de terminal abierta: ciérrala antes de abrir otra.',
+        'Este proyecto ya tiene su terminal abierta.',
       );
     }
 
     const requestId = randomUUID();
     const fileCount = Object.keys(input.files).length;
+    const payload = { workspaceId, ...input };
     await this.dualConfirmService.createPendingApproval({
       requestId,
       toolName: START_TERMINAL_SESSION_TOOL,
       level: 'confirm',
-      inputsHash: computeInputsHash(input),
-      planSummary: `Abrir una terminal aislada por ${ttlLabel(input.ttlSeconds)} (${fileCount} archivo${fileCount === 1 ? '' : 's'} del editor): un pod sin más red que el proxy de npm del clúster. Los comandos los escribes tú.`,
-      payload: input,
+      inputsHash: computeInputsHash(payload),
+      planSummary: existing
+        ? `Reanudar la terminal de este proyecto por ${ttlLabel(input.ttlSeconds)}: el mismo disco, tal como quedó.`
+        : `Abrir una terminal aislada para este proyecto por ${ttlLabel(input.ttlSeconds)} (${fileCount} archivo${fileCount === 1 ? '' : 's'} del editor): un pod sin más red que el proxy de npm del clúster. Los comandos los escribes tú.`,
+      payload,
       actor: TERMINAL_ACTOR,
     });
     return { status: 'pending-approval', requestId };
   }
 
   async requestExpose(
-    sessionId: string,
+    workspaceId: string,
     input: ExposeTerminalInput,
   ): Promise<PendingTerminalApproval> {
-    const session = (await this.executor.list()).find(
-      (candidate) => candidate.id === sessionId,
+    const workspace = (await this.executor.list()).find(
+      (candidate) => candidate.id === workspaceId,
     );
-    if (!session || session.status !== 'running') {
+    if (!workspace || workspace.status !== 'running') {
       throw new TerminalUpstreamError(
         404,
-        'Esa sesión de terminal no está corriendo.',
+        'La terminal de ese proyecto no está corriendo.',
       );
     }
-    if (session.exposure) {
+    if (workspace.exposure) {
       throw new TerminalUpstreamError(
         409,
-        'Esta sesión ya publicó un build. Cierra la sesión para publicar otro.',
+        'Este proyecto ya publicó un build. Cierra la terminal para publicar otro.',
       );
     }
 
-    const payload = { sessionId, ...input };
+    const payload = { workspaceId, ...input };
     const requestId = randomUUID();
     await this.dualConfirmService.createPendingApproval({
       requestId,
@@ -147,18 +158,22 @@ export class OwnerTerminalService implements OnModuleInit {
   private applyStart(
     rawPayload: unknown,
     context?: ToolExecutionContext,
-  ): Promise<TerminalSessionInfo> {
+  ): Promise<TerminalWorkspaceInfo> {
     // Defensa en profundidad: se vuelve a validar lo que quedó guardado.
-    const payload = StartTerminalSchema.parse(rawPayload);
+    const payload = StartTerminalApprovedPayloadSchema.parse(rawPayload);
+    const { workspaceId, ...rest } = payload;
     // El id de la aprobación viene del contexto, no del payload guardado.
-    return this.executor.start({ ...payload, requestId: context?.requestId });
+    return this.executor.start(workspaceId, {
+      ...rest,
+      requestId: context?.requestId,
+    });
   }
 
   private applyExpose(
     rawPayload: unknown,
   ): Promise<{ slug: string; url: string }> {
     const payload = ExposeApprovedPayloadSchema.parse(rawPayload);
-    return this.executor.expose(payload.sessionId, {
+    return this.executor.expose(payload.workspaceId, {
       dir: payload.dir,
       slugHint: payload.slugHint,
       port: TERMINAL_STATIC_PORT,
@@ -169,34 +184,45 @@ export class OwnerTerminalService implements OnModuleInit {
 
   // ── Sin aprobación por operación ───────────────────────────────────────
 
-  list(): Promise<readonly TerminalSessionInfo[]> {
+  list(): Promise<readonly TerminalWorkspaceInfo[]> {
     return this.executor.list();
   }
 
-  async stop(sessionId: string): Promise<void> {
+  /** Detiene el pod del workspace; el disco NO se toca (se puede reanudar). */
+  async stopPod(workspaceId: string): Promise<void> {
     await this.audit(
       STOP_TERMINAL_SESSION_TOOL,
-      { sessionId },
-      'terminal: cerrar la sesión',
+      { workspaceId },
+      'terminal: detener el pod (el disco se conserva)',
     );
-    await this.executor.stop(sessionId);
+    await this.executor.stopPod(workspaceId);
   }
 
-  exportFiles(sessionId: string, dir: string): Promise<TerminalExportResult> {
-    return this.executor.exportFiles(sessionId, dir);
+  /** Borra el pod (si lo hay) Y el disco del workspace. Irreversible. */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.audit(
+      DELETE_TERMINAL_WORKSPACE_TOOL,
+      { workspaceId },
+      'terminal: borrar el proyecto (pod y disco)',
+    );
+    await this.executor.deleteWorkspace(workspaceId);
+  }
+
+  exportFiles(workspaceId: string, dir: string): Promise<TerminalExportResult> {
+    return this.executor.exportFiles(workspaceId, dir);
   }
 
   async importFiles(
-    sessionId: string,
+    workspaceId: string,
     files: Readonly<Record<string, string>>,
   ): Promise<{ written: number }> {
     const count = Object.keys(files).length;
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
-      { sessionId, files: Object.keys(files) },
-      `terminal: copiar ${count} archivo${count === 1 ? '' : 's'} del editor a la sesión`,
+      { workspaceId, files: Object.keys(files) },
+      `terminal: copiar ${count} archivo${count === 1 ? '' : 's'} del editor al proyecto`,
     );
-    return this.executor.importFiles(sessionId, files);
+    return this.executor.importFiles(workspaceId, files);
   }
 
   /**
@@ -204,7 +230,7 @@ export class OwnerTerminalService implements OnModuleInit {
    * comando (fail-closed).
    */
   async exec(
-    sessionId: string,
+    workspaceId: string,
     input: ExecTerminalInput,
     signal: AbortSignal,
   ): Promise<Response> {
@@ -213,22 +239,23 @@ export class OwnerTerminalService implements OnModuleInit {
       .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
-      { sessionId, command: input.command },
+      { workspaceId, command: input.command },
       `terminal: ${preview}`,
     );
-    return this.executor.openExec(sessionId, input, signal);
+    return this.executor.openExec(workspaceId, input, signal);
   }
 
   // ── Servidores en segundo plano y vista previa en vivo ─────────────────
 
   /**
-   * Lanza un servidor dentro de la sesión (`npm run dev`). Es un comando más del
-   * owner: se audita ANTES (fail-closed) y no pide aprobación, porque no expone
-   * nada afuera: la vista previa es privada (JWT del owner) y el pod sigue sin
-   * más red que el proxy de npm. Publicar un link público sí pide aprobación.
+   * Lanza un servidor dentro del workspace (`npm run dev`). Es un comando más
+   * del owner: se audita ANTES (fail-closed) y no pide aprobación, porque no
+   * expone nada afuera: la vista previa es privada (JWT del owner) y el pod
+   * sigue sin más red que el proxy de npm. Publicar un link público sí pide
+   * aprobación.
    */
   async startService(
-    sessionId: string,
+    workspaceId: string,
     input: { command: string; port: number },
   ): Promise<TerminalServiceStart> {
     const preview = input.command
@@ -236,27 +263,27 @@ export class OwnerTerminalService implements OnModuleInit {
       .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
-      { sessionId, command: input.command, port: input.port },
+      { workspaceId, command: input.command, port: input.port },
       `terminal: [servidor :${input.port}] ${preview}`,
     );
-    return this.executor.startService(sessionId, input);
+    return this.executor.startService(workspaceId, input);
   }
 
-  listServices(sessionId: string): Promise<readonly TerminalServiceInfo[]> {
-    return this.executor.listServices(sessionId);
+  listServices(workspaceId: string): Promise<readonly TerminalServiceInfo[]> {
+    return this.executor.listServices(workspaceId);
   }
 
-  async stopService(sessionId: string, port: number): Promise<void> {
+  async stopService(workspaceId: string, port: number): Promise<void> {
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
-      { sessionId, stopPort: port },
+      { workspaceId, stopPort: port },
       `terminal: detener el servidor :${port}`,
     );
-    await this.executor.stopService(sessionId, port);
+    await this.executor.stopService(workspaceId, port);
   }
 
-  serviceLogs(sessionId: string, port: number): Promise<string> {
-    return this.executor.serviceLogs(sessionId, port);
+  serviceLogs(workspaceId: string, port: number): Promise<string> {
+    return this.executor.serviceLogs(workspaceId, port);
   }
 
   /**
@@ -265,7 +292,7 @@ export class OwnerTerminalService implements OnModuleInit {
    * levantó, y lo que la habilitó (el servidor) ya quedó en el audit.
    */
   previewRequest(
-    sessionId: string,
+    workspaceId: string,
     port: number,
     request: {
       method: string;
@@ -275,7 +302,7 @@ export class OwnerTerminalService implements OnModuleInit {
       signal: AbortSignal;
     },
   ): Promise<Response> {
-    return this.executor.proxy(sessionId, port, request);
+    return this.executor.proxy(workspaceId, port, request);
   }
 
   private async audit(

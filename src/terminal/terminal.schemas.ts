@@ -1,6 +1,21 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+/**
+ * Id de proyecto que manda la app (2026-09-28, ADR 0016 ampliada): nombra el
+ * pod Y el PVC del proyecto en el Executor. Se valida ESTRICTO acá también
+ * (defensa en profundidad — el Executor lo vuelve a validar antes de tocar
+ * cualquier nombre de recurso de Kubernetes). Un UUID cualquiera alcanza; se
+ * normaliza a minúsculas, igual que del lado del Executor.
+ */
+export const WorkspaceIdSchema = z
+  .string()
+  .regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+    'id de proyecto inválido',
+  )
+  .transform((id) => id.toLowerCase());
+
 /** Mismos topes que Publicar (ADR 0015) y que el Executor. */
 export const TERMINAL_MAX_FILES = 50;
 export const TERMINAL_MAX_TOTAL_BYTES = 256 * 1024;
@@ -34,7 +49,7 @@ export const TerminalFilesSchema = z
 
 export const StartTerminalSchema = z
   .object({
-    /** El proyecto del editor con el que arranca la sesión (puede ir vacío). */
+    /** Solo se escriben la primera vez que se crea el disco del proyecto (se ignora al reanudar uno existente). */
     files: TerminalFilesSchema.default({}),
     ttlSeconds: z
       .number()
@@ -45,6 +60,11 @@ export const StartTerminalSchema = z
   .strict();
 export type StartTerminalInput = z.infer<typeof StartTerminalSchema>;
 export class StartTerminalDto extends createZodDto(StartTerminalSchema) {}
+
+/** Lo que queda guardado en la aprobación de abrir/reanudar (y se vuelve a validar al aprobarla). */
+export const StartTerminalApprovedPayloadSchema = StartTerminalSchema.extend({
+  workspaceId: WorkspaceIdSchema,
+});
 
 export const ExecTerminalSchema = z
   .object({
@@ -72,7 +92,7 @@ export class ExposeTerminalDto extends createZodDto(ExposeTerminalSchema) {}
 
 /** Lo que queda guardado en la aprobación de publicar (y se vuelve a validar al aprobarla). */
 export const ExposeApprovedPayloadSchema = ExposeTerminalSchema.extend({
-  sessionId: z.string().uuid(),
+  workspaceId: WorkspaceIdSchema,
 });
 
 export const ImportTerminalSchema = z
@@ -87,16 +107,27 @@ export class ExportTerminalQueryDto extends createZodDto(
   ExportTerminalQuerySchema,
 ) {}
 
-export const TerminalSessionSchema = z.object({
+/**
+ * Un workspace = un proyecto (2026-09-28, ADR 0016 ampliada): su disco
+ * (`createdAt`) sobrevive a que el pod se destruya y se vuelva a crear.
+ * `status: 'stopped'` es el reposo normal, no un error — `expiresAt`,
+ * `requestId`, `exposure` y `lastActivityAt` son del pod ACTUAL, si lo hay.
+ */
+export const TerminalWorkspaceSchema = z.object({
   id: z.string(),
-  status: z.enum(['starting', 'running', 'expired', 'failed']),
-  expiresAt: z.string(),
-  /** Aprobación que abrió la sesión: enlaza el pod con su fila del audit. */
+  status: z.enum(['stopped', 'starting', 'running', 'expired', 'failed']),
+  createdAt: z.string(),
+  expiresAt: z.string().nullable(),
+  /** Aprobación que abrió el pod actual: enlaza el pod con su fila del audit. */
   requestId: z.string().nullable(),
-  /** Presente si publicaste el build de esta sesión. */
+  /** Presente si publicaste el build de esta sesión del pod. */
   exposure: z.object({ slug: z.string(), url: z.string() }).nullable(),
+  /** Último comando/servicio/petición al pod actual; null si no hay pod. */
+  lastActivityAt: z.string().nullable(),
 });
-export class TerminalSessionDto extends createZodDto(TerminalSessionSchema) {}
+export class TerminalWorkspaceDto extends createZodDto(
+  TerminalWorkspaceSchema,
+) {}
 
 /** Iniciar y publicar siempre esperan tu aprobación (ningún modo la salta). */
 export const TerminalPendingSchema = z.object({
