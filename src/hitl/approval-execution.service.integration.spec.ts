@@ -78,11 +78,11 @@ describe('ApprovalExecutionService (integración, Postgres real)', () => {
       toolName: 'sendEmail',
       result: 'email-enviado-123',
     });
-    expect(executor).toHaveBeenCalledWith({
-      to: 'a@b.com',
-      subject: 'Hola',
-      body: 'Mundo',
-    });
+    // Payload exacto, y como contexto la aprobación que lo originó (no viaja en el payload).
+    expect(executor).toHaveBeenCalledWith(
+      { to: 'a@b.com', subject: 'Hola', body: 'Mundo' },
+      { requestId: '11111111-1111-4111-8111-111111111111' },
+    );
 
     const pending = await dualConfirmService.getPending(
       '11111111-1111-4111-8111-111111111111',
