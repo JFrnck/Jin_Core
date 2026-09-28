@@ -7,10 +7,14 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
+import { computeInputsHash } from '../agent/agent.logic';
+import { AuditService } from '../audit/audit.service';
 import { OkResultDto } from '../common/dto/ok-result.dto';
 import { ExecutorClientService } from './executor-client.service';
 import { OwnerPreviewPublishService } from './owner-preview-publish.service';
@@ -23,6 +27,8 @@ const PreviewServiceSchema = z.object({
   url: z.string(),
   status: z.enum(['running', 'expired']),
   expiresAt: z.string(),
+  /** Aprobación que lo originó (enlace con el audit); ausente en pods anteriores. */
+  requestId: z.string().optional(),
 });
 class PreviewServiceDto extends createZodDto(PreviewServiceSchema) {}
 
@@ -82,6 +88,23 @@ const PublishPreviewResultSchema = z.object({
   requestId: z.string(),
   service: PreviewServiceSchema.optional(),
 });
+const PreviewFilesQuerySchema = z.object({
+  /** Directorio del pod ("." = todo el espacio de trabajo). */
+  dir: z
+    .string()
+    .min(1)
+    .max(200)
+    .refine((path) => !path.startsWith('/') && !path.split('/').includes('..'))
+    .default('.'),
+});
+class PreviewFilesQueryDto extends createZodDto(PreviewFilesQuerySchema) {}
+
+const PreviewFilesSchema = z.object({
+  files: z.record(z.string(), z.string()),
+  skipped: z.array(z.object({ path: z.string(), reason: z.string() })),
+});
+class PreviewFilesDto extends createZodDto(PreviewFilesSchema) {}
+
 class PublishPreviewResultDto extends createZodDto(
   PublishPreviewResultSchema,
 ) {}
@@ -98,6 +121,7 @@ export class PreviewServicesController {
   constructor(
     private readonly executorClientService: ExecutorClientService,
     private readonly ownerPublish: OwnerPreviewPublishService,
+    private readonly auditService: AuditService,
   ) {}
 
   @Post()
@@ -120,6 +144,32 @@ export class PreviewServicesController {
       : { status: 'pending-approval', requestId: result.requestId };
   }
 
+  @Get(':serviceId/files')
+  @ApiOperation({
+    summary:
+      'Archivos de texto de un pod vivo (sin node_modules, .git ni .jin), para traerlos al editor y editarlos',
+  })
+  @ZodResponse({ status: 200, type: PreviewFilesDto })
+  async exportFiles(
+    @Param('serviceId') serviceId: string,
+    @Query() query: PreviewFilesQueryDto,
+  ): Promise<z.infer<typeof PreviewFilesSchema>> {
+    // Leer el contenido de un pod (código que escribió un agente) queda en el audit.
+    await this.auditService.recordToolCall({
+      requestId: randomUUID(),
+      actor: 'owner:api',
+      toolName: 'exportPreviewFiles',
+      inputsHash: computeInputsHash({ serviceId, dir: query.dir }),
+      planSummary: `Traer al editor los archivos del pod ${serviceId} (${query.dir})`,
+      approvalStatus: 'auto',
+    });
+    const result = await this.executorClientService.exportPreviewFiles(
+      serviceId,
+      query.dir,
+    );
+    return { files: { ...result.files }, skipped: [...result.skipped] };
+  }
+
   @Get()
   @ApiOperation({ summary: 'Apps de preview corriendo (jinserver.com)' })
   @ZodResponse({ status: 200, type: [PreviewServiceDto] })
@@ -130,6 +180,7 @@ export class PreviewServicesController {
       url: string;
       status: 'running' | 'expired';
       expiresAt: string;
+      requestId?: string;
     }[]
   > {
     return [...(await this.executorClientService.listPreviewServices())];

@@ -10,6 +10,8 @@ export interface TerminalSessionInfo {
   readonly id: string;
   readonly status: 'starting' | 'running' | 'expired' | 'failed';
   readonly expiresAt: string;
+  /** Aprobación que abrió la sesión (enlace con el audit); null en sesiones anteriores. */
+  readonly requestId: string | null;
   readonly exposure: { readonly slug: string; readonly url: string } | null;
 }
 
@@ -37,6 +39,7 @@ export class TerminalExecutorClient {
   start(input: {
     files: Readonly<Record<string, string>>;
     ttlSeconds: number;
+    requestId?: string | undefined;
   }): Promise<TerminalSessionInfo> {
     return this.json('POST', '', input);
   }

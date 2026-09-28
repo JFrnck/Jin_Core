@@ -104,7 +104,10 @@ describe('OwnerPreviewPublishService', () => {
       requestId: 'req-1',
       service: SERVICE,
     });
-    expect(execute).toHaveBeenCalledWith('startPreviewService', INPUT);
+    // La aprobación/decisión viaja como contexto (enlace con el audit), no en el payload.
+    expect(execute).toHaveBeenCalledWith('startPreviewService', INPUT, {
+      requestId: 'req-1',
+    });
     expect(createPendingApproval).not.toHaveBeenCalled();
     expect(recordToolCall).toHaveBeenCalledWith(
       expect.objectContaining({

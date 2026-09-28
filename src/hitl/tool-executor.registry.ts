@@ -1,7 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { JinError } from '../common/errors/jin-error';
 
-export type ToolExecutor = (payload: unknown) => Promise<unknown>;
+/**
+ * Contexto que el llamador (no el modelo) le pasa al executor. `requestId` es la
+ * aprobación/decisión HITL que originó esta ejecución: sirve para enlazar lo que
+ * el executor cree (un pod, por ejemplo) con su fila del audit. Nunca sale del
+ * payload: ese lo puede escribir el modelo, este no.
+ */
+export interface ToolExecutionContext {
+  readonly requestId?: string;
+}
+
+export type ToolExecutor = (
+  payload: unknown,
+  context?: ToolExecutionContext,
+) => Promise<unknown>;
 
 export class ToolExecutorAlreadyRegisteredError extends JinError {
   constructor(toolName: string) {
@@ -41,11 +54,15 @@ export class ToolExecutorRegistry {
     this.executors.set(toolName, executor);
   }
 
-  async execute(toolName: string, payload: unknown): Promise<unknown> {
+  async execute(
+    toolName: string,
+    payload: unknown,
+    context?: ToolExecutionContext,
+  ): Promise<unknown> {
     const executor = this.executors.get(toolName);
     if (!executor) {
       throw new NoExecutorRegisteredError(toolName);
     }
-    return executor(payload);
+    return executor(payload, context);
   }
 }

@@ -8,6 +8,8 @@ import { AuditService } from './audit.service';
 const ListQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).default(50),
   cursor: z.string().optional(),
+  // Solo las filas de una acción: enlaza un pod con su rastro en el audit.
+  requestId: z.string().uuid().optional(),
 });
 class ListQueryDto extends createZodDto(ListQuerySchema) {}
 
@@ -54,11 +56,13 @@ export class AuditController {
   @ApiOperation({ summary: 'Audit log paginado, más reciente primero' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'cursor', required: false, type: String })
+  @ApiQuery({ name: 'requestId', required: false, type: String })
   @ZodResponse({ status: 200, type: ListRecentResponseDto })
   async list(@Query() query: ListQueryDto): Promise<ListRecentResponse> {
     const result = await this.auditService.listRecent({
       limit: query.limit,
       cursor: query.cursor,
+      requestId: query.requestId,
     });
     return {
       items: result.items.map((row) => ({ ...row, id: row.id.toString() })),

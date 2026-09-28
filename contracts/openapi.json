@@ -78,6 +78,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "requestId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -482,6 +492,48 @@
           }
         },
         "summary": "Apps de preview corriendo (jinserver.com)",
+        "tags": [
+          "preview-services"
+        ]
+      }
+    },
+    "/api/preview-services/{serviceId}/files": {
+      "get": {
+        "operationId": "PreviewServicesController_exportFiles",
+        "parameters": [
+          {
+            "name": "serviceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "default": ".",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewFilesDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archivos de texto de un pod vivo (sin node_modules, .git ni .jin), para traerlos al editor y editarlos",
         "tags": [
           "preview-services"
         ]
@@ -2033,6 +2085,9 @@
               },
               "expiresAt": {
                 "type": "string"
+              },
+              "requestId": {
+                "type": "string"
               }
             },
             "required": [
@@ -2048,6 +2103,41 @@
         "required": [
           "status",
           "requestId"
+        ],
+        "additionalProperties": false
+      },
+      "PreviewFilesDto_Output": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "files",
+          "skipped"
         ],
         "additionalProperties": false
       },
@@ -2071,6 +2161,9 @@
             ]
           },
           "expiresAt": {
+            "type": "string"
+          },
+          "requestId": {
             "type": "string"
           }
         },
@@ -2141,6 +2234,10 @@
           "expiresAt": {
             "type": "string"
           },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
           "exposure": {
             "type": "object",
             "properties": {
@@ -2163,6 +2260,7 @@
           "id",
           "status",
           "expiresAt",
+          "requestId",
           "exposure"
         ],
         "additionalProperties": false

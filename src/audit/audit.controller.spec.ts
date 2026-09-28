@@ -15,9 +15,13 @@ describe('AuditController', () => {
     // `id: bigint → string` en cada item antes de responder — bigint no
     // es serializable por JSON nativo).
     await expect(
-      controller.list({ limit: 50, cursor: undefined }),
+      controller.list({ limit: 50, cursor: undefined, requestId: undefined }),
     ).resolves.toEqual(result);
-    expect(listRecent).toHaveBeenCalledWith({ limit: 50, cursor: undefined });
+    expect(listRecent).toHaveBeenCalledWith({
+      limit: 50,
+      cursor: undefined,
+      requestId: undefined,
+    });
   });
 
   it('list convierte id (bigint) a string en cada item — bigint no es serializable por JSON nativo', async () => {
@@ -29,7 +33,11 @@ describe('AuditController', () => {
       listRecent,
     } as unknown as AuditService);
 
-    const response = await controller.list({ limit: 50, cursor: undefined });
+    const response = await controller.list({
+      limit: 50,
+      cursor: undefined,
+      requestId: undefined,
+    });
 
     expect(response.items[0]?.id).toBe('4192');
     expect(typeof response.items[0]?.id).toBe('string');

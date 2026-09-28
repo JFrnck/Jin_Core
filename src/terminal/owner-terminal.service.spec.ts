@@ -20,6 +20,7 @@ function session(over: Partial<TerminalSessionInfo> = {}): TerminalSessionInfo {
     id: SESSION_ID,
     status: 'running',
     expiresAt: '2026-09-28T20:00:00.000Z',
+    requestId: null,
     exposure: null,
     ...over,
   };
@@ -155,6 +156,27 @@ describe('OwnerTerminalService', () => {
         files: input.files,
         ttlSeconds: 3600,
       });
+    });
+
+    it('el id de la aprobación viene del contexto de ejecución; un requestId dentro del payload guardado se rechaza (no se puede falsificar)', async () => {
+      await registry.execute('startTerminalSession', input, {
+        requestId: '11111111-1111-4111-8111-111111111111',
+      });
+      expect(start).toHaveBeenCalledWith({
+        files: input.files,
+        ttlSeconds: 3600,
+        requestId: '11111111-1111-4111-8111-111111111111',
+      });
+
+      start.mockClear();
+      await expect(
+        registry.execute(
+          'startTerminalSession',
+          { ...input, requestId: '99999999-9999-4999-8999-999999999999' },
+          { requestId: '11111111-1111-4111-8111-111111111111' },
+        ),
+      ).rejects.toThrow();
+      expect(start).not.toHaveBeenCalled();
     });
 
     it('al aprobarla, un payload alterado se rechaza (defensa en profundidad)', async () => {

@@ -3,7 +3,10 @@ import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { computeInputsHash } from '../agent/agent.logic';
 import { AuditService } from '../audit/audit.service';
 import { DualConfirmService } from '../hitl/dual-confirm.service';
-import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
+import {
+  ToolExecutorRegistry,
+  type ToolExecutionContext,
+} from '../hitl/tool-executor.registry';
 import { STATIC_SERVER_SOURCE } from '../executor-client/preview-template.logic';
 import {
   AUDIT_COMMAND_PREVIEW_LENGTH,
@@ -62,8 +65,9 @@ export class OwnerTerminalService implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    this.toolExecutorRegistry.register(START_TERMINAL_SESSION_TOOL, (payload) =>
-      this.applyStart(payload),
+    this.toolExecutorRegistry.register(
+      START_TERMINAL_SESSION_TOOL,
+      (payload, context) => this.applyStart(payload, context),
     );
     this.toolExecutorRegistry.register(
       EXPOSE_TERMINAL_SESSION_TOOL,
@@ -138,10 +142,14 @@ export class OwnerTerminalService implements OnModuleInit {
 
   // ── Ejecutores de las aprobaciones (registrados en onModuleInit) ───────
 
-  private applyStart(rawPayload: unknown): Promise<TerminalSessionInfo> {
+  private applyStart(
+    rawPayload: unknown,
+    context?: ToolExecutionContext,
+  ): Promise<TerminalSessionInfo> {
     // Defensa en profundidad: se vuelve a validar lo que quedó guardado.
     const payload = StartTerminalSchema.parse(rawPayload);
-    return this.executor.start(payload);
+    // El id de la aprobación viene del contexto, no del payload guardado.
+    return this.executor.start({ ...payload, requestId: context?.requestId });
   }
 
   private applyExpose(

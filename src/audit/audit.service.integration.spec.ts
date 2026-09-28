@@ -290,5 +290,53 @@ describe('AuditService + ChainVerificationService (integración, Postgres real)'
       expect(page3.items[0]?.inputsHash).toBe('h0');
       expect(page3.nextCursor).toBeNull();
     });
+
+    it('con requestId devuelve solo el rastro de esa acción (pedido, aprobación, ejecución) y sigue paginando', async () => {
+      await seed(3);
+      const target = 'eeeeeeee-eeee-4eee-8eee-000000000001';
+      await auditService.recordToolCall({
+        requestId: target,
+        actor: 'owner:api',
+        toolName: 'startPreviewService',
+        inputsHash: 'x1',
+        approvalStatus: 'pending',
+      });
+      await auditService.recordApproval({
+        requestId: target,
+        approver: 'owner',
+        toolName: 'startPreviewService',
+        inputsHash: 'x1',
+      });
+      await seed(2);
+
+      const all = await auditService.listRecent({
+        limit: 10,
+        cursor: undefined,
+        requestId: target,
+      });
+      expect(all.items.map((row) => row.requestId)).toEqual([target, target]);
+      expect(all.items[0]?.actionType).toBe('approval');
+
+      const first = await auditService.listRecent({
+        limit: 1,
+        cursor: undefined,
+        requestId: target,
+      });
+      const second = await auditService.listRecent({
+        limit: 1,
+        cursor: first.nextCursor ?? undefined,
+        requestId: target,
+      });
+      expect(second.items).toHaveLength(1);
+      expect(second.items[0]?.actionType).toBe('tool_call');
+      expect(second.nextCursor).toBeNull();
+
+      const none = await auditService.listRecent({
+        limit: 10,
+        cursor: undefined,
+        requestId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      });
+      expect(none.items).toEqual([]);
+    });
   });
 });

@@ -77,10 +77,9 @@ export class OwnerPreviewPublishService {
       return { status: 'pending-approval', requestId: decision.requestId };
     }
 
-    const service = (await this.toolExecutorRegistry.execute(
-      TOOL_NAME,
-      input,
-    )) as PreviewServiceInfo;
+    const service = (await this.toolExecutorRegistry.execute(TOOL_NAME, input, {
+      requestId: decision.requestId,
+    })) as PreviewServiceInfo;
 
     await this.auditService.recordToolCall({
       requestId: decision.requestId,

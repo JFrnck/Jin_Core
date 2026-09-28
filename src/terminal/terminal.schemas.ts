@@ -91,6 +91,8 @@ export const TerminalSessionSchema = z.object({
   id: z.string(),
   status: z.enum(['starting', 'running', 'expired', 'failed']),
   expiresAt: z.string(),
+  /** Aprobación que abrió la sesión: enlaza el pod con su fila del audit. */
+  requestId: z.string().nullable(),
   /** Presente si publicaste el build de esta sesión. */
   exposure: z.object({ slug: z.string(), url: z.string() }).nullable(),
 });

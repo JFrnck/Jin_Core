@@ -23,6 +23,8 @@ export interface StartPreviewServiceInput {
   readonly port: number;
   readonly ttlSeconds: number;
   readonly slugHint?: string;
+  /** Aprobación que lo originó (enlace con el audit). */
+  readonly requestId?: string;
 }
 
 export interface PreviewServiceInfo {
@@ -31,6 +33,8 @@ export interface PreviewServiceInfo {
   readonly url: string;
   readonly status: 'running' | 'expired';
   readonly expiresAt: string;
+  /** Aprobación que lo originó; ausente en pods anteriores a este campo. */
+  readonly requestId?: string;
 }
 
 /**
@@ -95,6 +99,29 @@ export class ExecutorClientService {
     }
 
     return (await response.json()) as PreviewServiceInfo;
+  }
+
+  /** Archivos de texto de un pod vivo, para traerlos al editor (Executor `GET /services/:id/files`). */
+  async exportPreviewFiles(
+    serviceId: string,
+    dir: string,
+  ): Promise<{
+    files: Readonly<Record<string, string>>;
+    skipped: readonly { path: string; reason: string }[];
+  }> {
+    const response = await fetch(
+      `${this.baseUrl}/services/${encodeURIComponent(serviceId)}/files?dir=${encodeURIComponent(dir)}`,
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new ExecutorApiError(response.status, errorText);
+    }
+
+    return (await response.json()) as {
+      files: Readonly<Record<string, string>>;
+      skipped: readonly { path: string; reason: string }[];
+    };
   }
 
   async stopPreviewService(serviceId: string): Promise<void> {
