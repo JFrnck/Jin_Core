@@ -49,7 +49,8 @@ describe('TerminalExecutorClient', () => {
     await c.importFiles('s1', { 'a.js': '1' });
 
     const urls = fetchMock.mock.calls.map(
-      (call) => `${(call[1] as { method: string }).method} ${String(call[0])}`,
+      (call) =>
+        `${(call[1] as { method: string }).method} ${call[0] as string}`,
     );
     expect(urls).toEqual([
       'GET http://jin-executor:3001/terminal/sessions',
