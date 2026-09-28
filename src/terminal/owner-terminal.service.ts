@@ -1,0 +1,226 @@
+import { randomUUID } from 'node:crypto';
+import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { computeInputsHash } from '../agent/agent.logic';
+import { AuditService } from '../audit/audit.service';
+import { DualConfirmService } from '../hitl/dual-confirm.service';
+import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
+import { STATIC_SERVER_SOURCE } from '../executor-client/preview-template.logic';
+import {
+  AUDIT_COMMAND_PREVIEW_LENGTH,
+  EXPOSE_TERMINAL_SESSION_TOOL,
+  RUN_TERMINAL_COMMAND_TOOL,
+  START_TERMINAL_SESSION_TOOL,
+  STOP_TERMINAL_SESSION_TOOL,
+  TERMINAL_ACTOR,
+} from './terminal.constants';
+import { TerminalUpstreamError } from './terminal.errors';
+import {
+  TerminalExecutorClient,
+  type TerminalExportResult,
+  type TerminalSessionInfo,
+} from './terminal-executor.client';
+import {
+  ExposeApprovedPayloadSchema,
+  StartTerminalSchema,
+  TERMINAL_STATIC_PORT,
+  type ExecTerminalInput,
+  type ExposeTerminalInput,
+  type StartTerminalInput,
+} from './terminal.schemas';
+
+export interface PendingTerminalApproval {
+  readonly status: 'pending-approval';
+  readonly requestId: string;
+}
+
+function ttlLabel(seconds: number): string {
+  const hours = seconds / 3600;
+  return hours >= 1 && Number.isInteger(hours)
+    ? `${hours} h`
+    : `${Math.round(seconds / 60)} min`;
+}
+
+/**
+ * La terminal del owner (ADR 0016).
+ *
+ * - **Abrir una sesión y publicar un build** quedan como aprobaciones
+ *   pendientes de nivel `confirm` FIJO (tools virtuales: el modelo no las ve
+ *   y ningún modo de autonomía las relaja). Es lo que HITL vigila: crear un
+ *   pod con salida a un registro y exponer un link público.
+ * - **Cada comando** que teclea el owner se audita ANTES de ejecutarse
+ *   (fail-closed: si el audit falla, el comando no corre), pero no pide
+ *   aprobación uno por uno: lo escribe el owner y corre en un sandbox sin más
+ *   red que el proxy de npm. La aprobación es de la sesión.
+ */
+@Injectable()
+export class OwnerTerminalService implements OnModuleInit {
+  constructor(
+    private readonly dualConfirmService: DualConfirmService,
+    private readonly toolExecutorRegistry: ToolExecutorRegistry,
+    private readonly executor: TerminalExecutorClient,
+    private readonly auditService: AuditService,
+  ) {}
+
+  onModuleInit(): void {
+    this.toolExecutorRegistry.register(START_TERMINAL_SESSION_TOOL, (payload) =>
+      this.applyStart(payload),
+    );
+    this.toolExecutorRegistry.register(
+      EXPOSE_TERMINAL_SESSION_TOOL,
+      (payload) => this.applyExpose(payload),
+    );
+  }
+
+  // ── Aprobaciones ───────────────────────────────────────────────────────
+
+  async requestSession(
+    input: StartTerminalInput,
+  ): Promise<PendingTerminalApproval> {
+    // Falla rápido: no vale la pena una aprobación si el Executor igual la rechazaría.
+    const alive = (await this.executor.list()).filter(
+      (session) =>
+        session.status === 'running' || session.status === 'starting',
+    );
+    if (alive.length > 0) {
+      throw new TerminalUpstreamError(
+        409,
+        'Ya hay una sesión de terminal abierta: ciérrala antes de abrir otra.',
+      );
+    }
+
+    const requestId = randomUUID();
+    const fileCount = Object.keys(input.files).length;
+    await this.dualConfirmService.createPendingApproval({
+      requestId,
+      toolName: START_TERMINAL_SESSION_TOOL,
+      level: 'confirm',
+      inputsHash: computeInputsHash(input),
+      planSummary: `Abrir una terminal aislada por ${ttlLabel(input.ttlSeconds)} (${fileCount} archivo${fileCount === 1 ? '' : 's'} del editor): un pod sin más red que el proxy de npm del clúster. Los comandos los escribes tú.`,
+      payload: input,
+      actor: TERMINAL_ACTOR,
+    });
+    return { status: 'pending-approval', requestId };
+  }
+
+  async requestExpose(
+    sessionId: string,
+    input: ExposeTerminalInput,
+  ): Promise<PendingTerminalApproval> {
+    const session = (await this.executor.list()).find(
+      (candidate) => candidate.id === sessionId,
+    );
+    if (!session || session.status !== 'running') {
+      throw new TerminalUpstreamError(
+        404,
+        'Esa sesión de terminal no está corriendo.',
+      );
+    }
+    if (session.exposure) {
+      throw new TerminalUpstreamError(
+        409,
+        'Esta sesión ya publicó un build. Cierra la sesión para publicar otro.',
+      );
+    }
+
+    const payload = { sessionId, ...input };
+    const requestId = randomUUID();
+    await this.dualConfirmService.createPendingApproval({
+      requestId,
+      toolName: EXPOSE_TERMINAL_SESSION_TOOL,
+      level: 'confirm',
+      inputsHash: computeInputsHash(payload),
+      planSummary: `Publicar el directorio "${input.dir}" de la terminal en https://<slug>.jinserver.com: un link público hasta que venza la sesión. Sirve los archivos tal cual con el servidor estático de Jin.`,
+      payload,
+      actor: TERMINAL_ACTOR,
+    });
+    return { status: 'pending-approval', requestId };
+  }
+
+  // ── Ejecutores de las aprobaciones (registrados en onModuleInit) ───────
+
+  private applyStart(rawPayload: unknown): Promise<TerminalSessionInfo> {
+    // Defensa en profundidad: se vuelve a validar lo que quedó guardado.
+    const payload = StartTerminalSchema.parse(rawPayload);
+    return this.executor.start(payload);
+  }
+
+  private applyExpose(
+    rawPayload: unknown,
+  ): Promise<{ slug: string; url: string }> {
+    const payload = ExposeApprovedPayloadSchema.parse(rawPayload);
+    return this.executor.expose(payload.sessionId, {
+      dir: payload.dir,
+      slugHint: payload.slugHint,
+      port: TERMINAL_STATIC_PORT,
+      // Código fijo de Jin (el mismo de los previews), no del owner ni de un agente.
+      serverSource: STATIC_SERVER_SOURCE,
+    });
+  }
+
+  // ── Sin aprobación por operación ───────────────────────────────────────
+
+  list(): Promise<readonly TerminalSessionInfo[]> {
+    return this.executor.list();
+  }
+
+  async stop(sessionId: string): Promise<void> {
+    await this.audit(
+      STOP_TERMINAL_SESSION_TOOL,
+      { sessionId },
+      'terminal: cerrar la sesión',
+    );
+    await this.executor.stop(sessionId);
+  }
+
+  exportFiles(sessionId: string, dir: string): Promise<TerminalExportResult> {
+    return this.executor.exportFiles(sessionId, dir);
+  }
+
+  async importFiles(
+    sessionId: string,
+    files: Readonly<Record<string, string>>,
+  ): Promise<{ written: number }> {
+    const count = Object.keys(files).length;
+    await this.audit(
+      RUN_TERMINAL_COMMAND_TOOL,
+      { sessionId, files: Object.keys(files) },
+      `terminal: copiar ${count} archivo${count === 1 ? '' : 's'} del editor a la sesión`,
+    );
+    return this.executor.importFiles(sessionId, files);
+  }
+
+  /**
+   * Abre el stream de un comando. El audit va ANTES: sin registro no hay
+   * comando (fail-closed).
+   */
+  async exec(
+    sessionId: string,
+    input: ExecTerminalInput,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    const preview = input.command
+      .replace(/\s+/g, ' ')
+      .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
+    await this.audit(
+      RUN_TERMINAL_COMMAND_TOOL,
+      { sessionId, command: input.command },
+      `terminal: ${preview}`,
+    );
+    return this.executor.openExec(sessionId, input, signal);
+  }
+
+  private async audit(
+    toolName: string,
+    inputs: unknown,
+    planSummary: string,
+  ): Promise<void> {
+    await this.auditService.recordToolCall({
+      requestId: randomUUID(),
+      actor: TERMINAL_ACTOR,
+      toolName,
+      inputsHash: computeInputsHash(inputs),
+      planSummary,
+      approvalStatus: 'auto',
+    });
+  }
+}

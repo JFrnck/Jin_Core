@@ -518,6 +518,258 @@
         ]
       }
     },
+    "/api/terminal/sessions": {
+      "post": {
+        "operationId": "TerminalController_start",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartTerminalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalPendingDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pide abrir una sesión de terminal. Siempre queda esperando tu aprobación (nivel confirm fijo).",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "get": {
+        "operationId": "TerminalController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TerminalSessionDto_Output"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Sesiones de terminal (con el link publicado, si hay)",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}": {
+      "delete": {
+        "operationId": "TerminalController_stop",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cierra una sesión y destruye su pod",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/exec": {
+      "post": {
+        "operationId": "TerminalController_exec",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecTerminalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Ejecuta un comando en la sesión (salida en streaming NDJSON)",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/files": {
+      "get": {
+        "operationId": "TerminalController_exportFiles",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": ".",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "."
+                  ]
+                },
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalExportDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Archivos de texto de la sesión (sin node_modules, .git ni dist), para traerlos al editor",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "put": {
+        "operationId": "TerminalController_importFiles",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTerminalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalImportResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Copia archivos del editor al espacio de trabajo de la sesión",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/expose": {
+      "post": {
+        "operationId": "TerminalController_expose",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExposeTerminalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalPendingDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pide publicar el build de la sesión bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "AuthController_login",
@@ -1829,6 +2081,188 @@
           "status",
           "expiresAt"
         ],
+        "additionalProperties": false
+      },
+      "StartTerminalDto": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "default": {},
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "minimum": 300,
+            "maximum": 14400
+          }
+        },
+        "required": [
+          "ttlSeconds"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalPendingDto_Output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending-approval"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "requestId"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalSessionDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "starting",
+              "running",
+              "expired",
+              "failed"
+            ]
+          },
+          "expiresAt": {
+            "type": "string"
+          },
+          "exposure": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slug",
+              "url"
+            ],
+            "additionalProperties": false,
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "expiresAt",
+          "exposure"
+        ],
+        "additionalProperties": false
+      },
+      "ExecTerminalDto": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalExportDto_Output": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "files",
+          "skipped"
+        ],
+        "additionalProperties": false
+      },
+      "ImportTerminalDto": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalImportResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "written": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "written"
+        ],
+        "additionalProperties": false
+      },
+      "ExposeTerminalDto": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "default": "dist",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "slugHint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
         "additionalProperties": false
       },
       "LoginDto": {
