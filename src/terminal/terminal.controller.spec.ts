@@ -144,3 +144,159 @@ describe('TerminalController.exec', () => {
     expect(signal?.aborted).toBe(true);
   });
 });
+
+describe('TerminalController.preview (vista previa en vivo)', () => {
+  function fakeReq(over: Record<string, unknown> = {}) {
+    return {
+      method: 'GET',
+      originalUrl: '/api/terminal/sessions/s1/preview/5173/src/main.js?t=1',
+      headers: {
+        accept: '*/*',
+        cookie: 'sesion=secreta',
+        authorization: 'Bearer token-del-owner',
+        'x-otro': 'no',
+      },
+      body: {},
+      readableEnded: true,
+      ...over,
+    } as unknown as import('express').Request;
+  }
+
+  function withPreview(previewRequest: ReturnType<typeof vi.fn>) {
+    return new TerminalController({
+      previewRequest,
+    } as unknown as OwnerTerminalService);
+  }
+
+  it('reenvía ruta y query tal cual y NO le pasa al servidor las cookies ni el JWT del owner', async () => {
+    const previewRequest = vi.fn().mockResolvedValue(
+      new Response('console.log(1)', {
+        headers: { 'content-type': 'text/javascript' },
+      }),
+    );
+    const res = fakeRes();
+
+    await withPreview(previewRequest).preview(
+      's1',
+      '5173',
+      fakeReq(),
+      res as unknown as ExpressResponse,
+    );
+
+    const call = previewRequest.mock.calls[0] as [
+      string,
+      number,
+      { pathAndQuery: string; headers: Record<string, string>; method: string },
+    ];
+    expect(call[0]).toBe('s1');
+    expect(call[1]).toBe(5173);
+    expect(call[2].pathAndQuery).toBe('/src/main.js?t=1');
+    expect(call[2].headers).toEqual({ accept: '*/*' });
+    expect(res.written.join('')).toBe('console.log(1)');
+    expect(res.ended).toBe(true);
+  });
+
+  it('la raíz sin barra final llega como /', async () => {
+    const previewRequest = vi.fn().mockResolvedValue(new Response('<html>'));
+    await withPreview(previewRequest).preview(
+      's1',
+      '5173',
+      fakeReq({ originalUrl: '/api/terminal/sessions/s1/preview/5173' }),
+      fakeRes() as unknown as ExpressResponse,
+    );
+    expect((previewRequest.mock.calls[0] as unknown[])[2]).toMatchObject({
+      pathAndQuery: '/',
+    });
+  });
+
+  it('devuelve el estado del servidor y solo cabeceras seguras: sin set-cookie, sin cache; nunca cachea', async () => {
+    const previewRequest = vi.fn().mockResolvedValue(
+      new Response('no', {
+        status: 404,
+        headers: {
+          'content-type': 'text/plain',
+          'set-cookie': 'a=b',
+          'cache-control': 'public, max-age=999',
+          'x-powered-by': 'express',
+        },
+      }),
+    );
+    const res = fakeRes();
+    await withPreview(previewRequest).preview(
+      's1',
+      '5173',
+      fakeReq(),
+      res as unknown as ExpressResponse,
+    );
+
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['content-type']).toBe('text/plain');
+    expect(res.headers['Cache-Control']).toBe('no-store');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(res.headers['x-powered-by']).toBeUndefined();
+  });
+
+  it('un puerto que no es de usuario o no es un número se rechaza antes de tocar el Executor', async () => {
+    const previewRequest = vi.fn();
+    for (const port of ['80', '1023', '65536', '5173abc', '0x1400', '']) {
+      await expect(
+        withPreview(previewRequest).preview(
+          's1',
+          port,
+          fakeReq(),
+          fakeRes() as unknown as ExpressResponse,
+        ),
+      ).rejects.toThrow(/Puerto/);
+    }
+    expect(previewRequest).not.toHaveBeenCalled();
+  });
+
+  it('reenvía el cuerpo JSON de un POST y cuando el cliente se va corta la conexión', async () => {
+    let signal: AbortSignal | undefined;
+    const previewRequest = vi
+      .fn()
+      .mockImplementation(
+        (_id: string, _port: number, request: { signal: AbortSignal }) => {
+          signal = request.signal;
+          return Promise.resolve(new Response('ok'));
+        },
+      );
+    const res = fakeRes();
+    const pending = withPreview(previewRequest).preview(
+      's1',
+      '3000',
+      fakeReq({
+        method: 'POST',
+        body: { a: 1 },
+        originalUrl: '/api/terminal/sessions/s1/preview/3000/api/items',
+      }),
+      res as unknown as ExpressResponse,
+    );
+    res.emit('close');
+    await pending;
+
+    const call = previewRequest.mock.calls[0] as [
+      string,
+      number,
+      { body?: Buffer },
+    ];
+    expect(call[2].body?.toString()).toBe('{"a":1}');
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('un fallo del Executor antes del primer byte sale como error HTTP normal', async () => {
+    const previewRequest = vi
+      .fn()
+      .mockRejectedValue(new TerminalUpstreamError(404, 'No existe la sesión'));
+    const res = fakeRes();
+    await expect(
+      withPreview(previewRequest).preview(
+        's1',
+        '5173',
+        fakeReq(),
+        res as unknown as ExpressResponse,
+      ),
+    ).rejects.toBeInstanceOf(TerminalUpstreamError);
+    expect(res.statusCode).toBeUndefined();
+  });
+});

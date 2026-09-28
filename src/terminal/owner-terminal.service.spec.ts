@@ -34,6 +34,9 @@ describe('OwnerTerminalService', () => {
   let expose: ReturnType<typeof vi.fn>;
   let openExec: ReturnType<typeof vi.fn>;
   let importFiles: ReturnType<typeof vi.fn>;
+  let startService: ReturnType<typeof vi.fn>;
+  let stopService: ReturnType<typeof vi.fn>;
+  let proxy: ReturnType<typeof vi.fn>;
   let createPendingApproval: ReturnType<typeof vi.fn>;
   let recordToolCall: ReturnType<typeof vi.fn>;
   let registry: ToolExecutorRegistry;
@@ -53,6 +56,12 @@ describe('OwnerTerminalService', () => {
       return Promise.resolve(new Response('ok'));
     });
     importFiles = vi.fn().mockResolvedValue({ written: 2 });
+    startService = vi.fn().mockImplementation(() => {
+      order.push('startService');
+      return Promise.resolve({ status: 'listening', port: 5173, log: '' });
+    });
+    stopService = vi.fn().mockResolvedValue(undefined);
+    proxy = vi.fn().mockResolvedValue(new Response('ok'));
     createPendingApproval = vi.fn().mockResolvedValue(undefined);
     recordToolCall = vi.fn().mockImplementation(() => {
       order.push('audit');
@@ -69,6 +78,9 @@ describe('OwnerTerminalService', () => {
         expose,
         openExec,
         importFiles,
+        startService,
+        stopService,
+        proxy,
       } as unknown as TerminalExecutorClient,
       { recordToolCall } as unknown as AuditService,
     );
@@ -329,6 +341,58 @@ describe('OwnerTerminalService', () => {
         { command: 'ls', timeoutSeconds: 30 },
         controller.signal,
       );
+    });
+  });
+
+  describe('servidores y vista previa en vivo', () => {
+    it('lanzar un servidor se audita ANTES, como un comando, con el puerto en el resumen', async () => {
+      await service.startService(SESSION_ID, {
+        command: 'npm run dev -- --host 0.0.0.0',
+        port: 5173,
+      });
+
+      expect(order).toEqual(['audit', 'startService']);
+      expect(recordToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actor: 'owner:terminal',
+          toolName: 'runTerminalCommand',
+          approvalStatus: 'auto',
+          planSummary:
+            'terminal: [servidor :5173] npm run dev -- --host 0.0.0.0',
+        }),
+      );
+    });
+
+    it('fail-closed: si el audit falla, el servidor NO se lanza', async () => {
+      recordToolCall.mockRejectedValueOnce(new Error('audit caído'));
+      await expect(
+        service.startService(SESSION_ID, {
+          command: 'node server.js',
+          port: 3000,
+        }),
+      ).rejects.toThrow('audit caído');
+      expect(startService).not.toHaveBeenCalled();
+    });
+
+    it('detener también queda en el audit', async () => {
+      await service.stopService(SESSION_ID, 5173);
+      expect(recordToolCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          planSummary: 'terminal: detener el servidor :5173',
+        }),
+      );
+      expect(stopService).toHaveBeenCalledWith(SESSION_ID, 5173);
+    });
+
+    it('las peticiones de la vista previa NO se auditan una por una (una página son decenas)', async () => {
+      await service.previewRequest(SESSION_ID, 5173, {
+        method: 'GET',
+        pathAndQuery: '/',
+        headers: {},
+        signal: new AbortController().signal,
+      });
+      expect(recordToolCall).not.toHaveBeenCalled();
+      expect(proxy).toHaveBeenCalledTimes(1);
     });
   });
 

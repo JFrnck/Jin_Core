@@ -20,6 +20,8 @@ import { TerminalUpstreamError } from './terminal.errors';
 import {
   TerminalExecutorClient,
   type TerminalExportResult,
+  type TerminalServiceInfo,
+  type TerminalServiceStart,
   type TerminalSessionInfo,
 } from './terminal-executor.client';
 import {
@@ -215,6 +217,65 @@ export class OwnerTerminalService implements OnModuleInit {
       `terminal: ${preview}`,
     );
     return this.executor.openExec(sessionId, input, signal);
+  }
+
+  // ── Servidores en segundo plano y vista previa en vivo ─────────────────
+
+  /**
+   * Lanza un servidor dentro de la sesión (`npm run dev`). Es un comando más del
+   * owner: se audita ANTES (fail-closed) y no pide aprobación, porque no expone
+   * nada afuera: la vista previa es privada (JWT del owner) y el pod sigue sin
+   * más red que el proxy de npm. Publicar un link público sí pide aprobación.
+   */
+  async startService(
+    sessionId: string,
+    input: { command: string; port: number },
+  ): Promise<TerminalServiceStart> {
+    const preview = input.command
+      .replace(/\s+/g, ' ')
+      .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
+    await this.audit(
+      RUN_TERMINAL_COMMAND_TOOL,
+      { sessionId, command: input.command, port: input.port },
+      `terminal: [servidor :${input.port}] ${preview}`,
+    );
+    return this.executor.startService(sessionId, input);
+  }
+
+  listServices(sessionId: string): Promise<readonly TerminalServiceInfo[]> {
+    return this.executor.listServices(sessionId);
+  }
+
+  async stopService(sessionId: string, port: number): Promise<void> {
+    await this.audit(
+      RUN_TERMINAL_COMMAND_TOOL,
+      { sessionId, stopPort: port },
+      `terminal: detener el servidor :${port}`,
+    );
+    await this.executor.stopService(sessionId, port);
+  }
+
+  serviceLogs(sessionId: string, port: number): Promise<string> {
+    return this.executor.serviceLogs(sessionId, port);
+  }
+
+  /**
+   * Reenvía una petición de la vista previa. NO se audita cada petición (una
+   * página son decenas): abrir la vista previa es leer lo que el propio owner
+   * levantó, y lo que la habilitó (el servidor) ya quedó en el audit.
+   */
+  previewRequest(
+    sessionId: string,
+    port: number,
+    request: {
+      method: string;
+      pathAndQuery: string;
+      headers: Readonly<Record<string, string>>;
+      body?: Buffer | undefined;
+      signal: AbortSignal;
+    },
+  ): Promise<Response> {
+    return this.executor.proxy(sessionId, port, request);
   }
 
   private async audit(

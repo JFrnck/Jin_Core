@@ -23,6 +23,27 @@ export interface TerminalExportResult {
   }[];
 }
 
+export interface TerminalServiceInfo {
+  readonly port: number;
+  readonly command: string;
+  readonly startedAt: string;
+  readonly running: boolean;
+  readonly listening: boolean;
+}
+
+export type TerminalServiceStart =
+  | {
+      readonly status: 'listening' | 'already-running' | 'timeout';
+      readonly port: number;
+      readonly log: string;
+    }
+  | {
+      readonly status: 'exited';
+      readonly port: number;
+      readonly code: number;
+      readonly log: string;
+    };
+
 /**
  * Contrato HTTP con `/terminal/sessions` del Executor (ADR 0016). Sin tipos
  * compartidos entre repos: esto es el contrato, no un import.
@@ -76,6 +97,70 @@ export class TerminalExecutorClient {
     },
   ): Promise<{ slug: string; url: string }> {
     return this.json('POST', `/${encodeURIComponent(id)}/expose`, input);
+  }
+
+  startService(
+    id: string,
+    input: { command: string; port: number },
+  ): Promise<TerminalServiceStart> {
+    return this.json('POST', `/${encodeURIComponent(id)}/services`, input);
+  }
+
+  listServices(id: string): Promise<readonly TerminalServiceInfo[]> {
+    return this.json('GET', `/${encodeURIComponent(id)}/services`);
+  }
+
+  async stopService(id: string, port: number): Promise<void> {
+    await this.send('DELETE', `/${encodeURIComponent(id)}/services/${port}`);
+  }
+
+  async serviceLogs(id: string, port: number): Promise<string> {
+    const result = await this.json<{ log: string }>(
+      'GET',
+      `/${encodeURIComponent(id)}/services/${port}/logs`,
+    );
+    return result.log;
+  }
+
+  /**
+   * Reenvía una petición al puerto de un servidor de la sesión. Devuelve la
+   * respuesta SIN validar el estado: un 404 o un 500 del servidor del owner es
+   * parte de lo que quiere ver. Solo los fallos del propio Executor (sesión
+   * inexistente, puerto inválido, red) salen como error.
+   */
+  async proxy(
+    id: string,
+    port: number,
+    request: {
+      method: string;
+      pathAndQuery: string;
+      headers: Readonly<Record<string, string>>;
+      body?: Buffer | undefined;
+      signal: AbortSignal;
+    },
+  ): Promise<Response> {
+    let response: Response;
+    try {
+      response = await fetch(
+        `${this.baseUrl}/${encodeURIComponent(id)}/proxy/${port}${request.pathAndQuery}`,
+        {
+          method: request.method,
+          headers: request.headers,
+          ...(request.body ? { body: new Uint8Array(request.body) } : {}),
+          signal: request.signal,
+          redirect: 'manual',
+        },
+      );
+    } catch (error) {
+      if (request.signal.aborted) throw error;
+      throw new TerminalUnavailableError(error);
+    }
+    // El Executor marca con `x-jin-proxied` lo que viene del servidor del owner;
+    // una respuesta sin la marca es un fallo del propio Executor (sesión, puerto, red).
+    if (response.headers.get('x-jin-proxied') !== '1') {
+      throw await TerminalUpstreamError.fromResponse(response);
+    }
+    return response;
   }
 
   /**

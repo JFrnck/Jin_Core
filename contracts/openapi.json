@@ -781,6 +781,641 @@
         ]
       }
     },
+    "/api/terminal/sessions/{id}/services": {
+      "post": {
+        "operationId": "TerminalController_startService",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartServiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalServiceStartDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lanza un servidor dentro de la sesión (npm run dev…) y espera a que el puerto responda. Queda en el audit.",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "get": {
+        "operationId": "TerminalController_listServices",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TerminalServiceInfoDto_Output"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Servidores en segundo plano de la sesión",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/services/{port}": {
+      "delete": {
+        "operationId": "TerminalController_stopService",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Detiene un servidor de la sesión",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/services/{port}/logs": {
+      "get": {
+        "operationId": "TerminalController_serviceLogs",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalServiceLogsDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Últimas líneas de la salida de un servidor",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/preview/{port}": {
+      "get": {
+        "operationId": "TerminalController_preview_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "post": {
+        "operationId": "TerminalController_preview_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "put": {
+        "operationId": "TerminalController_preview_put",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "delete": {
+        "operationId": "TerminalController_preview_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "patch": {
+        "operationId": "TerminalController_preview_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "options": {
+        "operationId": "TerminalController_preview_options",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "head": {
+        "operationId": "TerminalController_preview_head",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "search": {
+        "operationId": "TerminalController_preview_search",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/sessions/{id}/preview/{port}/{rest}": {
+      "get": {
+        "operationId": "TerminalController_preview_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "post": {
+        "operationId": "TerminalController_preview_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "put": {
+        "operationId": "TerminalController_preview_put",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "delete": {
+        "operationId": "TerminalController_preview_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "patch": {
+        "operationId": "TerminalController_preview_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "options": {
+        "operationId": "TerminalController_preview_options",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "head": {
+        "operationId": "TerminalController_preview_head",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "search": {
+        "operationId": "TerminalController_preview_search",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
     "/api/terminal/sessions/{id}/expose": {
       "post": {
         "operationId": "TerminalController_expose",
@@ -2343,6 +2978,95 @@
         },
         "required": [
           "written"
+        ],
+        "additionalProperties": false
+      },
+      "StartServiceDto": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1024,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "command",
+          "port"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalServiceStartDto_Output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "listening",
+              "already-running",
+              "timeout",
+              "exited"
+            ]
+          },
+          "port": {
+            "type": "number"
+          },
+          "code": {
+            "type": "number"
+          },
+          "log": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "port",
+          "log"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalServiceInfoDto_Output": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": "number"
+          },
+          "command": {
+            "type": "string"
+          },
+          "startedAt": {
+            "type": "string"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "listening": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "port",
+          "command",
+          "startedAt",
+          "running",
+          "listening"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalServiceLogsDto_Output": {
+        "type": "object",
+        "properties": {
+          "log": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "log"
         ],
         "additionalProperties": false
       },

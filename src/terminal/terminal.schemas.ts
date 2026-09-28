@@ -115,3 +115,41 @@ export const TerminalImportResultSchema = z.object({ written: z.number() });
 export class TerminalImportResultDto extends createZodDto(
   TerminalImportResultSchema,
 ) {}
+
+export const StartServiceSchema = z
+  .object({
+    /** Comando que levanta el servidor (`npm run dev -- --host 0.0.0.0 --port 5173`). */
+    command: z.string().min(1).max(TERMINAL_MAX_COMMAND_LENGTH),
+    /** Puerto donde escucha (de usuario: 1024–65535). */
+    port: z.number().int().min(1024).max(65535),
+  })
+  .strict();
+export class StartServiceDto extends createZodDto(StartServiceSchema) {}
+
+export const TerminalServiceInfoSchema = z.object({
+  port: z.number(),
+  command: z.string(),
+  startedAt: z.string(),
+  running: z.boolean(),
+  listening: z.boolean(),
+});
+export class TerminalServiceInfoDto extends createZodDto(
+  TerminalServiceInfoSchema,
+) {}
+
+export const TerminalServiceStartSchema = z.object({
+  status: z.enum(['listening', 'already-running', 'timeout', 'exited']),
+  port: z.number(),
+  /** Solo si el proceso terminó al arrancar. */
+  code: z.number().optional(),
+  /** Últimas líneas de su salida. */
+  log: z.string(),
+});
+export class TerminalServiceStartDto extends createZodDto(
+  TerminalServiceStartSchema,
+) {}
+
+export const TerminalServiceLogsSchema = z.object({ log: z.string() });
+export class TerminalServiceLogsDto extends createZodDto(
+  TerminalServiceLogsSchema,
+) {}

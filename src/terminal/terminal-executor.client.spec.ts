@@ -128,4 +128,82 @@ describe('TerminalExecutorClient', () => {
       .catch((e: unknown) => e);
     expect(error).not.toBeInstanceOf(TerminalUnavailableError);
   });
+
+  it('servidores: rutas y puerto', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(json({ log: 'ok', services: [] })),
+    );
+    const c = client();
+    await c.startService('s1', { command: 'npm run dev', port: 5173 });
+    await c.listServices('s1');
+    await c.stopService('s1', 5173);
+    await c.serviceLogs('s1', 5173);
+    const calls = fetchMock.mock.calls.map(
+      (call) =>
+        `${(call[1] as { method: string }).method} ${call[0] as string}`,
+    );
+    expect(calls).toEqual([
+      'POST http://jin-executor:3001/terminal/sessions/s1/services',
+      'GET http://jin-executor:3001/terminal/sessions/s1/services',
+      'DELETE http://jin-executor:3001/terminal/sessions/s1/services/5173',
+      'GET http://jin-executor:3001/terminal/sessions/s1/services/5173/logs',
+    ]);
+  });
+
+  describe('proxy de la vista previa', () => {
+    const request = (signal: AbortSignal) => ({
+      method: 'GET',
+      pathAndQuery: '/src/main.js?t=1',
+      headers: { accept: '*/*' },
+      signal,
+    });
+
+    it('un 404 o 500 del servidor del owner (con la marca) se devuelve tal cual: es lo que quiere ver', async () => {
+      for (const status of [404, 500]) {
+        fetchMock.mockResolvedValueOnce(
+          new Response('Cannot GET /x', {
+            status,
+            headers: { 'x-jin-proxied': '1' },
+          }),
+        );
+        const response = await client().proxy(
+          's1',
+          5173,
+          request(new AbortController().signal),
+        );
+        expect(response.status).toBe(status);
+      }
+    });
+
+    it('un fallo del propio Executor (sin la marca: sesión inexistente, puerto inválido) sale como error con su mensaje', async () => {
+      fetchMock.mockResolvedValueOnce(
+        json(
+          { statusCode: 404, message: 'No existe la sesión de terminal s1' },
+          404,
+        ),
+      );
+      const error = await client()
+        .proxy('s1', 5173, request(new AbortController().signal))
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(TerminalUpstreamError);
+      expect((error as TerminalUpstreamError).httpStatus).toBe(404);
+    });
+
+    it('arma la URL con la ruta y la query tal cual, no sigue redirecciones y pasa la señal', async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response('x', { headers: { 'x-jin-proxied': '1' } }),
+      );
+      const controller = new AbortController();
+      await client().proxy('s1', 5173, request(controller.signal));
+      const [url, init] = fetchMock.mock.calls[0] as [
+        string,
+        { redirect: string; signal: AbortSignal },
+      ];
+      expect(url).toBe(
+        'http://jin-executor:3001/terminal/sessions/s1/proxy/5173/src/main.js?t=1',
+      );
+      expect(init.redirect).toBe('manual');
+      expect(init.signal).toBe(controller.signal);
+    });
+  });
 });
