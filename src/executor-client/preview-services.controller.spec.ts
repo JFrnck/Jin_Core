@@ -3,6 +3,7 @@ import type {
   ExecutorClientService,
   PreviewServiceInfo,
 } from './executor-client.service';
+import type { OwnerPreviewPublishService } from './owner-preview-publish.service';
 import { PreviewServicesController } from './preview-services.controller';
 
 function buildController(
@@ -13,7 +14,10 @@ function buildController(
     stopPreviewService: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
-  return new PreviewServicesController(service as ExecutorClientService);
+  return new PreviewServicesController(
+    service as ExecutorClientService,
+    {} as OwnerPreviewPublishService,
+  );
 }
 
 describe('PreviewServicesController', () => {

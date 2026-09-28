@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
@@ -18,7 +19,13 @@ async function bootstrap() {
   await loadSecrets();
   const { AppModule } = await import('./app.module.js');
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Express corta el JSON en 100 KB por defecto. La app iOS publica proyectos
+  // de hasta 256 KB (`PUBLISH_MAX_TOTAL_BYTES`, ADR 0015): sin subir esto, un
+  // proyecto entre 100 y 256 KB ni siquiera llegaba al validador. El tope
+  // real lo sigue poniendo cada endpoint con Zod; este es solo el techo del parser.
+  app.useBodyParser('json', { limit: '512kb' });
 
   // Requerida por `JwtAuthGuard`/`extractWsToken` para leer la cookie
   // httpOnly `__Host-jin_session` (Fase 6.1) — sin esto `req.cookies` no
