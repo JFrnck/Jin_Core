@@ -10,9 +10,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "App"
-        ]
+        "tags": ["App"]
       }
     },
     "/health/live": {
@@ -25,9 +23,7 @@
           }
         },
         "summary": "Liveness — el proceso responde. No consulta dependencias a propósito: reiniciar el pod no arregla un Postgres caído.",
-        "tags": [
-          "health"
-        ]
+        "tags": ["health"]
       }
     },
     "/health/ready": {
@@ -50,9 +46,7 @@
           }
         },
         "summary": "Readiness — 200 si el pod puede servir, 503 si no. Postgres es dependencia dura; Redis solo degrada (fail-open, ADR 0007).",
-        "tags": [
-          "health"
-        ]
+        "tags": ["health"]
       }
     },
     "/api/audit": {
@@ -93,9 +87,7 @@
           }
         },
         "summary": "Audit log paginado, más reciente primero",
-        "tags": [
-          "audit"
-        ]
+        "tags": ["audit"]
       }
     },
     "/api/hitl/pending": {
@@ -118,9 +110,7 @@
           }
         },
         "summary": "Lista las aprobaciones pendientes (confirm/dual-confirm)",
-        "tags": [
-          "hitl"
-        ]
+        "tags": ["hitl"]
       }
     },
     "/api/hitl/{requestId}/approve": {
@@ -149,9 +139,7 @@
           }
         },
         "summary": "Aprueba una acción pendiente — ejecuta la tool real igual que /approve en Telegram",
-        "tags": [
-          "hitl"
-        ]
+        "tags": ["hitl"]
       }
     },
     "/api/hitl/{requestId}/reject": {
@@ -180,9 +168,7 @@
           }
         },
         "summary": "Rechaza una acción pendiente",
-        "tags": [
-          "hitl"
-        ]
+        "tags": ["hitl"]
       }
     },
     "/api/budget": {
@@ -202,9 +188,7 @@
           }
         },
         "summary": "Estado actual de presupuesto diario y kill switch",
-        "tags": [
-          "budget"
-        ]
+        "tags": ["budget"]
       }
     },
     "/api/budget/unpause": {
@@ -224,9 +208,7 @@
           }
         },
         "summary": "Desactiva el kill switch manualmente — mismo flujo que /unpause en Telegram",
-        "tags": [
-          "budget"
-        ]
+        "tags": ["budget"]
       }
     },
     "/metrics": {
@@ -238,9 +220,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Prometheus"
-        ]
+        "tags": ["Prometheus"]
       }
     },
     "/api/memory/recall": {
@@ -273,9 +253,7 @@
           }
         },
         "summary": "Recall de memoria extendida por similaridad semántica",
-        "tags": [
-          "memory"
-        ]
+        "tags": ["memory"]
       }
     },
     "/api/autonomy": {
@@ -295,9 +273,7 @@
           }
         },
         "summary": "Modo de autonomía vigente, caducidad y límites",
-        "tags": [
-          "autonomy"
-        ]
+        "tags": ["autonomy"]
       },
       "post": {
         "operationId": "AutonomyController_changeMode",
@@ -325,9 +301,7 @@
           }
         },
         "summary": "Cambia el modo. Volver a más restrictivo es inmediato; bajar la protección crea una aprobación dual-confirm (2 aprobaciones ≥30 s)",
-        "tags": [
-          "autonomy"
-        ]
+        "tags": ["autonomy"]
       }
     },
     "/api/orchestrator/runs": {
@@ -368,9 +342,7 @@
           }
         },
         "summary": "Runs de orquestación multi-agente, más reciente primero",
-        "tags": [
-          "orchestrator"
-        ]
+        "tags": ["orchestrator"]
       }
     },
     "/api/orchestrator/runs/{runId}": {
@@ -399,9 +371,7 @@
           }
         },
         "summary": "Detalle de un run: tickets + hilo de comentarios de cada uno (board de orquestación)",
-        "tags": [
-          "orchestrator"
-        ]
+        "tags": ["orchestrator"]
       }
     },
     "/telegram/webhook": {
@@ -427,9 +397,7 @@
           }
         },
         "summary": "Endpoint del Webhook de Telegram",
-        "tags": [
-          "telegram"
-        ]
+        "tags": ["telegram"]
       }
     },
     "/api/preview-services": {
@@ -459,9 +427,7 @@
           }
         },
         "summary": "El owner publica una app de preview sin pasar por el modelo (mismo HITL que la tool)",
-        "tags": [
-          "preview-services"
-        ]
+        "tags": ["preview-services"]
       },
       "get": {
         "operationId": "PreviewServicesController_list",
@@ -482,9 +448,7 @@
           }
         },
         "summary": "Apps de preview corriendo (jinserver.com)",
-        "tags": [
-          "preview-services"
-        ]
+        "tags": ["preview-services"]
       }
     },
     "/api/preview-services/{serviceId}": {
@@ -513,9 +477,7 @@
           }
         },
         "summary": "Detiene una preview app antes de su TTL",
-        "tags": [
-          "preview-services"
-        ]
+        "tags": ["preview-services"]
       }
     },
     "/api/terminal/sessions": {
@@ -545,9 +507,7 @@
           }
         },
         "summary": "Pide abrir una sesión de terminal. Siempre queda esperando tu aprobación (nivel confirm fijo).",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       },
       "get": {
         "operationId": "TerminalController_list",
@@ -568,9 +528,7 @@
           }
         },
         "summary": "Sesiones de terminal (con el link publicado, si hay)",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       }
     },
     "/api/terminal/sessions/{id}": {
@@ -599,9 +557,7 @@
           }
         },
         "summary": "Cierra una sesión y destruye su pod",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       }
     },
     "/api/terminal/sessions/{id}/exec": {
@@ -633,9 +589,7 @@
           }
         },
         "summary": "Ejecuta un comando en la sesión (salida en streaming NDJSON)",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       }
     },
     "/api/terminal/sessions/{id}/files": {
@@ -659,9 +613,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "enum": [
-                    "."
-                  ]
+                  "enum": ["."]
                 },
                 {
                   "type": "string",
@@ -685,9 +637,7 @@
           }
         },
         "summary": "Archivos de texto de la sesión (sin node_modules, .git ni dist), para traerlos al editor",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       },
       "put": {
         "operationId": "TerminalController_importFiles",
@@ -724,9 +674,7 @@
           }
         },
         "summary": "Copia archivos del editor al espacio de trabajo de la sesión",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       }
     },
     "/api/terminal/sessions/{id}/expose": {
@@ -765,9 +713,7 @@
           }
         },
         "summary": "Pide publicar el build de la sesión bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.",
-        "tags": [
-          "terminal"
-        ]
+        "tags": ["terminal"]
       }
     },
     "/api/auth/login": {
@@ -800,9 +746,7 @@
           }
         },
         "summary": "Login single-user con la contraseña del owner",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/api/auth/logout": {
@@ -822,9 +766,7 @@
           }
         },
         "summary": "Logout — borra la cookie del cliente. Sin blocklist: un Bearer token capturado sigue válido hasta expirar (ver ADR 0007).",
-        "tags": [
-          "auth"
-        ]
+        "tags": ["auth"]
       }
     },
     "/api/chat": {
@@ -854,9 +796,7 @@
           }
         },
         "summary": "Turno de chat contra el agente — sin persistencia de sesión server-side, el caller manda su propio historial",
-        "tags": [
-          "chat"
-        ]
+        "tags": ["chat"]
       }
     },
     "/api/relay/messages": {
@@ -886,9 +826,7 @@
           }
         },
         "summary": "Manda un mensaje (o una pregunta con opciones) del Claude de la VM al owner",
-        "tags": [
-          "relay"
-        ]
+        "tags": ["relay"]
       }
     },
     "/api/relay/inbox": {
@@ -908,9 +846,7 @@
           }
         },
         "summary": "Mensajes del owner pendientes de leer — los devuelve UNA sola vez (los marca consumidos)",
-        "tags": [
-          "relay"
-        ]
+        "tags": ["relay"]
       }
     },
     "/api/relay/messages/{id}/answer": {
@@ -939,9 +875,7 @@
           }
         },
         "summary": "Respuesta del owner a una pregunta concreta (para el modo espera)",
-        "tags": [
-          "relay"
-        ]
+        "tags": ["relay"]
       }
     },
     "/api/bridge/messages": {
@@ -974,9 +908,7 @@
           }
         },
         "summary": "Historial del puente para el dashboard (ambas direcciones) — lectura pura, no consume la cola que lee el CLI de la VM",
-        "tags": [
-          "relay"
-        ]
+        "tags": ["relay"]
       }
     },
     "/api/bridge/reply": {
@@ -1006,9 +938,7 @@
           }
         },
         "summary": "El owner responde a Claude desde el dashboard — mismo rol que una respuesta por Telegram",
-        "tags": [
-          "relay"
-        ]
+        "tags": ["relay"]
       }
     },
     "/api/push/status": {
@@ -1028,9 +958,7 @@
           }
         },
         "summary": "¿Está encendido push (claves APNs cargadas)?",
-        "tags": [
-          "push"
-        ]
+        "tags": ["push"]
       }
     },
     "/api/push/device": {
@@ -1060,9 +988,7 @@
           }
         },
         "summary": "Registra (o actualiza) este iPhone y sus preferencias",
-        "tags": [
-          "push"
-        ]
+        "tags": ["push"]
       }
     },
     "/api/push/device/{token}": {
@@ -1091,9 +1017,7 @@
           }
         },
         "summary": "Deja de avisar a este iPhone (cerrar sesión)",
-        "tags": [
-          "push"
-        ]
+        "tags": ["push"]
       }
     },
     "/api/push/activity": {
@@ -1123,9 +1047,7 @@
           }
         },
         "summary": "Token de una Live Activity (update) o para iniciarlas por push (start)",
-        "tags": [
-          "push"
-        ]
+        "tags": ["push"]
       }
     },
     "/api/push/test": {
@@ -1145,9 +1067,7 @@
           }
         },
         "summary": "Manda un aviso de prueba a los iPhones registrados",
-        "tags": [
-          "push"
-        ]
+        "tags": ["push"]
       }
     }
   },
@@ -1166,32 +1086,18 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "ok",
-              "degraded",
-              "error"
-            ]
+            "enum": ["ok", "degraded", "error"]
           },
           "postgres": {
             "type": "string",
-            "enum": [
-              "up",
-              "down"
-            ]
+            "enum": ["up", "down"]
           },
           "redis": {
             "type": "string",
-            "enum": [
-              "up",
-              "down"
-            ]
+            "enum": ["up", "down"]
           }
         },
-        "required": [
-          "status",
-          "postgres",
-          "redis"
-        ],
+        "required": ["status", "postgres", "redis"],
         "additionalProperties": false
       },
       "ListRecentResponseDto": {
@@ -1270,10 +1176,7 @@
             "nullable": true
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required": ["items", "nextCursor"]
       },
       "PendingApprovalDto": {
         "type": "object",
@@ -1366,14 +1269,10 @@
             "properties": {
               "outcome": {
                 "type": "string",
-                "enum": [
-                  "awaiting-second"
-                ]
+                "enum": ["awaiting-second"]
               }
             },
-            "required": [
-              "outcome"
-            ],
+            "required": ["outcome"],
             "additionalProperties": false
           },
           {
@@ -1381,20 +1280,14 @@
             "properties": {
               "outcome": {
                 "type": "string",
-                "enum": [
-                  "resolved"
-                ]
+                "enum": ["resolved"]
               },
               "toolName": {
                 "type": "string"
               },
               "result": {}
             },
-            "required": [
-              "outcome",
-              "toolName",
-              "result"
-            ],
+            "required": ["outcome", "toolName", "result"],
             "additionalProperties": false
           }
         ]
@@ -1404,14 +1297,10 @@
         "properties": {
           "ok": {
             "type": "boolean",
-            "enum": [
-              true
-            ]
+            "enum": [true]
           }
         },
-        "required": [
-          "ok"
-        ],
+        "required": ["ok"],
         "additionalProperties": false
       },
       "BudgetStatusDto_Output": {
@@ -1492,12 +1381,7 @@
             "properties": {
               "tipo": {
                 "type": "string",
-                "enum": [
-                  "hecho",
-                  "preferencia",
-                  "leccion",
-                  "episodio"
-                ]
+                "enum": ["hecho", "preferencia", "leccion", "episodio"]
               },
               "fuente": {
                 "type": "string"
@@ -1508,9 +1392,7 @@
             }
           }
         },
-        "required": [
-          "query"
-        ]
+        "required": ["query"]
       },
       "MemoryEntryDto_Output": {
         "type": "object",
@@ -1523,12 +1405,7 @@
           },
           "tipo": {
             "type": "string",
-            "enum": [
-              "hecho",
-              "preferencia",
-              "leccion",
-              "episodio"
-            ]
+            "enum": ["hecho", "preferencia", "leccion", "episodio"]
           },
           "fuente": {
             "type": "string"
@@ -1561,11 +1438,7 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": [
-              "supervised",
-              "semi-auto",
-              "auto"
-            ]
+            "enum": ["supervised", "semi-auto", "auto"]
           },
           "expiresAt": {
             "type": "string",
@@ -1591,10 +1464,7 @@
                     "type": "number"
                   }
                 },
-                "required": [
-                  "defaultHours",
-                  "maxHours"
-                ],
+                "required": ["defaultHours", "maxHours"],
                 "additionalProperties": false
               },
               "auto": {
@@ -1607,21 +1477,14 @@
                     "type": "number"
                   }
                 },
-                "required": [
-                  "defaultHours",
-                  "maxHours"
-                ],
+                "required": ["defaultHours", "maxHours"],
                 "additionalProperties": false
               },
               "maxRelaxedActionsPerHour": {
                 "type": "number"
               }
             },
-            "required": [
-              "semiAuto",
-              "auto",
-              "maxRelaxedActionsPerHour"
-            ],
+            "required": ["semiAuto", "auto", "maxRelaxedActionsPerHour"],
             "additionalProperties": false
           },
           "guardedInSemiAuto": {
@@ -1646,11 +1509,7 @@
         "properties": {
           "mode": {
             "type": "string",
-            "enum": [
-              "supervised",
-              "semi-auto",
-              "auto"
-            ]
+            "enum": ["supervised", "semi-auto", "auto"]
           },
           "hours": {
             "type": "integer",
@@ -1659,9 +1518,7 @@
             "minimum": 0
           }
         },
-        "required": [
-          "mode"
-        ]
+        "required": ["mode"]
       },
       "ChangeModeResult_Output": {
         "oneOf": [
@@ -1670,28 +1527,18 @@
             "properties": {
               "status": {
                 "type": "string",
-                "enum": [
-                  "applied"
-                ]
+                "enum": ["applied"]
               },
               "mode": {
                 "type": "string",
-                "enum": [
-                  "supervised",
-                  "semi-auto",
-                  "auto"
-                ]
+                "enum": ["supervised", "semi-auto", "auto"]
               },
               "expiresAt": {
                 "type": "string",
                 "nullable": true
               }
             },
-            "required": [
-              "status",
-              "mode",
-              "expiresAt"
-            ],
+            "required": ["status", "mode", "expiresAt"],
             "additionalProperties": false
           },
           {
@@ -1699,31 +1546,20 @@
             "properties": {
               "status": {
                 "type": "string",
-                "enum": [
-                  "pending-approval"
-                ]
+                "enum": ["pending-approval"]
               },
               "requestId": {
                 "type": "string"
               },
               "mode": {
                 "type": "string",
-                "enum": [
-                  "supervised",
-                  "semi-auto",
-                  "auto"
-                ]
+                "enum": ["supervised", "semi-auto", "auto"]
               },
               "hours": {
                 "type": "number"
               }
             },
-            "required": [
-              "status",
-              "requestId",
-              "mode",
-              "hours"
-            ],
+            "required": ["status", "requestId", "mode", "hours"],
             "additionalProperties": false
           }
         ]
@@ -1744,13 +1580,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "enum": [
-                    "running",
-                    "blocked",
-                    "done",
-                    "failed",
-                    "killed"
-                  ]
+                  "enum": ["running", "blocked", "done", "failed", "killed"]
                 },
                 "parentSessionId": {
                   "type": "string"
@@ -1787,10 +1617,7 @@
             "nullable": true
           }
         },
-        "required": [
-          "items",
-          "nextCursor"
-        ]
+        "required": ["items", "nextCursor"]
       },
       "RunDetailResponseDto": {
         "type": "object",
@@ -1806,13 +1633,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "running",
-                  "blocked",
-                  "done",
-                  "failed",
-                  "killed"
-                ]
+                "enum": ["running", "blocked", "done", "failed", "killed"]
               },
               "parentSessionId": {
                 "type": "string"
@@ -1900,11 +1721,7 @@
                       },
                       "authorType": {
                         "type": "string",
-                        "enum": [
-                          "orchestrator",
-                          "sub_agent",
-                          "owner"
-                        ]
+                        "enum": ["orchestrator", "sub_agent", "owner"]
                       },
                       "authorId": {
                         "type": "string",
@@ -1912,12 +1729,7 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": [
-                          "note",
-                          "result",
-                          "conflict",
-                          "resolution"
-                        ]
+                        "enum": ["note", "result", "conflict", "resolution"]
                       },
                       "body": {
                         "type": "string"
@@ -1948,10 +1760,7 @@
             }
           }
         },
-        "required": [
-          "run",
-          "tickets"
-        ]
+        "required": ["run", "tickets"]
       },
       "PublishPreviewDto": {
         "type": "object",
@@ -1964,9 +1773,7 @@
           },
           "template": {
             "type": "string",
-            "enum": [
-              "static"
-            ]
+            "enum": ["static"]
           },
           "command": {
             "minItems": 1,
@@ -1993,10 +1800,7 @@
             "maxLength": 40
           }
         },
-        "required": [
-          "files",
-          "ttlSeconds"
-        ],
+        "required": ["files", "ttlSeconds"],
         "additionalProperties": false
       },
       "PublishPreviewResultDto_Output": {
@@ -2004,10 +1808,7 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "pending-approval",
-              "started"
-            ]
+            "enum": ["pending-approval", "started"]
           },
           "requestId": {
             "type": "string"
@@ -2026,29 +1827,17 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "running",
-                  "expired"
-                ]
+                "enum": ["running", "expired"]
               },
               "expiresAt": {
                 "type": "string"
               }
             },
-            "required": [
-              "id",
-              "slug",
-              "url",
-              "status",
-              "expiresAt"
-            ],
+            "required": ["id", "slug", "url", "status", "expiresAt"],
             "additionalProperties": false
           }
         },
-        "required": [
-          "status",
-          "requestId"
-        ],
+        "required": ["status", "requestId"],
         "additionalProperties": false
       },
       "PreviewServiceDto_Output": {
@@ -2065,22 +1854,13 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "running",
-              "expired"
-            ]
+            "enum": ["running", "expired"]
           },
           "expiresAt": {
             "type": "string"
           }
         },
-        "required": [
-          "id",
-          "slug",
-          "url",
-          "status",
-          "expiresAt"
-        ],
+        "required": ["id", "slug", "url", "status", "expiresAt"],
         "additionalProperties": false
       },
       "StartTerminalDto": {
@@ -2099,9 +1879,7 @@
             "maximum": 14400
           }
         },
-        "required": [
-          "ttlSeconds"
-        ],
+        "required": ["ttlSeconds"],
         "additionalProperties": false
       },
       "TerminalPendingDto_Output": {
@@ -2109,18 +1887,13 @@
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "pending-approval"
-            ]
+            "enum": ["pending-approval"]
           },
           "requestId": {
             "type": "string"
           }
         },
-        "required": [
-          "status",
-          "requestId"
-        ],
+        "required": ["status", "requestId"],
         "additionalProperties": false
       },
       "TerminalSessionDto_Output": {
@@ -2131,12 +1904,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "starting",
-              "running",
-              "expired",
-              "failed"
-            ]
+            "enum": ["starting", "running", "expired", "failed"]
           },
           "expiresAt": {
             "type": "string"
@@ -2151,20 +1919,12 @@
                 "type": "string"
               }
             },
-            "required": [
-              "slug",
-              "url"
-            ],
+            "required": ["slug", "url"],
             "additionalProperties": false,
             "nullable": true
           }
         },
-        "required": [
-          "id",
-          "status",
-          "expiresAt",
-          "exposure"
-        ],
+        "required": ["id", "status", "expiresAt", "exposure"],
         "additionalProperties": false
       },
       "ExecTerminalDto": {
@@ -2181,9 +1941,7 @@
             "maximum": 600
           }
         },
-        "required": [
-          "command"
-        ],
+        "required": ["command"],
         "additionalProperties": false
       },
       "TerminalExportDto_Output": {
@@ -2207,18 +1965,12 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "path",
-                "reason"
-              ],
+              "required": ["path", "reason"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "files",
-          "skipped"
-        ],
+        "required": ["files", "skipped"],
         "additionalProperties": false
       },
       "ImportTerminalDto": {
@@ -2231,9 +1983,7 @@
             }
           }
         },
-        "required": [
-          "files"
-        ],
+        "required": ["files"],
         "additionalProperties": false
       },
       "TerminalImportResultDto_Output": {
@@ -2243,9 +1993,7 @@
             "type": "number"
           }
         },
-        "required": [
-          "written"
-        ],
+        "required": ["written"],
         "additionalProperties": false
       },
       "ExposeTerminalDto": {
@@ -2273,9 +2021,7 @@
             "minLength": 1
           }
         },
-        "required": [
-          "password"
-        ]
+        "required": ["password"]
       },
       "LoginResultDto_Output": {
         "type": "object",
@@ -2284,9 +2030,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "accessToken"
-        ],
+        "required": ["accessToken"],
         "additionalProperties": false
       },
       "ChatDto": {
@@ -2307,10 +2051,7 @@
               "properties": {
                 "role": {
                   "type": "string",
-                  "enum": [
-                    "user",
-                    "assistant"
-                  ]
+                  "enum": ["user", "assistant"]
                 },
                 "content": {
                   "anyOf": [
@@ -2326,27 +2067,20 @@
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "text"
-                                ]
+                                "enum": ["text"]
                               },
                               "text": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "type",
-                              "text"
-                            ]
+                            "required": ["type", "text"]
                           },
                           {
                             "type": "object",
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "tool_use"
-                                ]
+                                "enum": ["tool_use"]
                               },
                               "toolCall": {
                                 "type": "object",
@@ -2359,26 +2093,17 @@
                                   },
                                   "input": {}
                                 },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "input"
-                                ]
+                                "required": ["id", "name", "input"]
                               }
                             },
-                            "required": [
-                              "type",
-                              "toolCall"
-                            ]
+                            "required": ["type", "toolCall"]
                           },
                           {
                             "type": "object",
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "tool_result"
-                                ]
+                                "enum": ["tool_result"]
                               },
                               "toolCallId": {
                                 "type": "string"
@@ -2388,11 +2113,7 @@
                                 "type": "boolean"
                               }
                             },
-                            "required": [
-                              "type",
-                              "toolCallId",
-                              "output"
-                            ]
+                            "required": ["type", "toolCallId", "output"]
                           }
                         ]
                       }
@@ -2400,20 +2121,14 @@
                   ]
                 }
               },
-              "required": [
-                "role",
-                "content"
-              ]
+              "required": ["role", "content"]
             }
           },
           "notifyWhenDone": {
             "type": "boolean"
           }
         },
-        "required": [
-          "sessionId",
-          "objective"
-        ]
+        "required": ["sessionId", "objective"]
       },
       "AgentTurnResultDto_Output": {
         "type": "object",
@@ -2434,28 +2149,18 @@
                     },
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "pending",
-                        "in-progress",
-                        "done",
-                        "failed"
-                      ]
+                      "enum": ["pending", "in-progress", "done", "failed"]
                     },
                     "note": {
                       "type": "string"
                     }
                   },
-                  "required": [
-                    "description",
-                    "status"
-                  ],
+                  "required": ["description", "status"],
                   "additionalProperties": false
                 }
               }
             },
-            "required": [
-              "steps"
-            ],
+            "required": ["steps"],
             "additionalProperties": false
           },
           "pendingApprovals": {
@@ -2470,10 +2175,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "requestId",
-                "toolName"
-              ],
+              "required": ["requestId", "toolName"],
               "additionalProperties": false
             }
           },
@@ -2487,10 +2189,7 @@
               "properties": {
                 "role": {
                   "type": "string",
-                  "enum": [
-                    "user",
-                    "assistant"
-                  ]
+                  "enum": ["user", "assistant"]
                 },
                 "content": {
                   "anyOf": [
@@ -2506,18 +2205,13 @@
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "text"
-                                ]
+                                "enum": ["text"]
                               },
                               "text": {
                                 "type": "string"
                               }
                             },
-                            "required": [
-                              "type",
-                              "text"
-                            ],
+                            "required": ["type", "text"],
                             "additionalProperties": false
                           },
                           {
@@ -2525,9 +2219,7 @@
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "tool_use"
-                                ]
+                                "enum": ["tool_use"]
                               },
                               "toolCall": {
                                 "type": "object",
@@ -2540,18 +2232,11 @@
                                   },
                                   "input": {}
                                 },
-                                "required": [
-                                  "id",
-                                  "name",
-                                  "input"
-                                ],
+                                "required": ["id", "name", "input"],
                                 "additionalProperties": false
                               }
                             },
-                            "required": [
-                              "type",
-                              "toolCall"
-                            ],
+                            "required": ["type", "toolCall"],
                             "additionalProperties": false
                           },
                           {
@@ -2559,9 +2244,7 @@
                             "properties": {
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "tool_result"
-                                ]
+                                "enum": ["tool_result"]
                               },
                               "toolCallId": {
                                 "type": "string"
@@ -2571,11 +2254,7 @@
                                 "type": "boolean"
                               }
                             },
-                            "required": [
-                              "type",
-                              "toolCallId",
-                              "output"
-                            ],
+                            "required": ["type", "toolCallId", "output"],
                             "additionalProperties": false
                           }
                         ]
@@ -2584,10 +2263,7 @@
                   ]
                 }
               },
-              "required": [
-                "role",
-                "content"
-              ],
+              "required": ["role", "content"],
               "additionalProperties": false
             }
           }
@@ -2619,9 +2295,7 @@
             }
           }
         },
-        "required": [
-          "body"
-        ]
+        "required": ["body"]
       },
       "RelayMessageCreatedDto_Output": {
         "type": "object",
@@ -2630,9 +2304,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "additionalProperties": false
       },
       "RelayInboxDto_Output": {
@@ -2656,18 +2328,12 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "body",
-                "createdAt"
-              ],
+              "required": ["id", "body", "createdAt"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "messages"
-        ],
+        "required": ["messages"],
         "additionalProperties": false
       },
       "RelayAnswerDto_Output": {
@@ -2683,9 +2349,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "answered"
-        ],
+        "required": ["answered"],
         "additionalProperties": false
       },
       "RelayHistoryDto_Output": {
@@ -2701,10 +2365,7 @@
                 },
                 "direction": {
                   "type": "string",
-                  "enum": [
-                    "in",
-                    "out"
-                  ]
+                  "enum": ["in", "out"]
                 },
                 "body": {
                   "type": "string"
@@ -2725,20 +2386,12 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "direction",
-                "body",
-                "bodyHtml",
-                "createdAt"
-              ],
+              "required": ["id", "direction", "body", "bodyHtml", "createdAt"],
               "additionalProperties": false
             }
           }
         },
-        "required": [
-          "messages"
-        ],
+        "required": ["messages"],
         "additionalProperties": false
       },
       "RelayReplyDto": {
@@ -2755,9 +2408,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           }
         },
-        "required": [
-          "body"
-        ]
+        "required": ["body"]
       },
       "RelayReplyCreatedDto_Output": {
         "type": "object",
@@ -2766,9 +2417,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "additionalProperties": false
       },
       "PushStatusDto_Output": {
@@ -2778,9 +2427,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "enabled"
-        ],
+        "required": ["enabled"],
         "additionalProperties": false
       },
       "RegisterDeviceDto": {
@@ -2792,10 +2439,7 @@
           },
           "environment": {
             "type": "string",
-            "enum": [
-              "sandbox",
-              "production"
-            ]
+            "enum": ["sandbox", "production"]
           },
           "preferences": {
             "default": {},
@@ -2805,20 +2449,14 @@
             }
           }
         },
-        "required": [
-          "token",
-          "environment"
-        ]
+        "required": ["token", "environment"]
       },
       "RegisterActivityTokenDto": {
         "type": "object",
         "properties": {
           "purpose": {
             "type": "string",
-            "enum": [
-              "update",
-              "start"
-            ]
+            "enum": ["update", "start"]
           },
           "token": {
             "type": "string",
@@ -2826,10 +2464,7 @@
           },
           "environment": {
             "type": "string",
-            "enum": [
-              "sandbox",
-              "production"
-            ]
+            "enum": ["sandbox", "production"]
           },
           "kind": {
             "type": "string",
@@ -2842,11 +2477,7 @@
             "maxLength": 100
           }
         },
-        "required": [
-          "purpose",
-          "token",
-          "environment"
-        ]
+        "required": ["purpose", "token", "environment"]
       },
       "PushTestResultDto_Output": {
         "type": "object",
@@ -2865,11 +2496,7 @@
             "maximum": 9007199254740991
           }
         },
-        "required": [
-          "enabled",
-          "sent",
-          "failed"
-        ],
+        "required": ["enabled", "sent", "failed"],
         "additionalProperties": false
       }
     }

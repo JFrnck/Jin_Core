@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+} from 'vitest';
 import type { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.schema';
 import { TerminalExecutorClient } from './terminal-executor.client';
@@ -22,10 +30,10 @@ function json(body: unknown, status = 200): Response {
 }
 
 describe('TerminalExecutorClient', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: Mock<typeof fetch>;
 
   beforeEach(() => {
-    fetchMock = vi.fn();
+    fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetchMock);
   });
   afterEach(() => {
