@@ -46,6 +46,22 @@ export class JinErrorFilter implements ExceptionFilter {
       return;
     }
 
+    // Errores 4xx del parser de Express (body-parser / http-errors): cuerpo
+    // demasiado grande (413), JSON mal formado (400)... Traen `status` y
+    // `expose: true`. Sin esto salían como 500 y parecía un fallo del servidor.
+    const parserStatus = exposedClientStatus(exception);
+    if (parserStatus !== null) {
+      response.status(parserStatus).json({
+        statusCode: parserStatus,
+        code: parserStatus === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST',
+        message:
+          parserStatus === 413
+            ? 'La solicitud es demasiado grande.'
+            : 'La solicitud no es válida.',
+      });
+      return;
+    }
+
     this.logger.error(
       exception instanceof Error ? exception.stack : String(exception),
     );
@@ -55,4 +71,19 @@ export class JinErrorFilter implements ExceptionFilter {
       message: 'Error interno del servidor.',
     });
   }
+}
+
+/** `status` 4xx de un error de http-errors con `expose: true`, o null. */
+function exposedClientStatus(exception: unknown): number | null {
+  if (typeof exception !== 'object' || exception === null) return null;
+  const { status, expose } = exception as {
+    status?: unknown;
+    expose?: unknown;
+  };
+  return expose === true &&
+    typeof status === 'number' &&
+    status >= 400 &&
+    status < 500
+    ? status
+    : null;
 }

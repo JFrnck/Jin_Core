@@ -22,11 +22,11 @@ export const STATIC_SERVER_PATH = '.jin/static-server.mjs';
 /** Input tal como lo manda el modelo (command/port opcionales con plantilla). */
 export interface PreviewServiceToolInput {
   readonly files: Readonly<Record<string, string>>;
-  readonly template?: string;
-  readonly command?: readonly string[];
-  readonly port?: number;
+  readonly template?: string | undefined;
+  readonly command?: readonly string[] | undefined;
+  readonly port?: number | undefined;
   readonly ttlSeconds: number;
-  readonly slugHint?: string;
+  readonly slugHint?: string | undefined;
 }
 
 export class PreviewTemplateInputError extends Error {

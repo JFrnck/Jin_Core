@@ -66,4 +66,32 @@ describe('JinErrorFilter', () => {
 
     expect(status).toHaveBeenCalledWith(500);
   });
+
+  it('errores 4xx del parser de Express (413, JSON inválido) responden 4xx, no 500', () => {
+    const filter = new JinErrorFilter();
+    const tooLarge = Object.assign(new Error('request entity too large'), {
+      status: 413,
+      expose: true,
+    });
+    const badJson = Object.assign(new SyntaxError('Unexpected token'), {
+      status: 400,
+      expose: true,
+    });
+    const internal = Object.assign(new Error('boom'), {
+      status: 500,
+      expose: false,
+    });
+
+    const a = buildHost();
+    filter.catch(tooLarge, a.host);
+    expect(a.status).toHaveBeenCalledWith(413);
+
+    const b = buildHost();
+    filter.catch(badJson, b.host);
+    expect(b.status).toHaveBeenCalledWith(400);
+
+    const c = buildHost();
+    filter.catch(internal, c.host);
+    expect(c.status).toHaveBeenCalledWith(500);
+  });
 });

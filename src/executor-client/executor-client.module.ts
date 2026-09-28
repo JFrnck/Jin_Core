@@ -1,5 +1,7 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module';
 import { HitlModule } from '../hitl/hitl.module';
+import { HitlPolicyModule } from '../hitl-policy/hitl-policy.module';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import {
   ExecutorClientService,
@@ -9,12 +11,13 @@ import {
   expandPreviewTemplate,
   type PreviewServiceToolInput,
 } from './preview-template.logic';
+import { OwnerPreviewPublishService } from './owner-preview-publish.service';
 import { PreviewServicesController } from './preview-services.controller';
 
 @Module({
-  imports: [HitlModule],
+  imports: [HitlModule, HitlPolicyModule, AuditModule],
   controllers: [PreviewServicesController],
-  providers: [ExecutorClientService],
+  providers: [ExecutorClientService, OwnerPreviewPublishService],
   exports: [ExecutorClientService],
 })
 export class ExecutorClientModule implements OnModuleInit {

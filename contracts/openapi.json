@@ -433,6 +433,36 @@
       }
     },
     "/api/preview-services": {
+      "post": {
+        "operationId": "PreviewServicesController_publish",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishPreviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishPreviewResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "El owner publica una app de preview sin pasar por el modelo (mismo HITL que la tool)",
+        "tags": [
+          "preview-services"
+        ]
+      },
       "get": {
         "operationId": "PreviewServicesController_list",
         "parameters": [],
@@ -1670,6 +1700,104 @@
           "run",
           "tickets"
         ]
+      },
+      "PublishPreviewDto": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "template": {
+            "type": "string",
+            "enum": [
+              "static"
+            ]
+          },
+          "command": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "port": {
+            "type": "integer",
+            "exclusiveMinimum": true,
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "minimum": 60,
+            "maximum": 86400
+          },
+          "slugHint": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "files",
+          "ttlSeconds"
+        ],
+        "additionalProperties": false
+      },
+      "PublishPreviewResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending-approval",
+              "started"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "service": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "running",
+                  "expired"
+                ]
+              },
+              "expiresAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "url",
+              "status",
+              "expiresAt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "status",
+          "requestId"
+        ],
+        "additionalProperties": false
       },
       "PreviewServiceDto_Output": {
         "type": "object",
