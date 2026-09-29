@@ -25,3 +25,53 @@ const NO_SAMPLING_PREFIXES: readonly string[] = [
 export function anthropicModelAcceptsSampling(modelId: string): boolean {
   return !NO_SAMPLING_PREFIXES.some((prefix) => modelId.startsWith(prefix));
 }
+
+/**
+ * Fragmento de `messages.create()` para el "esfuerzo" (2026-09-28,
+ * preferencia de modelo del owner) — vendor-agnóstico en el tipo
+ * (`ModelEffort`), específico acá en cómo se traduce.
+ *
+ * `undefined` (el caller no pidió un esfuerzo): no se manda nada, el
+ * modelo se comporta con su default de siempre.
+ *
+ * La misma generación que no acepta `temperature` (`NO_SAMPLING_PREFIXES`)
+ * es la que tiene "adaptive thinking": `{type:'disabled'}` apaga el
+ * pensamiento (aceptado en Sonnet 5 y Opus 4.7/4.8, la única generación que
+ * este roster usa hoy — Opus 5.5 en cambio lo rechaza siempre, pero no está
+ * en `config/models.yaml`); `{type:'adaptive'}` + `output_config.effort` lo
+ * prende con la profundidad pedida.
+ *
+ * La generación anterior (Haiku 4.5) no tiene adaptive thinking: usa
+ * `budget_tokens` clásico, que tiene que ser < `max_tokens` (mínimo 1024,
+ * BLUEPRINT del SDK) — se dimensiona contra el `maxOutputTokens` real de la
+ * request para no violar esa cota, y si no entra con margen, se omite en
+ * vez de mandar un valor inválido.
+ */
+type AnthropicEffort = 'low' | 'medium' | 'high';
+
+export function anthropicThinkingParams(
+  modelId: string,
+  effort: AnthropicEffort | undefined,
+  maxOutputTokens: number,
+):
+  | { thinking: { type: 'disabled' } }
+  | {
+      thinking: { type: 'adaptive' };
+      output_config: { effort: AnthropicEffort };
+    }
+  | { thinking: { type: 'enabled'; budget_tokens: number } }
+  | Record<string, never> {
+  if (effort === undefined) return {};
+
+  if (!anthropicModelAcceptsSampling(modelId)) {
+    if (effort === 'low') return { thinking: { type: 'disabled' } };
+    return { thinking: { type: 'adaptive' }, output_config: { effort } };
+  }
+
+  // Haiku 4.5 y anteriores: sin adaptive thinking.
+  if (effort === 'low') return {};
+  const desiredBudget = effort === 'high' ? 8192 : 2048;
+  const budgetTokens = Math.min(desiredBudget, maxOutputTokens - 512);
+  if (budgetTokens < 1024) return {};
+  return { thinking: { type: 'enabled', budget_tokens: budgetTokens } };
+}

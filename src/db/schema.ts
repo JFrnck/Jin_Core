@@ -414,6 +414,28 @@ export const autonomyModeState = pgTable('autonomy_mode_state', {
 export type AutonomyModeStateRow = typeof autonomyModeState.$inferSelect;
 
 /**
+ * Fila única (2026-09-28, preferencia de modelo del owner): qué
+ * vendor/modelo/esfuerzo usa `chat_conversational` en vez del `primary` de
+ * `config/models.yaml`. Mismo patrón singleton que `autonomy_mode_state`
+ * (id fijo, se lee/actualiza la única fila que existe). `null` en
+ * vendor/model/effort significa "sin preferencia": usar el default de
+ * siempre. Nunca la toca el LLM — solo `POST /api/model-provider/chat-preference`,
+ * autenticado, igual que `POST /api/autonomy`.
+ */
+export const chatModelPreference = pgTable('chat_model_preference', {
+  id: integer('id').primaryKey(),
+  vendor: text('vendor'), // 'anthropic' | 'google' | 'openai' | null
+  modelId: text('model_id'),
+  effort: text('effort'), // 'low' | 'medium' | 'high' | null
+  setBy: text('set_by').notNull().default('system:default'),
+  changedAt: timestamp('changed_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ChatModelPreferenceRow = typeof chatModelPreference.$inferSelect;
+
+/**
  * Fase 9.4: una fila por corrida del Shadowing Académico (cron 00:00).
  * Se guarda TAMBIÉN la corrida fallida (`status = 'failed'` + `error`): la
  * alerta de las 06:00 reutiliza el resumen en vez de recalcularlo (cero

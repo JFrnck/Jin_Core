@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { load } from 'js-yaml';
 import { z } from 'zod';
 import type {
+  ChatModelOption,
   ModelPrice,
   ModelPrices,
   ModelProfileConfig,
@@ -133,4 +134,48 @@ export function loadModelPrices(filePath: string): ModelPrices {
   const fileContents = readFileSync(filePath, 'utf-8');
   const raw = load(fileContents);
   return parseModelPrices(raw);
+}
+
+// Catálogo curado de opciones para "chat_conversational" (2026-09-28,
+// preferencia de modelo del owner) — separado de `profiles`/`model_prices`
+// por el mismo motivo que esos dos están separados entre sí: ciclo de vida
+// y consumidor propio (ChatModelPreferenceService, no el router ni budget).
+const ChatOptionYamlSchema = z.object({
+  vendor: z.enum(['anthropic', 'google', 'openai']),
+  model: z.string().min(1),
+  label: z.string().min(1),
+  supports_effort: z.boolean(),
+});
+
+const ChatOptionsYamlSchema = z.object({
+  chat_options: z.array(ChatOptionYamlSchema).min(1),
+});
+
+function toChatModelOption(
+  raw: z.infer<typeof ChatOptionYamlSchema>,
+): ChatModelOption {
+  return {
+    vendor: raw.vendor,
+    modelId: raw.model,
+    label: raw.label,
+    supportsEffort: raw.supports_effort,
+  };
+}
+
+/** Fail-fast (AGENTS.md 8.4), mismo criterio que los otros parsers de este archivo. */
+export function parseChatOptions(raw: unknown): readonly ChatModelOption[] {
+  const result = ChatOptionsYamlSchema.safeParse(raw);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
+      .join('\n');
+    throw new Error(`config/models.yaml (chat_options) inválido:\n${issues}`);
+  }
+  return result.data.chat_options.map(toChatModelOption);
+}
+
+export function loadChatOptions(filePath: string): readonly ChatModelOption[] {
+  const fileContents = readFileSync(filePath, 'utf-8');
+  const raw = load(fileContents);
+  return parseChatOptions(raw);
 }

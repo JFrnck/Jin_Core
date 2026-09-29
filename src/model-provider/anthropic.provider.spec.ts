@@ -289,6 +289,37 @@ describe('AnthropicProvider.complete', () => {
     expect(result.content).toBe('');
   });
 
+  // Regresión de cableado (2026-09-28, preferencia de modelo del owner):
+  // anthropicThinkingParams() ya tiene sus propios tests exhaustivos en
+  // sampling.spec.ts — este solo prueba que buildCreateParams() de verdad
+  // la usa (no queda una función pura sin conectar a la llamada real).
+  it('effort: low apaga el pensamiento; sin effort no manda thinking en absoluto', async () => {
+    createMock.mockResolvedValue({
+      model: 'claude-sonnet-5',
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      stop_reason: 'end_turn',
+    });
+
+    await new AnthropicProvider(fakeConfigService).complete('claude-sonnet-5', {
+      messages: [{ role: 'user', content: 'hola' }],
+      maxOutputTokens: 100,
+      temperature: 0.2,
+      effort: 'low',
+    });
+    expect(createMock.mock.calls[0]?.[0]).toHaveProperty('thinking', {
+      type: 'disabled',
+    });
+
+    createMock.mockClear();
+    await new AnthropicProvider(fakeConfigService).complete('claude-sonnet-5', {
+      messages: [{ role: 'user', content: 'hola' }],
+      maxOutputTokens: 100,
+      temperature: 0.2,
+    });
+    expect(createMock.mock.calls[0]?.[0]).not.toHaveProperty('thinking');
+  });
+
   it('incluye system solo cuando systemPrompt está definido', async () => {
     createMock.mockResolvedValue({
       model: 'claude-sonnet-5',

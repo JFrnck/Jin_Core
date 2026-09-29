@@ -195,6 +195,78 @@
         ]
       }
     },
+    "/api/model-provider/chat-preference": {
+      "get": {
+        "operationId": "ChatModelPreferenceController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatModelStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Catálogo de modelos elegibles y la preferencia vigente para el chat",
+        "tags": [
+          "model-provider"
+        ]
+      },
+      "post": {
+        "operationId": "ChatModelPreferenceController_setPreference",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPreferenceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatModelStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Fija el vendor/modelo/esfuerzo del chat. El mismo modelo decide qué tools correr en el turno (crear pods, terminal) — no es solo \"cómo contesta\".",
+        "tags": [
+          "model-provider"
+        ]
+      },
+      "delete": {
+        "operationId": "ChatModelPreferenceController_clearPreference",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatModelStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Borra la preferencia: el chat vuelve al modelo default de config/models.yaml",
+        "tags": [
+          "model-provider"
+        ]
+      }
+    },
     "/api/budget": {
       "get": {
         "operationId": "BudgetController_getStatus",
@@ -2100,6 +2172,120 @@
           "ok"
         ],
         "additionalProperties": false
+      },
+      "ChatModelStatusDto_Output": {
+        "type": "object",
+        "properties": {
+          "catalog": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "vendor": {
+                  "type": "string",
+                  "enum": [
+                    "anthropic",
+                    "google",
+                    "openai"
+                  ]
+                },
+                "modelId": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "supportsEffort": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "vendor",
+                "modelId",
+                "label",
+                "supportsEffort"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "preference": {
+            "type": "object",
+            "properties": {
+              "vendor": {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "google",
+                  "openai"
+                ]
+              },
+              "modelId": {
+                "type": "string"
+              },
+              "effort": {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  null
+                ],
+                "nullable": true
+              },
+              "setBy": {
+                "type": "string"
+              },
+              "changedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "vendor",
+              "modelId",
+              "effort",
+              "setBy",
+              "changedAt"
+            ],
+            "additionalProperties": false,
+            "nullable": true
+          }
+        },
+        "required": [
+          "catalog",
+          "preference"
+        ],
+        "additionalProperties": false
+      },
+      "SetPreferenceDto": {
+        "type": "object",
+        "properties": {
+          "vendor": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "google",
+              "openai"
+            ]
+          },
+          "modelId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "effort": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              null
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "vendor",
+          "modelId"
+        ]
       },
       "BudgetStatusDto_Output": {
         "type": "object",

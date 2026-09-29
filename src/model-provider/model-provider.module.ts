@@ -2,11 +2,14 @@ import { join } from 'node:path';
 import { Module } from '@nestjs/common';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { AnthropicProvider } from './anthropic.provider';
+import { ChatModelPreferenceController } from './chat-model-preference.controller';
+import { ChatModelPreferenceService } from './chat-model-preference.service';
 import { FailoverService } from './failover.service';
 import { GoogleProvider } from './google.provider';
-import { loadModelsConfig } from './models-config.schema';
-import { MODELS_CONFIG } from './model-provider.tokens';
-import type { ModelsConfig } from './model-provider.types';
+import { loadChatOptions, loadModelsConfig } from './models-config.schema';
+import { CHAT_OPTIONS, MODELS_CONFIG } from './model-provider.tokens';
+import type { ChatModelOption, ModelsConfig } from './model-provider.types';
+import { OpenAIProvider } from './openai.provider';
 import { ModelRouterService } from './router.service';
 
 // El I/O de disco (leer y parsear el YAML) queda fuera del constructor
@@ -19,16 +22,24 @@ const MODELS_CONFIG_PATH = join(process.cwd(), 'config', 'models.yaml');
 
 @Module({
   imports: [FeatureFlagsModule],
+  controllers: [ChatModelPreferenceController],
   providers: [
     {
       provide: MODELS_CONFIG,
       useFactory: (): ModelsConfig => loadModelsConfig(MODELS_CONFIG_PATH),
     },
+    {
+      provide: CHAT_OPTIONS,
+      useFactory: (): readonly ChatModelOption[] =>
+        loadChatOptions(MODELS_CONFIG_PATH),
+    },
     AnthropicProvider,
     GoogleProvider,
+    OpenAIProvider,
     FailoverService,
+    ChatModelPreferenceService,
     ModelRouterService,
   ],
-  exports: [ModelRouterService],
+  exports: [ModelRouterService, ChatModelPreferenceService],
 })
 export class ModelProviderModule {}
