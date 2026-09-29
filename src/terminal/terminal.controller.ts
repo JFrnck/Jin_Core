@@ -34,66 +34,90 @@ import {
   TerminalExportDto,
   TerminalImportResultDto,
   TerminalPendingDto,
-  TerminalSessionDto,
+  TerminalWorkspaceDto,
+  WorkspaceIdSchema,
   type TerminalServiceInfoSchema,
   type TerminalServiceStartSchema,
-  type TerminalSessionSchema,
+  type TerminalWorkspaceSchema,
 } from './terminal.schemas';
 
 /**
- * Terminal del owner (ADR 0016). El modelo no pasa por acá: es la app la que
- * llama, con el JWT del owner.
+ * Terminal del owner (ADR 0016 ampliada). El modelo no pasa por acá: es la
+ * app la que llama, con el JWT del owner. `:workspaceId` es el id del
+ * proyecto en la app (el mismo `CodeProject.id` que nombra su disco en el
+ * Executor).
  */
 @ApiTags('terminal')
-@Controller('api/terminal/sessions')
+@Controller('api/terminal/workspaces')
 export class TerminalController {
   constructor(private readonly terminal: OwnerTerminalService) {}
 
-  @Post()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary:
-      'Pide abrir una sesión de terminal. Siempre queda esperando tu aprobación (nivel confirm fijo).',
-  })
-  @ZodResponse({ status: 200, type: TerminalPendingDto })
-  async start(
-    @Body() body: StartTerminalDto,
-  ): Promise<{ status: 'pending-approval'; requestId: string }> {
-    return this.terminal.requestSession(body);
-  }
-
   @Get()
   @ApiOperation({
-    summary: 'Sesiones de terminal (con el link publicado, si hay)',
+    summary: 'Todos tus proyectos con disco propio, corriendo o no',
   })
-  @ZodResponse({ status: 200, type: [TerminalSessionDto] })
-  async list(): Promise<z.infer<typeof TerminalSessionSchema>[]> {
+  @ZodResponse({ status: 200, type: [TerminalWorkspaceDto] })
+  async list(): Promise<z.infer<typeof TerminalWorkspaceSchema>[]> {
     return [...(await this.terminal.list())];
   }
 
-  @Delete(':id')
+  @Post(':workspaceId/start')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cierra una sesión y destruye su pod' })
+  @ApiOperation({
+    summary:
+      'Pide abrir (o reanudar) la terminal de un proyecto. Siempre queda esperando tu aprobación (nivel confirm fijo).',
+  })
+  @ZodResponse({ status: 200, type: TerminalPendingDto })
+  async start(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Body() body: StartTerminalDto,
+  ): Promise<{ status: 'pending-approval'; requestId: string }> {
+    return this.terminal.requestStart(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body,
+    );
+  }
+
+  @Delete(':workspaceId/pod')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Detiene el pod del proyecto (el disco se conserva)',
+  })
   @ZodResponse({ status: 200, type: OkResultDto })
-  async stop(@Param('id') id: string): Promise<{ ok: true }> {
-    await this.terminal.stop(id);
+  async stopPod(
+    @Param('workspaceId') rawWorkspaceId: string,
+  ): Promise<{ ok: true }> {
+    await this.terminal.stopPod(this.workspaceIdOrFail(rawWorkspaceId));
+    return { ok: true };
+  }
+
+  @Delete(':workspaceId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Borra el pod (si lo hay) Y el disco del proyecto. Irreversible.',
+  })
+  @ZodResponse({ status: 200, type: OkResultDto })
+  async deleteWorkspace(
+    @Param('workspaceId') rawWorkspaceId: string,
+  ): Promise<{ ok: true }> {
+    await this.terminal.deleteWorkspace(this.workspaceIdOrFail(rawWorkspaceId));
     return { ok: true };
   }
 
   /**
-   * Corre un comando dentro de la sesión. La respuesta es un stream NDJSON
+   * Corre un comando dentro del workspace. La respuesta es un stream NDJSON
    * (`application/x-ndjson`): una línea JSON por evento — `{"t":"out","d":"…"}`,
    * `{"t":"err","d":"…"}` — y una última `{"t":"exit","code":0,"truncated":false}`
    * o `{"t":"error","message":"…"}`. Cada comando queda en el audit.
    */
-  @Post(':id/exec')
+  @Post(':workspaceId/exec')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Ejecuta un comando en la sesión (salida en streaming NDJSON)',
+    summary: 'Ejecuta un comando en el proyecto (salida en streaming NDJSON)',
   })
   @ApiProduces('application/x-ndjson')
   async exec(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Body() body: ExecTerminalDto,
     @Res() res: Response,
   ): Promise<void> {
@@ -101,7 +125,11 @@ export class TerminalController {
     res.on('close', () => controller.abort());
 
     // Cualquier error anterior al primer byte (audit, 404, 409) sale como HTTP normal.
-    const upstream = await this.terminal.exec(id, body, controller.signal);
+    const upstream = await this.terminal.exec(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body,
+      controller.signal,
+    );
 
     res.status(HttpStatus.OK);
     res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
@@ -129,49 +157,58 @@ export class TerminalController {
     }
   }
 
-  @Get(':id/files')
+  @Get(':workspaceId/files')
   @ApiOperation({
     summary:
-      'Archivos de texto de la sesión (sin node_modules, .git ni dist), para traerlos al editor',
+      'Archivos de texto del proyecto (sin node_modules, .git ni dist), para traerlos al editor',
   })
   @ZodResponse({ status: 200, type: TerminalExportDto })
   async exportFiles(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Query() query: ExportTerminalQueryDto,
   ): Promise<{
     files: Record<string, string>;
     skipped: { path: string; reason: string }[];
   }> {
-    const result = await this.terminal.exportFiles(id, query.dir);
+    const result = await this.terminal.exportFiles(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      query.dir,
+    );
     return { files: { ...result.files }, skipped: [...result.skipped] };
   }
 
-  @Put(':id/files')
+  @Put(':workspaceId/files')
   @ApiOperation({
-    summary: 'Copia archivos del editor al espacio de trabajo de la sesión',
+    summary: 'Copia archivos del editor al espacio de trabajo del proyecto',
   })
   @ZodResponse({ status: 200, type: TerminalImportResultDto })
   async importFiles(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Body() body: ImportTerminalDto,
   ): Promise<{ written: number }> {
-    return this.terminal.importFiles(id, body.files);
+    return this.terminal.importFiles(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body.files,
+    );
   }
 
   // ── Servidores en segundo plano y vista previa en vivo ─────────────────
 
-  @Post(':id/services')
+  @Post(':workspaceId/services')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Lanza un servidor dentro de la sesión (npm run dev…) y espera a que el puerto responda. Queda en el audit.',
+      'Lanza un servidor dentro del proyecto (npm run dev…) y espera a que el puerto responda. Queda en el audit.',
   })
   @ZodResponse({ status: 200, type: TerminalServiceStartDto })
   async startService(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Body() body: StartServiceDto,
   ): Promise<z.infer<typeof TerminalServiceStartSchema>> {
-    const result = await this.terminal.startService(id, body);
+    const result = await this.terminal.startService(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body,
+    );
     return {
       status: result.status,
       port: result.port,
@@ -180,58 +217,69 @@ export class TerminalController {
     };
   }
 
-  @Get(':id/services')
-  @ApiOperation({ summary: 'Servidores en segundo plano de la sesión' })
+  @Get(':workspaceId/services')
+  @ApiOperation({ summary: 'Servidores en segundo plano del proyecto' })
   @ZodResponse({ status: 200, type: [TerminalServiceInfoDto] })
   async listServices(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
   ): Promise<z.infer<typeof TerminalServiceInfoSchema>[]> {
-    return [...(await this.terminal.listServices(id))];
+    return [
+      ...(await this.terminal.listServices(
+        this.workspaceIdOrFail(rawWorkspaceId),
+      )),
+    ];
   }
 
-  @Delete(':id/services/:port')
+  @Delete(':workspaceId/services/:port')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Detiene un servidor de la sesión' })
+  @ApiOperation({ summary: 'Detiene un servidor del proyecto' })
   @ZodResponse({ status: 200, type: OkResultDto })
   async stopService(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Param('port') rawPort: string,
   ): Promise<{ ok: true }> {
-    await this.terminal.stopService(id, this.portOrFail(rawPort));
+    await this.terminal.stopService(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      this.portOrFail(rawPort),
+    );
     return { ok: true };
   }
 
-  @Get(':id/services/:port/logs')
+  @Get(':workspaceId/services/:port/logs')
   @ApiOperation({ summary: 'Últimas líneas de la salida de un servidor' })
   @ZodResponse({ status: 200, type: TerminalServiceLogsDto })
   async serviceLogs(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Param('port') rawPort: string,
   ): Promise<{ log: string }> {
     return {
-      log: await this.terminal.serviceLogs(id, this.portOrFail(rawPort)),
+      log: await this.terminal.serviceLogs(
+        this.workspaceIdOrFail(rawWorkspaceId),
+        this.portOrFail(rawPort),
+      ),
     };
   }
 
   /**
-   * Vista previa en vivo: reenvía la petición al puerto de un servidor de la
-   * sesión. Privada: exige el JWT del owner (la app lo agrega a cada petición
-   * de la vista web). No es un link público y no expone nada afuera.
+   * Vista previa en vivo: reenvía la petición al puerto de un servidor del
+   * proyecto. Privada: exige el JWT del owner (la app lo agrega a cada
+   * petición de la vista web). No es un link público y no expone nada afuera.
    */
-  @All([':id/preview/:port', ':id/preview/:port/*rest'])
+  @All([':workspaceId/preview/:port', ':workspaceId/preview/:port/*rest'])
   @SkipThrottle()
   @ApiOperation({
     summary:
-      'Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner',
+      'Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner',
   })
   async preview(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Param('port') rawPort: string,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const workspaceId = this.workspaceIdOrFail(rawWorkspaceId);
     const port = this.portOrFail(rawPort);
-    const prefix = `/api/terminal/sessions/${encodeURIComponent(id)}/preview/${rawPort}`;
+    const prefix = `/api/terminal/workspaces/${encodeURIComponent(rawWorkspaceId)}/preview/${rawPort}`;
     const rest = req.originalUrl.startsWith(prefix)
       ? req.originalUrl.slice(prefix.length)
       : '';
@@ -241,7 +289,7 @@ export class TerminalController {
     const controller = new AbortController();
     res.on('close', () => controller.abort());
 
-    const upstream = await this.terminal.previewRequest(id, port, {
+    const upstream = await this.terminal.previewRequest(workspaceId, port, {
       method: req.method,
       pathAndQuery,
       headers: previewRequestHeaders(req),
@@ -251,7 +299,7 @@ export class TerminalController {
 
     res.status(upstream.status);
     // Le dice a la app que esta respuesta es del servidor del owner: un 404 sin la
-    // marca es un fallo de Jin (sesión, puerto), no de su app.
+    // marca es un fallo de Jin (workspace, puerto), no de su app.
     res.setHeader('x-jin-proxied', '1');
     for (const name of PREVIEW_RESPONSE_HEADERS) {
       const value = upstream.headers.get(name);
@@ -284,18 +332,29 @@ export class TerminalController {
     return port;
   }
 
-  @Post(':id/expose')
+  /** Valida y normaliza el id de proyecto ANTES de que llegue al Executor. */
+  private workspaceIdOrFail(raw: string): string {
+    const result = WorkspaceIdSchema.safeParse(raw);
+    if (!result.success)
+      throw new BadRequestException('Id de proyecto inválido.');
+    return result.data;
+  }
+
+  @Post(':workspaceId/expose')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Pide publicar el build de la sesión bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.',
+      'Pide publicar el build del proyecto bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.',
   })
   @ZodResponse({ status: 200, type: TerminalPendingDto })
   async expose(
-    @Param('id') id: string,
+    @Param('workspaceId') rawWorkspaceId: string,
     @Body() body: ExposeTerminalDto,
   ): Promise<{ status: 'pending-approval'; requestId: string }> {
-    return this.terminal.requestExpose(id, body);
+    return this.terminal.requestExpose(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body,
+    );
   }
 }
 

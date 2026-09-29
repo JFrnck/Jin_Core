@@ -570,10 +570,44 @@
         ]
       }
     },
-    "/api/terminal/sessions": {
+    "/api/terminal/workspaces": {
+      "get": {
+        "operationId": "TerminalController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TerminalWorkspaceDto_Output"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Todos tus proyectos con disco propio, corriendo o no",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/workspaces/{workspaceId}/start": {
       "post": {
         "operationId": "TerminalController_start",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -596,41 +630,18 @@
             }
           }
         },
-        "summary": "Pide abrir una sesión de terminal. Siempre queda esperando tu aprobación (nivel confirm fijo).",
-        "tags": [
-          "terminal"
-        ]
-      },
-      "get": {
-        "operationId": "TerminalController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TerminalSessionDto_Output"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "summary": "Sesiones de terminal (con el link publicado, si hay)",
+        "summary": "Pide abrir (o reanudar) la terminal de un proyecto. Siempre queda esperando tu aprobación (nivel confirm fijo).",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}": {
+    "/api/terminal/workspaces/{workspaceId}/pod": {
       "delete": {
-        "operationId": "TerminalController_stop",
+        "operationId": "TerminalController_stopPod",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -650,18 +661,49 @@
             }
           }
         },
-        "summary": "Cierra una sesión y destruye su pod",
+        "summary": "Detiene el pod del proyecto (el disco se conserva)",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/exec": {
+    "/api/terminal/workspaces/{workspaceId}": {
+      "delete": {
+        "operationId": "TerminalController_deleteWorkspace",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Borra el pod (si lo hay) Y el disco del proyecto. Irreversible.",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/workspaces/{workspaceId}/exec": {
       "post": {
         "operationId": "TerminalController_exec",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -684,18 +726,18 @@
             "description": ""
           }
         },
-        "summary": "Ejecuta un comando en la sesión (salida en streaming NDJSON)",
+        "summary": "Ejecuta un comando en el proyecto (salida en streaming NDJSON)",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/files": {
+    "/api/terminal/workspaces/{workspaceId}/files": {
       "get": {
         "operationId": "TerminalController_exportFiles",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -736,7 +778,7 @@
             }
           }
         },
-        "summary": "Archivos de texto de la sesión (sin node_modules, .git ni dist), para traerlos al editor",
+        "summary": "Archivos de texto del proyecto (sin node_modules, .git ni dist), para traerlos al editor",
         "tags": [
           "terminal"
         ]
@@ -745,7 +787,7 @@
         "operationId": "TerminalController_importFiles",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -775,18 +817,18 @@
             }
           }
         },
-        "summary": "Copia archivos del editor al espacio de trabajo de la sesión",
+        "summary": "Copia archivos del editor al espacio de trabajo del proyecto",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/services": {
+    "/api/terminal/workspaces/{workspaceId}/services": {
       "post": {
         "operationId": "TerminalController_startService",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -816,7 +858,7 @@
             }
           }
         },
-        "summary": "Lanza un servidor dentro de la sesión (npm run dev…) y espera a que el puerto responda. Queda en el audit.",
+        "summary": "Lanza un servidor dentro del proyecto (npm run dev…) y espera a que el puerto responda. Queda en el audit.",
         "tags": [
           "terminal"
         ]
@@ -825,7 +867,7 @@
         "operationId": "TerminalController_listServices",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -848,18 +890,18 @@
             }
           }
         },
-        "summary": "Servidores en segundo plano de la sesión",
+        "summary": "Servidores en segundo plano del proyecto",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/services/{port}": {
+    "/api/terminal/workspaces/{workspaceId}/services/{port}": {
       "delete": {
         "operationId": "TerminalController_stopService",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -887,18 +929,18 @@
             }
           }
         },
-        "summary": "Detiene un servidor de la sesión",
+        "summary": "Detiene un servidor del proyecto",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/services/{port}/logs": {
+    "/api/terminal/workspaces/{workspaceId}/services/{port}/logs": {
       "get": {
         "operationId": "TerminalController_serviceLogs",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -932,12 +974,12 @@
         ]
       }
     },
-    "/api/terminal/sessions/{id}/preview/{port}": {
+    "/api/terminal/workspaces/{workspaceId}/preview/{port}": {
       "get": {
         "operationId": "TerminalController_preview_get",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -958,7 +1000,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -967,7 +1009,7 @@
         "operationId": "TerminalController_preview_post",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -988,7 +1030,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -997,7 +1039,7 @@
         "operationId": "TerminalController_preview_put",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1018,7 +1060,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1027,7 +1069,7 @@
         "operationId": "TerminalController_preview_delete",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1048,7 +1090,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1057,7 +1099,7 @@
         "operationId": "TerminalController_preview_patch",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1078,7 +1120,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1087,7 +1129,7 @@
         "operationId": "TerminalController_preview_options",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1108,7 +1150,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1117,7 +1159,7 @@
         "operationId": "TerminalController_preview_head",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1138,7 +1180,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1147,7 +1189,7 @@
         "operationId": "TerminalController_preview_search",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1168,18 +1210,18 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/preview/{port}/{rest}": {
+    "/api/terminal/workspaces/{workspaceId}/preview/{port}/{rest}": {
       "get": {
         "operationId": "TerminalController_preview_get",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1200,7 +1242,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1209,7 +1251,7 @@
         "operationId": "TerminalController_preview_post",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1230,7 +1272,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1239,7 +1281,7 @@
         "operationId": "TerminalController_preview_put",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1260,7 +1302,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1269,7 +1311,7 @@
         "operationId": "TerminalController_preview_delete",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1290,7 +1332,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1299,7 +1341,7 @@
         "operationId": "TerminalController_preview_patch",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1320,7 +1362,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1329,7 +1371,7 @@
         "operationId": "TerminalController_preview_options",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1350,7 +1392,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1359,7 +1401,7 @@
         "operationId": "TerminalController_preview_head",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1380,7 +1422,7 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
@@ -1389,7 +1431,7 @@
         "operationId": "TerminalController_preview_search",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1410,18 +1452,18 @@
             "description": ""
           }
         },
-        "summary": "Proxy HTTP privado a un puerto de la sesión (vista previa en vivo), con el JWT del owner",
+        "summary": "Proxy HTTP privado a un puerto del proyecto (vista previa en vivo), con el JWT del owner",
         "tags": [
           "terminal"
         ]
       }
     },
-    "/api/terminal/sessions/{id}/expose": {
+    "/api/terminal/workspaces/{workspaceId}/expose": {
       "post": {
         "operationId": "TerminalController_expose",
         "parameters": [
           {
-            "name": "id",
+            "name": "workspaceId",
             "required": true,
             "in": "path",
             "schema": {
@@ -1451,7 +1493,7 @@
             }
           }
         },
-        "summary": "Pide publicar el build de la sesión bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.",
+        "summary": "Pide publicar el build del proyecto bajo https://<slug>.jinserver.com. Siempre queda esperando tu aprobación.",
         "tags": [
           "terminal"
         ]
@@ -2811,6 +2853,66 @@
         ],
         "additionalProperties": false
       },
+      "TerminalWorkspaceDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "stopped",
+              "starting",
+              "running",
+              "expired",
+              "failed"
+            ]
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "requestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "exposure": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "slug",
+              "url"
+            ],
+            "additionalProperties": false,
+            "nullable": true
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "createdAt",
+          "expiresAt",
+          "requestId",
+          "exposure",
+          "lastActivityAt"
+        ],
+        "additionalProperties": false
+      },
       "StartTerminalDto": {
         "type": "object",
         "properties": {
@@ -2848,55 +2950,6 @@
         "required": [
           "status",
           "requestId"
-        ],
-        "additionalProperties": false
-      },
-      "TerminalSessionDto_Output": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "starting",
-              "running",
-              "expired",
-              "failed"
-            ]
-          },
-          "expiresAt": {
-            "type": "string"
-          },
-          "requestId": {
-            "type": "string",
-            "nullable": true
-          },
-          "exposure": {
-            "type": "object",
-            "properties": {
-              "slug": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "slug",
-              "url"
-            ],
-            "additionalProperties": false,
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "expiresAt",
-          "requestId",
-          "exposure"
         ],
         "additionalProperties": false
       },

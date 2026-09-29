@@ -5,6 +5,8 @@ import type { OwnerTerminalService } from './owner-terminal.service';
 import { TerminalController } from './terminal.controller';
 import { TerminalUpstreamError } from './terminal.errors';
 
+const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111';
+
 function fakeRes() {
   const res = new EventEmitter() as EventEmitter & {
     headers: Record<string, string>;
@@ -62,6 +64,21 @@ function controllerWith(exec: ReturnType<typeof vi.fn>) {
   return new TerminalController({ exec } as unknown as OwnerTerminalService);
 }
 
+describe('TerminalController: valida el id de proyecto antes de tocar el servicio', () => {
+  it('un id que no es un UUID se rechaza sin llamar al servicio', async () => {
+    const exec = vi.fn();
+    const res = fakeRes();
+    await expect(
+      controllerWith(exec).exec(
+        'no-es-un-uuid',
+        { command: 'ls' },
+        res as unknown as ExpressResponse,
+      ),
+    ).rejects.toThrow(/[Ii]d de proyecto/);
+    expect(exec).not.toHaveBeenCalled();
+  });
+});
+
 describe('TerminalController.exec', () => {
   it('reenvía el NDJSON tal como llega, con las cabeceras de streaming', async () => {
     const lines = [
@@ -72,7 +89,7 @@ describe('TerminalController.exec', () => {
     const res = fakeRes();
 
     await controllerWith(exec).exec(
-      's1',
+      WORKSPACE_ID,
       { command: 'echo hola' },
       res as unknown as ExpressResponse,
     );
@@ -90,14 +107,14 @@ describe('TerminalController.exec', () => {
       .mockRejectedValue(
         new TerminalUpstreamError(
           409,
-          'La sesión ya está ejecutando un comando',
+          'El proyecto ya está ejecutando un comando',
         ),
       );
     const res = fakeRes();
 
     await expect(
       controllerWith(exec).exec(
-        's1',
+        WORKSPACE_ID,
         { command: 'ls' },
         res as unknown as ExpressResponse,
       ),
@@ -115,7 +132,7 @@ describe('TerminalController.exec', () => {
     const res = fakeRes();
 
     await controllerWith(exec).exec(
-      's1',
+      WORKSPACE_ID,
       { command: 'ls' },
       res as unknown as ExpressResponse,
     );
@@ -135,7 +152,7 @@ describe('TerminalController.exec', () => {
       });
     const res = fakeRes();
     const pending = controllerWith(exec).exec(
-      's1',
+      WORKSPACE_ID,
       { command: 'ls' },
       res as unknown as ExpressResponse,
     );
@@ -149,7 +166,7 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
   function fakeReq(over: Record<string, unknown> = {}) {
     return {
       method: 'GET',
-      originalUrl: '/api/terminal/sessions/s1/preview/5173/src/main.js?t=1',
+      originalUrl: `/api/terminal/workspaces/${WORKSPACE_ID}/preview/5173/src/main.js?t=1`,
       headers: {
         accept: '*/*',
         cookie: 'sesion=secreta',
@@ -177,7 +194,7 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
     const res = fakeRes();
 
     await withPreview(previewRequest).preview(
-      's1',
+      WORKSPACE_ID,
       '5173',
       fakeReq(),
       res as unknown as ExpressResponse,
@@ -188,7 +205,7 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
       number,
       { pathAndQuery: string; headers: Record<string, string>; method: string },
     ];
-    expect(call[0]).toBe('s1');
+    expect(call[0]).toBe(WORKSPACE_ID);
     expect(call[1]).toBe(5173);
     expect(call[2].pathAndQuery).toBe('/src/main.js?t=1');
     expect(call[2].headers).toEqual({ accept: '*/*' });
@@ -199,9 +216,11 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
   it('la raíz sin barra final llega como /', async () => {
     const previewRequest = vi.fn().mockResolvedValue(new Response('<html>'));
     await withPreview(previewRequest).preview(
-      's1',
+      WORKSPACE_ID,
       '5173',
-      fakeReq({ originalUrl: '/api/terminal/sessions/s1/preview/5173' }),
+      fakeReq({
+        originalUrl: `/api/terminal/workspaces/${WORKSPACE_ID}/preview/5173`,
+      }),
       fakeRes() as unknown as ExpressResponse,
     );
     expect((previewRequest.mock.calls[0] as unknown[])[2]).toMatchObject({
@@ -223,7 +242,7 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
     );
     const res = fakeRes();
     await withPreview(previewRequest).preview(
-      's1',
+      WORKSPACE_ID,
       '5173',
       fakeReq(),
       res as unknown as ExpressResponse,
@@ -237,12 +256,25 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
     expect(res.headers['x-powered-by']).toBeUndefined();
   });
 
+  it('un id de proyecto que no es un UUID se rechaza antes de tocar el Executor', async () => {
+    const previewRequest = vi.fn();
+    await expect(
+      withPreview(previewRequest).preview(
+        'no-es-un-uuid',
+        '5173',
+        fakeReq(),
+        fakeRes() as unknown as ExpressResponse,
+      ),
+    ).rejects.toThrow(/[Ii]d de proyecto/);
+    expect(previewRequest).not.toHaveBeenCalled();
+  });
+
   it('un puerto que no es de usuario o no es un número se rechaza antes de tocar el Executor', async () => {
     const previewRequest = vi.fn();
     for (const port of ['80', '1023', '65536', '5173abc', '0x1400', '']) {
       await expect(
         withPreview(previewRequest).preview(
-          's1',
+          WORKSPACE_ID,
           port,
           fakeReq(),
           fakeRes() as unknown as ExpressResponse,
@@ -264,12 +296,12 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
       );
     const res = fakeRes();
     const pending = withPreview(previewRequest).preview(
-      's1',
+      WORKSPACE_ID,
       '3000',
       fakeReq({
         method: 'POST',
         body: { a: 1 },
-        originalUrl: '/api/terminal/sessions/s1/preview/3000/api/items',
+        originalUrl: `/api/terminal/workspaces/${WORKSPACE_ID}/preview/3000/api/items`,
       }),
       res as unknown as ExpressResponse,
     );
@@ -288,11 +320,13 @@ describe('TerminalController.preview (vista previa en vivo)', () => {
   it('un fallo del Executor antes del primer byte sale como error HTTP normal', async () => {
     const previewRequest = vi
       .fn()
-      .mockRejectedValue(new TerminalUpstreamError(404, 'No existe la sesión'));
+      .mockRejectedValue(
+        new TerminalUpstreamError(404, 'No existe el proyecto'),
+      );
     const res = fakeRes();
     await expect(
       withPreview(previewRequest).preview(
-        's1',
+        WORKSPACE_ID,
         '5173',
         fakeReq(),
         res as unknown as ExpressResponse,

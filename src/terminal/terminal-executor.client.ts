@@ -6,13 +6,15 @@ import {
   TerminalUpstreamError,
 } from './terminal.errors';
 
-export interface TerminalSessionInfo {
+export interface TerminalWorkspaceInfo {
   readonly id: string;
-  readonly status: 'starting' | 'running' | 'expired' | 'failed';
-  readonly expiresAt: string;
-  /** Aprobación que abrió la sesión (enlace con el audit); null en sesiones anteriores. */
+  readonly status: 'stopped' | 'starting' | 'running' | 'expired' | 'failed';
+  readonly createdAt: string;
+  readonly expiresAt: string | null;
+  /** Aprobación que abrió el pod actual (enlace con el audit); null si no hay pod. */
   readonly requestId: string | null;
   readonly exposure: { readonly slug: string; readonly url: string } | null;
+  readonly lastActivityAt: string | null;
 }
 
 export interface TerminalExportResult {
@@ -45,8 +47,9 @@ export type TerminalServiceStart =
     };
 
 /**
- * Contrato HTTP con `/terminal/sessions` del Executor (ADR 0016). Sin tipos
- * compartidos entre repos: esto es el contrato, no un import.
+ * Contrato HTTP con `/terminal/workspaces` del Executor (ADR 0016 ampliada,
+ * 2026-09-28: un disco por proyecto que sobrevive a que su pod se destruya).
+ * Sin tipos compartidos entre repos: esto es el contrato, no un import.
  */
 @Injectable()
 export class TerminalExecutorClient {
@@ -54,41 +57,57 @@ export class TerminalExecutorClient {
 
   constructor(configService: ConfigService<Env, true>) {
     const rawUrl = configService.get('EXECUTOR_BASE_URL', { infer: true });
-    this.baseUrl = `${rawUrl.replace(/\/+$/, '')}/terminal/sessions`;
+    this.baseUrl = `${rawUrl.replace(/\/+$/, '')}/terminal/workspaces`;
   }
 
-  start(input: {
-    files: Readonly<Record<string, string>>;
-    ttlSeconds: number;
-    requestId?: string | undefined;
-  }): Promise<TerminalSessionInfo> {
-    return this.json('POST', '', input);
-  }
-
-  list(): Promise<readonly TerminalSessionInfo[]> {
+  /** Todos los workspaces (proyectos con disco propio) del owner, corriendo o no. */
+  list(): Promise<readonly TerminalWorkspaceInfo[]> {
     return this.json('GET', '');
   }
 
-  async stop(id: string): Promise<void> {
-    await this.send('DELETE', `/${encodeURIComponent(id)}`);
+  start(
+    workspaceId: string,
+    input: {
+      files: Readonly<Record<string, string>>;
+      ttlSeconds: number;
+      requestId?: string | undefined;
+    },
+  ): Promise<TerminalWorkspaceInfo> {
+    return this.json(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/start`,
+      input,
+    );
   }
 
-  exportFiles(id: string, dir: string): Promise<TerminalExportResult> {
+  /** Detiene el pod del workspace; el disco NO se toca. */
+  async stopPod(workspaceId: string): Promise<void> {
+    await this.send('DELETE', `/${encodeURIComponent(workspaceId)}/pod`);
+  }
+
+  /** Borra el pod (si lo hay) Y el disco del workspace. Irreversible. */
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    await this.send('DELETE', `/${encodeURIComponent(workspaceId)}`);
+  }
+
+  exportFiles(workspaceId: string, dir: string): Promise<TerminalExportResult> {
     return this.json(
       'GET',
-      `/${encodeURIComponent(id)}/files?dir=${encodeURIComponent(dir)}`,
+      `/${encodeURIComponent(workspaceId)}/files?dir=${encodeURIComponent(dir)}`,
     );
   }
 
   importFiles(
-    id: string,
+    workspaceId: string,
     files: Readonly<Record<string, string>>,
   ): Promise<{ written: number }> {
-    return this.json('PUT', `/${encodeURIComponent(id)}/files`, { files });
+    return this.json('PUT', `/${encodeURIComponent(workspaceId)}/files`, {
+      files,
+    });
   }
 
   expose(
-    id: string,
+    workspaceId: string,
     input: {
       dir: string;
       slugHint?: string | undefined;
@@ -96,40 +115,51 @@ export class TerminalExecutorClient {
       serverSource: string;
     },
   ): Promise<{ slug: string; url: string }> {
-    return this.json('POST', `/${encodeURIComponent(id)}/expose`, input);
+    return this.json(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/expose`,
+      input,
+    );
   }
 
   startService(
-    id: string,
+    workspaceId: string,
     input: { command: string; port: number },
   ): Promise<TerminalServiceStart> {
-    return this.json('POST', `/${encodeURIComponent(id)}/services`, input);
+    return this.json(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/services`,
+      input,
+    );
   }
 
-  listServices(id: string): Promise<readonly TerminalServiceInfo[]> {
-    return this.json('GET', `/${encodeURIComponent(id)}/services`);
+  listServices(workspaceId: string): Promise<readonly TerminalServiceInfo[]> {
+    return this.json('GET', `/${encodeURIComponent(workspaceId)}/services`);
   }
 
-  async stopService(id: string, port: number): Promise<void> {
-    await this.send('DELETE', `/${encodeURIComponent(id)}/services/${port}`);
+  async stopService(workspaceId: string, port: number): Promise<void> {
+    await this.send(
+      'DELETE',
+      `/${encodeURIComponent(workspaceId)}/services/${port}`,
+    );
   }
 
-  async serviceLogs(id: string, port: number): Promise<string> {
+  async serviceLogs(workspaceId: string, port: number): Promise<string> {
     const result = await this.json<{ log: string }>(
       'GET',
-      `/${encodeURIComponent(id)}/services/${port}/logs`,
+      `/${encodeURIComponent(workspaceId)}/services/${port}/logs`,
     );
     return result.log;
   }
 
   /**
-   * Reenvía una petición al puerto de un servidor de la sesión. Devuelve la
+   * Reenvía una petición al puerto de un servidor del workspace. Devuelve la
    * respuesta SIN validar el estado: un 404 o un 500 del servidor del owner es
-   * parte de lo que quiere ver. Solo los fallos del propio Executor (sesión
+   * parte de lo que quiere ver. Solo los fallos del propio Executor (workspace
    * inexistente, puerto inválido, red) salen como error.
    */
   async proxy(
-    id: string,
+    workspaceId: string,
     port: number,
     request: {
       method: string;
@@ -142,7 +172,7 @@ export class TerminalExecutorClient {
     let response: Response;
     try {
       response = await fetch(
-        `${this.baseUrl}/${encodeURIComponent(id)}/proxy/${port}${request.pathAndQuery}`,
+        `${this.baseUrl}/${encodeURIComponent(workspaceId)}/proxy/${port}${request.pathAndQuery}`,
         {
           method: request.method,
           headers: request.headers,
@@ -156,7 +186,7 @@ export class TerminalExecutorClient {
       throw new TerminalUnavailableError(error);
     }
     // El Executor marca con `x-jin-proxied` lo que viene del servidor del owner;
-    // una respuesta sin la marca es un fallo del propio Executor (sesión, puerto, red).
+    // una respuesta sin la marca es un fallo del propio Executor (workspace, puerto, red).
     if (response.headers.get('x-jin-proxied') !== '1') {
       throw await TerminalUpstreamError.fromResponse(response);
     }
@@ -169,11 +199,16 @@ export class TerminalExecutorClient {
    * `TerminalUpstreamError`. `signal` corta la conexión si el owner se va.
    */
   async openExec(
-    id: string,
+    workspaceId: string,
     input: { command: string; timeoutSeconds?: number | undefined },
     signal: AbortSignal,
   ): Promise<Response> {
-    return this.send('POST', `/${encodeURIComponent(id)}/exec`, input, signal);
+    return this.send(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/exec`,
+      input,
+      signal,
+    );
   }
 
   private async json<T>(
