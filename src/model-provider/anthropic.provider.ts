@@ -13,6 +13,7 @@ import type {
 } from './model-provider.types';
 import {
   anthropicModelAcceptsSampling,
+  anthropicMaxTokens,
   anthropicThinkingParams,
 } from './sampling';
 
@@ -100,13 +101,22 @@ export class AnthropicProvider implements ModelProviderClient {
   // exportado por el SDK (solo sus subtipos streaming/non-streaming) — el
   // shape estructural inferido acá es válido para `.create()` Y `.stream()`.
   private buildCreateParams(modelId: string, request: ModelCompletionRequest) {
+    const maxTokens = anthropicMaxTokens(modelId, request.maxOutputTokens);
+    const thinking = anthropicThinkingParams(
+      modelId,
+      request.effort,
+      maxTokens,
+    );
     return {
       model: modelId,
-      max_tokens: request.maxOutputTokens,
+      max_tokens: maxTokens,
       // Solo si el modelo lo acepta: Sonnet 5, Opus 5/4.8/4.7 y Fable 5 lo
       // rechazan con 400 (ver sampling.ts). Ningún otro parámetro de muestreo
-      // se manda nunca.
-      ...(anthropicModelAcceptsSampling(modelId)
+      // se manda nunca. Tampoco con `thinking: enabled` (Haiku 4.5 con
+      // esfuerzo): la API exige temperature 1 con thinking manual y devolvía
+      // 400 — visto en producción 2026-09-29 como fallback de chat.
+      ...(anthropicModelAcceptsSampling(modelId) &&
+      !('thinking' in thinking && thinking.thinking.type === 'enabled')
         ? { temperature: request.temperature }
         : {}),
       // Spread condicional, no `system: request.systemPrompt`: con
@@ -129,11 +139,7 @@ export class AnthropicProvider implements ModelProviderClient {
             })),
           }
         : {}),
-      ...anthropicThinkingParams(
-        modelId,
-        request.effort,
-        request.maxOutputTokens,
-      ),
+      ...thinking,
     };
   }
 

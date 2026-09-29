@@ -220,6 +220,38 @@ describe('OpenAIProvider.complete', () => {
     expect(sent).not.toHaveProperty('temperature');
   });
 
+  it('con effort Y tools: NO manda reasoning_effort ni temperature (Chat Completions da 400 con GPT-6)', async () => {
+    createMock.mockResolvedValue({
+      model: 'gpt-6-luna',
+      choices: [
+        {
+          message: { content: 'ok', tool_calls: undefined },
+          finish_reason: 'stop',
+        },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 1 },
+    });
+
+    await new OpenAIProvider(fakeConfigService).complete('gpt-6-luna', {
+      messages: [{ role: 'user', content: 'x' }],
+      maxOutputTokens: 100,
+      temperature: 0.7,
+      effort: 'medium',
+      tools: [
+        {
+          name: 'listPreviewServices',
+          description: 'lista',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+    });
+
+    const sent = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('reasoning_effort');
+    expect(sent).not.toHaveProperty('temperature');
+    expect(sent).toHaveProperty('tools');
+  });
+
   it('sin effort: manda temperature y no manda reasoning_effort', async () => {
     createMock.mockResolvedValue({
       model: 'gpt-5.1',

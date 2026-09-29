@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
+  anthropicMaxTokens,
   anthropicModelAcceptsSampling,
   anthropicThinkingParams,
 } from './sampling';
+
+describe('anthropicMaxTokens (pensamiento siempre prendido come del mismo tope)', () => {
+  it('Opus 5.5 / Sonnet 5.5: sube el tope de 8000 a 16000', () => {
+    expect(anthropicMaxTokens('claude-sonnet-5-5', 8000)).toBe(16_000);
+    expect(anthropicMaxTokens('claude-opus-5-5', 1000)).toBe(16_000);
+  });
+  it('nunca baja un tope ya más alto', () => {
+    expect(anthropicMaxTokens('claude-opus-5-5', 20_000)).toBe(20_000);
+  });
+  it('el resto no cambia', () => {
+    expect(anthropicMaxTokens('claude-sonnet-5', 8000)).toBe(8000);
+    expect(anthropicMaxTokens('claude-haiku-4-5', 1000)).toBe(1000);
+  });
+});
 
 describe('anthropicModelAcceptsSampling', () => {
   it.each([

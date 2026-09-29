@@ -134,9 +134,18 @@ export class OpenAIProvider implements ModelProviderClient {
       // temperature — mismo criterio que anthropicModelAcceptsSampling en
       // sampling.ts: un parámetro de muestreo no se manda nunca si el
       // modelo no lo acepta.
+      //
+      // Chat Completions rechaza con 400 `reasoning_effort` junto con
+      // function tools en GPT-6 ("use /v1/responses or set reasoning_effort
+      // to 'none'", visto en producción 2026-09-29 con gpt-6-luna). El chat
+      // siempre manda tools, así que con tools el esfuerzo se ignora (el
+      // modelo usa su default) y tampoco se manda temperature: es un modelo
+      // de razonamiento. Honrarlo con tools exige migrar a la Responses API.
       ...(request.effort === undefined
         ? { temperature: request.temperature }
-        : { reasoning_effort: request.effort }),
+        : request.tools !== undefined
+          ? {}
+          : { reasoning_effort: request.effort }),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map(

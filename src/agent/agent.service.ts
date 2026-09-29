@@ -303,6 +303,20 @@ export class AgentService {
    */
   private resolveFinalResponseText(response: ModelCompletionResponse): string {
     if (
+      response.stopReason === 'max_tokens' &&
+      response.content.trim().length === 0
+    ) {
+      this.logger.warn(
+        `Turno sin texto por límite de tokens (stopReason=max_tokens, modelo=${response.modelId}): el razonamiento consumió el tope de salida.`,
+      );
+      return (
+        'El modelo se quedó sin espacio de salida antes de terminar (gastó ' +
+        'el tope pensando). No es un filtro de seguridad. Probá bajar el ' +
+        'esfuerzo en Más → Ajustes → Modelo del chat, o pedime un paso más ' +
+        'chico.'
+      );
+    }
+    if (
       response.stopReason === 'refusal' ||
       response.content.trim().length === 0
     ) {

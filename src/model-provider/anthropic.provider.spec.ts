@@ -320,6 +320,41 @@ describe('AnthropicProvider.complete', () => {
     expect(createMock.mock.calls[0]?.[0]).not.toHaveProperty('thinking');
   });
 
+  it('Haiku con effort medium: thinking manual y SIN temperature (la API da 400 con temperature != 1 y thinking)', async () => {
+    createMock.mockResolvedValue({
+      model: 'claude-haiku-4-5',
+      content: [{ type: 'text', text: 'ok' }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+      stop_reason: 'end_turn',
+    });
+
+    await new AnthropicProvider(fakeConfigService).complete(
+      'claude-haiku-4-5',
+      {
+        messages: [{ role: 'user', content: 'hola' }],
+        maxOutputTokens: 8000,
+        temperature: 0.7,
+        effort: 'medium',
+      },
+    );
+
+    const sent = createMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent).toHaveProperty('thinking');
+    expect(sent).not.toHaveProperty('temperature');
+
+    createMock.mockClear();
+    await new AnthropicProvider(fakeConfigService).complete(
+      'claude-haiku-4-5',
+      {
+        messages: [{ role: 'user', content: 'hola' }],
+        maxOutputTokens: 8000,
+        temperature: 0.7,
+        effort: 'low',
+      },
+    );
+    expect(createMock.mock.calls[0]?.[0]).toHaveProperty('temperature', 0.7);
+  });
+
   it('incluye system solo cuando systemPrompt está definido', async () => {
     createMock.mockResolvedValue({
       model: 'claude-sonnet-5',
