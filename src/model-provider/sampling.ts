@@ -39,6 +39,23 @@ export function anthropicModelAcceptsSampling(modelId: string): boolean {
   return !NO_SAMPLING_PREFIXES.some((prefix) => modelId.startsWith(prefix));
 }
 
+/**
+ * Con el pensamiento siempre prendido, los tokens de razonamiento salen del
+ * mismo `max_tokens` que la respuesta. Visto en producción 2026-09-29: con
+ * `chat_conversational` (8000) Sonnet 5.5 se quedaba sin salida
+ * (`stop_reason: max_tokens`) antes de actualizar el plan o de contestar. Se
+ * sube el tope solo para estos modelos — se factura lo generado, no el tope —
+ * y sin pasar de ~21k para que la llamada sin streaming siga siendo válida
+ * en el SDK.
+ */
+const ALWAYS_ON_THINKING_MIN_MAX_TOKENS = 16_000;
+
+export function anthropicMaxTokens(modelId: string, requested: number): number {
+  return hasThinkingAlwaysOn(modelId)
+    ? Math.max(requested, ALWAYS_ON_THINKING_MIN_MAX_TOKENS)
+    : requested;
+}
+
 function hasThinkingAlwaysOn(modelId: string): boolean {
   return ALWAYS_ON_THINKING_PREFIXES.some((prefix) =>
     modelId.startsWith(prefix),

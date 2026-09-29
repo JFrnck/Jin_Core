@@ -170,6 +170,20 @@ describe('AgentService.runTurn', () => {
     expect(result.finalResponse.toLowerCase()).toContain('no pude generar');
   });
 
+  it('stopReason "max_tokens" sin texto: dice que se agotó el tope, NO que fue un filtro de seguridad', async () => {
+    completeMock.mockResolvedValue(
+      fakeResponse({ content: '', stopReason: 'max_tokens' }),
+    );
+
+    const result = await service.runTurn({
+      sessionId: 'sess-1',
+      objective: 'hacé algo largo',
+    });
+
+    expect(result.finalResponse).toContain('sin espacio de salida');
+    expect(result.finalResponse.toLowerCase()).not.toContain('probablemente');
+  });
+
   it('content vacío sin ser un refusal explícito: mismo mensaje de fallback (nunca un mensaje en blanco)', async () => {
     completeMock.mockResolvedValue(
       fakeResponse({ content: '', stopReason: 'end_turn' }),
