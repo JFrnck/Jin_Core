@@ -177,13 +177,40 @@ describe('TerminalGateway (/terminal)', () => {
       });
     });
 
-    it('una segunda apertura en la misma conexión se rechaza', async () => {
-      const { gateway, openOrAttach } = setup();
+    it('volver a abrir por la misma conexión suelta la suscripción anterior y se reengancha', async () => {
+      const { gateway, openOrAttach, detach } = setup();
+      openOrAttach.mockResolvedValueOnce({ ptyId: PTY_ID, resumed: false });
+      openOrAttach.mockResolvedValueOnce({ ptyId: PTY_ID, resumed: true });
+      const client = fakeClient();
+
+      await gateway.open(openPayload, client as never);
+      await gateway.open(openPayload, client as never);
+
+      expect(detach).toHaveBeenCalledTimes(1);
+      expect(detach).toHaveBeenCalledWith(PTY_ID, expect.any(Function));
+      expect(openOrAttach).toHaveBeenCalledTimes(2);
+      expect(client.emit).toHaveBeenLastCalledWith('pty:opened', {
+        ptyId: PTY_ID,
+        resumed: true,
+      });
+    });
+
+    it('si la reapertura falla, la conexión queda sin terminal (no arrastra la anterior)', async () => {
+      const { gateway, openOrAttach, detach } = setup();
       const client = fakeClient();
       await gateway.open(openPayload, client as never);
+
+      openOrAttach.mockRejectedValueOnce(
+        new TerminalUpstreamError(409, 'no está corriendo'),
+      );
       await gateway.open(openPayload, client as never);
-      expect(openOrAttach).toHaveBeenCalledTimes(1);
-      expect(events(client).at(-1)).toBe('pty:error');
+      gateway.handleDisconnect(client as never);
+
+      expect(client.emit).toHaveBeenLastCalledWith('pty:error', {
+        message: 'no está corriendo',
+      });
+      // Solo el detach de la reapertura; al desconectarse no hay nada más que soltar.
+      expect(detach).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -93,12 +93,15 @@ export class TerminalGateway
       client.emit('pty:error', { message: 'Pedido de terminal inválido.' });
       return;
     }
-    if (dataOf(client).ptyId) {
-      client.emit('pty:error', {
-        message: 'Esta conexión ya tiene una terminal abierta.',
-      });
-      return;
+    // La app sale de la pantalla sin cerrar la sesión y vuelve por la MISMA
+    // conexión: se suelta la suscripción anterior (empieza su gracia de 10 min)
+    // y `openOrAttach` se reengancha a la sesión viva, cancelando esa gracia.
+    const previous = dataOf(client);
+    if (previous.ptyId && previous.listener) {
+      this.pty.detach(previous.ptyId, previous.listener);
     }
+    previous.ptyId = undefined;
+    previous.listener = undefined;
 
     // La salida guardada se entrega dentro de `openOrAttach`, antes de que la app
     // sepa el `ptyId`: se encola y se suelta justo después de `pty:opened`.
