@@ -115,3 +115,51 @@ model_prices:
   antigravity-preview-05-2026:
     input_per_million: 0
     output_per_million: 0
+  # OpenAI (2026-09-28, preferencia de modelo del owner): precio ESTIMADO,
+  # no verificado contra la lista oficial de OpenAI todavía — ningún
+  # profile de runtime los usa como primary/fallback (solo `chat_options`
+  # abajo, elegibles a mano por el owner), así que un precio de lista
+  # desactualizado no puede aparecer como fallback automático silencioso.
+  # Corregir con la próxima verificación mensual (MODEL_ROUTING.md §6.2).
+  gpt-5.1:
+    input_per_million: 1.25
+    output_per_million: 10
+  gpt-5.1-mini:
+    input_per_million: 0.25
+    output_per_million: 2
+
+# Catálogo elegible por el owner para "chat_conversational" (2026-09-28,
+# preferencia de modelo — app iOS: Más → Ajustes). Curado a propósito: NO
+# es "todo modelo con precio arriba", solo lo que tiene sentido para hablar
+# con el owner y decidir tools en el mismo turno. `supports_effort`: si el
+# modelo no tiene ningún knob de esfuerzo (Gemini todavía no, en este SDK),
+# la app no muestra el selector de esfuerzo para esa opción.
+chat_options:
+  - vendor: anthropic
+    model: claude-opus-4-8
+    label: "Claude Opus 4.8 — el más capaz"
+    supports_effort: true
+  - vendor: anthropic
+    model: claude-sonnet-5
+    label: "Claude Sonnet 5 — balanceado (default)"
+    supports_effort: true
+  - vendor: anthropic
+    model: claude-haiku-4-5
+    label: "Claude Haiku 4.5 — rápido y barato"
+    supports_effort: true
+  - vendor: google
+    model: gemini-3.1-pro
+    label: "Gemini 3.1 Pro — contexto masivo"
+    supports_effort: false
+  - vendor: google
+    model: gemini-3.5-flash
+    label: "Gemini 3.5 Flash — agentic, rápido"
+    supports_effort: false
+  - vendor: openai
+    model: gpt-5.1
+    label: "GPT-5.1 — el más capaz de OpenAI"
+    supports_effort: true
+  - vendor: openai
+    model: gpt-5.1-mini
+    label: "GPT-5.1 Mini — rápido y barato"
+    supports_effort: true

@@ -26,6 +26,31 @@ export interface ModelProfileConfig {
 export type ModelsConfig = Readonly<Record<TaskProfile, ModelProfileConfig>>;
 
 /**
+ * Una opción elegible por el owner para `chat_conversational` (2026-09-28,
+ * preferencia de modelo). Catálogo curado en `config/models.yaml` →
+ * `chat_options` — NUNCA toda la lista de modelos internos de los otros
+ * TaskProfiles: solo lo que de verdad tiene sentido para hablar con el
+ * owner y decidir tools en el mismo turno (regla de oro #5: config-driven,
+ * no hardcodeado, pero tampoco "cualquier string libre" — un modelo sin
+ * precio en `model_prices` rompería el budget guard).
+ */
+export interface ChatModelOption {
+  readonly vendor: 'anthropic' | 'google' | 'openai';
+  readonly modelId: string;
+  readonly label: string;
+  readonly supportsEffort: boolean;
+}
+
+/** Preferencia vigente del owner para `chat_conversational`. `null` = usar el `primary` de `models.yaml` (el default de siempre). */
+export interface ChatModelPreference {
+  readonly vendor: 'anthropic' | 'google' | 'openai';
+  readonly modelId: string;
+  readonly effort: ModelEffort | null;
+  readonly setBy: string;
+  readonly changedAt: string;
+}
+
+/**
  * Precio por 1M tokens (`config/models.yaml` → `model_prices`), usado
  * por `src/budget/cost.ts` para calcular el gasto real de cada llamada.
  * Vive acá (no en src/budget/) porque es el mismo archivo YAML que
@@ -58,6 +83,16 @@ export interface SelectedModel {
   readonly modelId: string;
   readonly tier: 'primary' | 'fallback';
 }
+
+/**
+ * Profundidad de razonamiento, vendor-agnóstica (2026-09-28, preferencia
+ * de modelo del owner). Cada provider la traduce a su propio mecanismo:
+ * Anthropic -> `thinking`/`output_config.effort` (ver anthropic.provider.ts,
+ * distinto según la generación del modelo); OpenAI -> `reasoning_effort`
+ * tal cual (mismos 3 niveles); Google -> sin traducción todavía (Gemini no
+ * tiene un knob de esfuerzo equivalente en este SDK — se ignora).
+ */
+export type ModelEffort = 'low' | 'medium' | 'high';
 
 /**
  * Declaración de una tool para tool-use nativo del vendor (Fase 5.1,
@@ -116,6 +151,8 @@ export interface ModelCompletionRequest {
   readonly temperature: number;
   /** Presente solo si el caller quiere tool-use nativo (Fase 5.1). */
   readonly tools?: readonly ModelToolDeclaration[];
+  /** Ausente: el provider usa su propio default (nunca lo fija `ModelRouterService` por sí solo). */
+  readonly effort?: ModelEffort;
 }
 
 /**
@@ -145,7 +182,7 @@ export type ModelStreamDeltaListener = (
 ) => void;
 
 export interface ModelProviderClient {
-  readonly vendor: 'anthropic' | 'google';
+  readonly vendor: 'anthropic' | 'google' | 'openai';
   complete(
     modelId: string,
     request: ModelCompletionRequest,

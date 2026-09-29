@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AnthropicProvider } from './anthropic.provider';
+import type { ChatModelPreferenceService } from './chat-model-preference.service';
 import { UnknownModelVendorError } from './errors';
 import type { FailoverService } from './failover.service';
 import type { GoogleProvider } from './google.provider';
@@ -8,6 +9,7 @@ import type {
   ModelCompletionResponse,
   ModelsConfig,
 } from './model-provider.types';
+import type { OpenAIProvider } from './openai.provider';
 import { ModelRouterService } from './router.service';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
@@ -15,6 +17,12 @@ import type { FeatureFlagsService } from '../feature-flags/feature-flags.service
 const NO_OP_FEATURE_FLAGS = {
   getModelOverride: () => undefined,
 } as unknown as FeatureFlagsService;
+
+// Este spec no ejercita OpenAI ni la preferencia de chat del owner.
+const NO_OP_OPENAI = {} as unknown as OpenAIProvider;
+const NO_OP_CHAT_PREFERENCE = {
+  getPreference: () => null,
+} as unknown as ChatModelPreferenceService;
 
 const REQUEST: ModelCompletionRequest = {
   messages: [{ role: 'user', content: 'hola' }],
@@ -131,8 +139,10 @@ describe('ModelRouterService.complete', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.complete('coding_default', REQUEST);
@@ -162,8 +172,10 @@ describe('ModelRouterService.complete', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.complete('long_context', REQUEST);
@@ -196,8 +208,10 @@ describe('ModelRouterService.complete', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.complete('coding_default', REQUEST);
@@ -227,8 +241,10 @@ describe('ModelRouterService.complete', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.complete('coding_default', REQUEST, {
@@ -253,8 +269,10 @@ describe('ModelRouterService.complete', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     let caught: unknown;
@@ -304,8 +322,10 @@ describe('ModelRouterService.completeStream', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.completeStream(
@@ -352,8 +372,10 @@ describe('ModelRouterService.completeStream', () => {
       PROFILES,
       anthropicProvider,
       googleProvider,
+      NO_OP_OPENAI,
       failoverService,
       NO_OP_FEATURE_FLAGS,
+      NO_OP_CHAT_PREFERENCE,
     );
 
     const result = await router.completeStream(
@@ -369,5 +391,111 @@ describe('ModelRouterService.completeStream', () => {
       'respuesta completa de Gemini',
       'respuesta completa de Gemini',
     );
+  });
+});
+
+describe('ModelRouterService: preferencia de modelo del owner (2026-09-28)', () => {
+  function routerWith(
+    chatModelPreferenceService: unknown,
+    overrides: {
+      openaiComplete?: ReturnType<typeof vi.fn>;
+      anthropicComplete?: ReturnType<typeof vi.fn>;
+    } = {},
+  ) {
+    const anthropicComplete =
+      overrides.anthropicComplete ??
+      vi.fn((modelId: string) => Promise.resolve(fakeResponse(modelId)));
+    const anthropicProvider = {
+      complete: anthropicComplete,
+    } as unknown as AnthropicProvider;
+    const googleProvider = { complete: vi.fn() } as unknown as GoogleProvider;
+    const openaiComplete =
+      overrides.openaiComplete ??
+      vi.fn((modelId: string) => Promise.resolve(fakeResponse(modelId)));
+    const openaiProvider = {
+      complete: openaiComplete,
+    } as unknown as OpenAIProvider;
+    const failoverService = {
+      executeWithFailover: vi.fn((_context, callPrimary: () => unknown) =>
+        callPrimary(),
+      ),
+    } as unknown as FailoverService;
+
+    const router = new ModelRouterService(
+      PROFILES,
+      anthropicProvider,
+      googleProvider,
+      openaiProvider,
+      failoverService,
+      NO_OP_FEATURE_FLAGS,
+      chatModelPreferenceService as ChatModelPreferenceService,
+    );
+    return { router, anthropicComplete, openaiComplete };
+  }
+
+  it('sin preferencia (null): chat_conversational usa el primary de siempre, sin effort en la request', async () => {
+    const { router, anthropicComplete } = routerWith({
+      getPreference: () => null,
+    });
+    await router.complete('chat_conversational', REQUEST);
+    expect(anthropicComplete).toHaveBeenCalledWith('claude-sonnet-5', REQUEST);
+  });
+
+  it('con preferencia: chat_conversational despacha al vendor/modelo elegido, con el effort mezclado en la request', async () => {
+    const { router, openaiComplete } = routerWith({
+      getPreference: () => ({
+        vendor: 'openai',
+        modelId: 'gpt-5.1',
+        effort: 'high',
+        setBy: 'owner:api',
+        changedAt: '2026-09-28T00:00:00.000Z',
+      }),
+    });
+
+    const result = await router.complete('chat_conversational', REQUEST);
+
+    expect(result.modelId).toBe('gpt-5.1');
+    expect(openaiComplete).toHaveBeenCalledWith('gpt-5.1', {
+      ...REQUEST,
+      effort: 'high',
+    });
+  });
+
+  it('la preferencia del owner NUNCA afecta a otro TaskProfile (solo chat_conversational puede elegirse)', async () => {
+    const getPreference = vi.fn().mockReturnValue({
+      vendor: 'openai',
+      modelId: 'gpt-5.1',
+      effort: 'high',
+      setBy: 'owner:api',
+      changedAt: '2026-09-28T00:00:00.000Z',
+    });
+    const { router, anthropicComplete } = routerWith({ getPreference });
+
+    const result = await router.complete('reasoning_heavy', REQUEST);
+
+    // reasoning_heavy.primary sigue siendo claude-opus-4-8: la preferencia no se consultó.
+    expect(result.modelId).toBe('claude-opus-4-8');
+    expect(anthropicComplete).toHaveBeenCalledWith('claude-opus-4-8', REQUEST);
+    expect(getPreference).not.toHaveBeenCalled();
+  });
+
+  it('effort ausente en la preferencia (modelo sin esfuerzo elegido): la request no lleva effort', async () => {
+    const { router, anthropicComplete } = routerWith({
+      getPreference: () => ({
+        vendor: 'anthropic',
+        modelId: 'claude-haiku-4-5',
+        effort: null,
+        setBy: 'owner:api',
+        changedAt: '2026-09-28T00:00:00.000Z',
+      }),
+    });
+
+    await router.complete('chat_conversational', REQUEST);
+
+    const sent = anthropicComplete.mock.calls[0]?.[1] as Record<
+      string,
+      unknown
+    >;
+    expect(sent).not.toHaveProperty('effort');
   });
 });

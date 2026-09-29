@@ -11,7 +11,10 @@ import type {
   ModelStreamDeltaListener,
   ModelToolCall,
 } from './model-provider.types';
-import { anthropicModelAcceptsSampling } from './sampling';
+import {
+  anthropicModelAcceptsSampling,
+  anthropicThinkingParams,
+} from './sampling';
 
 function toAnthropicContent(
   content: ModelMessage['content'],
@@ -126,6 +129,11 @@ export class AnthropicProvider implements ModelProviderClient {
             })),
           }
         : {}),
+      ...anthropicThinkingParams(
+        modelId,
+        request.effort,
+        request.maxOutputTokens,
+      ),
     };
   }
 

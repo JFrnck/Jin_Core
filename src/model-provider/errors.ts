@@ -34,17 +34,34 @@ export class AllProvidersFailedError extends JinError {
 }
 
 /**
- * `router.service.ts` decide qué provider (Anthropic/Google) usar por el
- * prefijo del model ID (`claude-`/`gemini-`, ver docs/MODEL_ROUTING.md
- * §1). Un modelId que no matchea ninguno de los dos significaría que
- * `config/models.yaml` referencia un modelo de un vendor no soportado
- * todavía — fail-safe: rechazar en vez de adivinar un provider.
+ * `router.service.ts` decide qué provider (Anthropic/Google/OpenAI) usar
+ * por el prefijo del model ID (`claude-`/`gemini-`/`gpt-`, ver
+ * docs/MODEL_ROUTING.md §1). Un modelId que no matchea ninguno de los tres
+ * significaría que `config/models.yaml` referencia un modelo de un vendor
+ * no soportado todavía — fail-safe: rechazar en vez de adivinar un provider.
  */
 export class UnknownModelVendorError extends JinError {
   constructor(modelId: string) {
     super(
-      `No se pudo determinar el vendor (Anthropic/Google) para el modelId "${modelId}".`,
+      `No se pudo determinar el vendor (Anthropic/Google/OpenAI) para el modelId "${modelId}".`,
       { code: 'MODEL_PROVIDER_UNKNOWN_VENDOR', httpStatus: 500 },
+    );
+  }
+}
+
+/**
+ * El owner pidió un vendor+modelo para `chat_conversational` que no está
+ * en el catálogo curado (`config/models.yaml` → `chat_options`) — 2026-09-28,
+ * preferencia de modelo. Fail-safe, mismo criterio que
+ * `UnknownTaskProfileError`: un valor fuera del catálogo nunca cae a un
+ * default silencioso ni se guarda tal cual (rompería el budget guard, que
+ * necesita el precio del modelo en `model_prices`).
+ */
+export class InvalidChatModelOptionError extends JinError {
+  constructor(vendor: string, modelId: string) {
+    super(
+      `"${vendor}/${modelId}" no está en el catálogo de modelos elegibles para el chat.`,
+      { code: 'MODEL_PROVIDER_INVALID_CHAT_OPTION', httpStatus: 400 },
     );
   }
 }

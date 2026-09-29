@@ -5,3 +5,4 @@
 // importaría el token de vuelta desde el módulo. Separado, ninguno de
 // los dos archivos se importa entre sí.
 export const MODELS_CONFIG = Symbol('MODELS_CONFIG');
+export const CHAT_OPTIONS = Symbol('CHAT_OPTIONS');

@@ -1,10 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AnthropicProvider } from './anthropic.provider';
+import { ChatModelPreferenceService } from './chat-model-preference.service';
 import { MODELS_CONFIG } from './model-provider.tokens';
 import type {
   ModelCompletionRequest,
   ModelCompletionResponse,
+  ModelEffort,
   ModelProviderClient,
   ModelsConfig,
   ModelStreamDeltaListener,
@@ -14,6 +16,7 @@ import type {
 import { UnknownModelVendorError } from './errors';
 import { FailoverService } from './failover.service';
 import { GoogleProvider } from './google.provider';
+import { OpenAIProvider } from './openai.provider';
 import { selectModel } from './router.logic';
 
 /**
@@ -31,8 +34,10 @@ export class ModelRouterService {
     @Inject(MODELS_CONFIG) private readonly profiles: ModelsConfig,
     private readonly anthropicProvider: AnthropicProvider,
     private readonly googleProvider: GoogleProvider,
+    private readonly openaiProvider: OpenAIProvider,
     private readonly failoverService: FailoverService,
     private readonly featureFlagsService: FeatureFlagsService,
+    private readonly chatModelPreferenceService: ChatModelPreferenceService,
   ) {}
 
   async complete(
@@ -40,10 +45,11 @@ export class ModelRouterService {
     request: ModelCompletionRequest,
     hints?: SelectModelHints,
   ): Promise<ModelCompletionResponse> {
-    const { selected, secondaryModelId } = this.resolveCandidates(
+    const { selected, secondaryModelId, effort } = this.resolveCandidates(
       taskProfile,
       hints,
     );
+    const effectiveRequest = this.withEffort(request, effort);
 
     return this.failoverService.executeWithFailover(
       {
@@ -52,9 +58,15 @@ export class ModelRouterService {
         fallbackModelId: secondaryModelId,
       },
       () =>
-        this.providerFor(selected.modelId).complete(selected.modelId, request),
+        this.providerFor(selected.modelId).complete(
+          selected.modelId,
+          effectiveRequest,
+        ),
       () =>
-        this.providerFor(secondaryModelId).complete(secondaryModelId, request),
+        this.providerFor(secondaryModelId).complete(
+          secondaryModelId,
+          effectiveRequest,
+        ),
     );
   }
 
@@ -71,10 +83,11 @@ export class ModelRouterService {
     onDelta: ModelStreamDeltaListener,
     hints?: SelectModelHints,
   ): Promise<ModelCompletionResponse> {
-    const { selected, secondaryModelId } = this.resolveCandidates(
+    const { selected, secondaryModelId, effort } = this.resolveCandidates(
       taskProfile,
       hints,
     );
+    const effectiveRequest = this.withEffort(request, effort);
 
     return this.failoverService.executeWithFailoverStream(
       {
@@ -83,9 +96,9 @@ export class ModelRouterService {
         fallbackModelId: secondaryModelId,
       },
       (onDeltaFn) =>
-        this.completeOrStream(selected.modelId, request, onDeltaFn),
+        this.completeOrStream(selected.modelId, effectiveRequest, onDeltaFn),
       (onDeltaFn) =>
-        this.completeOrStream(secondaryModelId, request, onDeltaFn),
+        this.completeOrStream(secondaryModelId, effectiveRequest, onDeltaFn),
       onDelta,
     );
   }
@@ -113,13 +126,25 @@ export class ModelRouterService {
   ): {
     readonly selected: ReturnType<typeof selectModel>;
     readonly secondaryModelId: string;
+    readonly effort: ModelEffort | undefined;
   } {
+    // Preferencia del owner (2026-09-28, elegida en la app): solo aplica a
+    // `chat_conversational` — es el único TaskProfile que el owner puede
+    // elegir (mismo modelo que le contesta Y decide qué tools correr en el
+    // turno). Gana sobre el override de operación (feature flag) si ambos
+    // están puestos: es la señal más específica y más reciente.
+    const chatPreference =
+      taskProfile === 'chat_conversational'
+        ? this.chatModelPreferenceService.getPreference()
+        : null;
+
     // Fase 9.5 (BLUEPRINT §12.3): override hot de `primary` sobre
     // config/models.yaml -- regla de oro #5 intacta, sigue siendo
     // 100% config-driven, solo con una segunda capa encima de la
     // estática. Ningún cambio si no hay override declarado (camino
     // caliente sin allocación extra).
     const modelOverride =
+      chatPreference?.modelId ??
       this.featureFlagsService.getModelOverride(taskProfile);
     const effectiveProfiles = modelOverride
       ? {
@@ -136,7 +161,19 @@ export class ModelRouterService {
     const secondaryModelId =
       selected.modelId === profile.primary ? profile.fallback : profile.primary;
 
-    return { selected, secondaryModelId };
+    return {
+      selected,
+      secondaryModelId,
+      effort: chatPreference?.effort ?? undefined,
+    };
+  }
+
+  /** `effort` nunca lo fija el caller de `complete()`/`completeStream()` — solo la preferencia del owner, resuelta acá. */
+  private withEffort(
+    request: ModelCompletionRequest,
+    effort: ModelEffort | undefined,
+  ): ModelCompletionRequest {
+    return effort === undefined ? request : { ...request, effort };
   }
 
   private providerFor(modelId: string): ModelProviderClient {
@@ -145,6 +182,9 @@ export class ModelRouterService {
     }
     if (modelId.startsWith('gemini-')) {
       return this.googleProvider;
+    }
+    if (modelId.startsWith('gpt-')) {
+      return this.openaiProvider;
     }
     throw new UnknownModelVendorError(modelId);
   }

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  loadChatOptions,
   loadModelPrices,
   loadModelsConfig,
   parseModelPrices,
@@ -138,7 +139,7 @@ describe('parseModelPrices', () => {
 });
 
 describe('loadModelPrices', () => {
-  it('carga y valida el config/models.yaml real, incluyendo los 9 modelos documentados', () => {
+  it('carga y valida el config/models.yaml real, incluyendo los 11 modelos documentados (2026-09-28: +2 de OpenAI)', () => {
     const realPath = join(process.cwd(), 'config', 'models.yaml');
     const prices = loadModelPrices(realPath);
 
@@ -150,6 +151,33 @@ describe('loadModelPrices', () => {
       inputPerMillion: 1.25,
       outputPerMillion: 10,
     });
-    expect(Object.keys(prices)).toHaveLength(9);
+    expect(prices['gpt-5.1']).toEqual({
+      inputPerMillion: 1.25,
+      outputPerMillion: 10,
+    });
+    expect(Object.keys(prices)).toHaveLength(11);
+  });
+});
+
+describe('loadChatOptions', () => {
+  it('carga y valida el catálogo real elegible para el chat', () => {
+    const realPath = join(process.cwd(), 'config', 'models.yaml');
+    const options = loadChatOptions(realPath);
+
+    expect(options.length).toBeGreaterThanOrEqual(7);
+    expect(options).toContainEqual({
+      vendor: 'anthropic',
+      modelId: 'claude-sonnet-5',
+      label: 'Claude Sonnet 5 — balanceado (default)',
+      supportsEffort: true,
+    });
+    expect(options).toContainEqual(
+      expect.objectContaining({ vendor: 'openai', modelId: 'gpt-5.1' }),
+    );
+    // Todo modelo elegible para el chat tiene precio (el budget guard lo necesita).
+    const prices = loadModelPrices(realPath);
+    for (const option of options) {
+      expect(prices[option.modelId]).toBeDefined();
+    }
   });
 });
