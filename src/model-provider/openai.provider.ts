@@ -98,7 +98,8 @@ function parseToolArguments(rawArguments: string): unknown {
 }
 
 /**
- * Cliente de OpenAI (GPT-5.1 y su variante mini), 2026-09-28. Mismo
+ * Cliente de OpenAI (2026-09-28) — el modelo es cualquier `modelId` de
+ * `config/models.yaml` → `chat_options`, no hardcodeado acá. Mismo
  * contrato `ModelProviderClient` que Anthropic y Google — ver esos dos
  * providers para el patrón general. Sin streaming propio todavía (como
  * Google): `ModelRouterService.completeOrStream` degrada a `complete()` +
