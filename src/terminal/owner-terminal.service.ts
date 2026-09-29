@@ -10,17 +10,23 @@ import {
 import { STATIC_SERVER_SOURCE } from '../executor-client/preview-template.logic';
 import {
   AUDIT_COMMAND_PREVIEW_LENGTH,
+  DELETE_TERMINAL_ENTRY_TOOL,
   DELETE_TERMINAL_WORKSPACE_TOOL,
   EXPOSE_TERMINAL_SESSION_TOOL,
+  MAKE_TERMINAL_DIR_TOOL,
   RUN_TERMINAL_COMMAND_TOOL,
   START_TERMINAL_SESSION_TOOL,
   STOP_TERMINAL_SESSION_TOOL,
   TERMINAL_ACTOR,
+  WRITE_TERMINAL_FILE_TOOL,
 } from './terminal.constants';
 import { TerminalUpstreamError } from './terminal.errors';
 import {
   TerminalExecutorClient,
   type TerminalExportResult,
+  type TerminalFsFile,
+  type TerminalFsList,
+  type TerminalFsWritten,
   type TerminalServiceInfo,
   type TerminalServiceStart,
   type TerminalWorkspaceInfo,
@@ -31,6 +37,7 @@ import {
   TERMINAL_STATIC_PORT,
   type ExecTerminalInput,
   type ExposeTerminalInput,
+  type FsWriteInput,
   type StartTerminalInput,
 } from './terminal.schemas';
 
@@ -223,6 +230,47 @@ export class OwnerTerminalService implements OnModuleInit {
       `terminal: copiar ${count} archivo${count === 1 ? '' : 's'} del editor al proyecto`,
     );
     return this.executor.importFiles(workspaceId, files);
+  }
+
+  // ── Explorador de archivos del pod ─────────────────────────────────────
+
+  fsList(workspaceId: string, path: string): Promise<TerminalFsList> {
+    return this.executor.fsList(workspaceId, path);
+  }
+
+  fsRead(workspaceId: string, path: string): Promise<TerminalFsFile> {
+    return this.executor.fsRead(workspaceId, path);
+  }
+
+  /** Audit ANTES (fail-closed): hash de la ruta, nunca el contenido. */
+  async fsWrite(
+    workspaceId: string,
+    input: FsWriteInput,
+  ): Promise<TerminalFsWritten> {
+    await this.audit(
+      WRITE_TERMINAL_FILE_TOOL,
+      { workspaceId, path: input.path, force: input.force },
+      `terminal: guardar ${input.path.slice(0, AUDIT_COMMAND_PREVIEW_LENGTH)}${input.force ? ' (sobrescribir)' : ''}`,
+    );
+    return this.executor.fsWrite(workspaceId, input);
+  }
+
+  async fsMkdir(workspaceId: string, path: string): Promise<void> {
+    await this.audit(
+      MAKE_TERMINAL_DIR_TOOL,
+      { workspaceId, path },
+      `terminal: crear carpeta ${path.slice(0, AUDIT_COMMAND_PREVIEW_LENGTH)}`,
+    );
+    await this.executor.fsMkdir(workspaceId, path);
+  }
+
+  async fsDelete(workspaceId: string, path: string): Promise<void> {
+    await this.audit(
+      DELETE_TERMINAL_ENTRY_TOOL,
+      { workspaceId, path },
+      `terminal: borrar ${path.slice(0, AUDIT_COMMAND_PREVIEW_LENGTH)}`,
+    );
+    await this.executor.fsDelete(workspaceId, path);
   }
 
   /**

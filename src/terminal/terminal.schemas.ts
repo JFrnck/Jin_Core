@@ -184,3 +184,84 @@ export const TerminalServiceLogsSchema = z.object({ log: z.string() });
 export class TerminalServiceLogsDto extends createZodDto(
   TerminalServiceLogsSchema,
 ) {}
+
+// ── Explorador de archivos del pod (2026-09-29) ──────────────────────────
+// Un archivo de texto a la vez sobre el disco real del proyecto. El Executor
+// vuelve a validar todo (y `FS_SCRIPT` dentro del pod, una tercera vez).
+
+export const TERMINAL_FS_MAX_FILE_BYTES = 512 * 1024;
+
+const FsFilePath = z
+  .string()
+  .min(1)
+  .max(400)
+  .refine(
+    (path) =>
+      !path.startsWith('/') &&
+      !path.includes('\\') &&
+      !path.split('/').includes('..'),
+    { message: 'ruta insegura (absoluta o con "..")' },
+  );
+const FsDirPath = z.union([z.literal('.'), FsFilePath]);
+
+export const FsListQuerySchema = z.object({ path: FsDirPath.default('.') });
+export class FsListQueryDto extends createZodDto(FsListQuerySchema) {}
+
+export const FsReadQuerySchema = z.object({ path: FsFilePath });
+export class FsReadQueryDto extends createZodDto(FsReadQuerySchema) {}
+
+export const FsWriteSchema = z
+  .object({
+    path: FsFilePath,
+    content: z
+      .string()
+      .refine((text) => Buffer.byteLength(text) <= TERMINAL_FS_MAX_FILE_BYTES, {
+        message: `el archivo supera ${TERMINAL_FS_MAX_FILE_BYTES / 1024} KB`,
+      }),
+    /** Hash que la app leyó: si el archivo cambió desde entonces el Executor responde 409. */
+    expectedSha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    /** Sobrescribir sin comprobar el hash (el "sobrescribir" de la alerta de conflicto). */
+    force: z.boolean().default(false),
+  })
+  .strict();
+export type FsWriteInput = z.infer<typeof FsWriteSchema>;
+export class FsWriteDto extends createZodDto(FsWriteSchema) {}
+
+export const FsMkdirSchema = z.object({ path: FsFilePath }).strict();
+export class FsMkdirDto extends createZodDto(FsMkdirSchema) {}
+
+export const FsDeleteQuerySchema = z.object({ path: FsFilePath });
+export class FsDeleteQueryDto extends createZodDto(FsDeleteQuerySchema) {}
+
+export const TerminalFsListSchema = z.object({
+  entries: z.array(
+    z.object({
+      name: z.string(),
+      type: z.enum(['file', 'dir', 'link', 'other']),
+      size: z.number(),
+      mtimeMs: z.number(),
+    }),
+  ),
+  truncated: z.boolean(),
+});
+export class TerminalFsListDto extends createZodDto(TerminalFsListSchema) {}
+
+export const TerminalFsFileSchema = z.object({
+  content: z.string(),
+  size: z.number(),
+  mtimeMs: z.number(),
+  sha256: z.string(),
+});
+export class TerminalFsFileDto extends createZodDto(TerminalFsFileSchema) {}
+
+export const TerminalFsWrittenSchema = z.object({
+  sha256: z.string(),
+  size: z.number(),
+  mtimeMs: z.number(),
+});
+export class TerminalFsWrittenDto extends createZodDto(
+  TerminalFsWrittenSchema,
+) {}

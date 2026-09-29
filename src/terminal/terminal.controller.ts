@@ -25,6 +25,11 @@ import {
   ExecTerminalDto,
   ExportTerminalQueryDto,
   ExposeTerminalDto,
+  FsDeleteQueryDto,
+  FsListQueryDto,
+  FsMkdirDto,
+  FsReadQueryDto,
+  FsWriteDto,
   ImportTerminalDto,
   StartServiceDto,
   StartTerminalDto,
@@ -32,6 +37,9 @@ import {
   TerminalServiceLogsDto,
   TerminalServiceStartDto,
   TerminalExportDto,
+  TerminalFsFileDto,
+  TerminalFsListDto,
+  TerminalFsWrittenDto,
   TerminalImportResultDto,
   TerminalPendingDto,
   TerminalWorkspaceDto,
@@ -190,6 +198,85 @@ export class TerminalController {
       this.workspaceIdOrFail(rawWorkspaceId),
       body.files,
     );
+  }
+
+  // ── Explorador de archivos del pod ─────────────────────────────────────
+
+  @Get(':workspaceId/fs/list')
+  @ApiOperation({ summary: 'Lista una carpeta del disco del proyecto' })
+  @ZodResponse({ status: 200, type: TerminalFsListDto })
+  async fsList(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Query() query: FsListQueryDto,
+  ) {
+    const result = await this.terminal.fsList(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      query.path,
+    );
+    return { entries: [...result.entries], truncated: result.truncated };
+  }
+
+  @Get(':workspaceId/fs/file')
+  @ApiOperation({
+    summary: 'Lee un archivo de texto del proyecto (UTF-8, hasta 512 KB)',
+  })
+  @ZodResponse({ status: 200, type: TerminalFsFileDto })
+  fsRead(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Query() query: FsReadQueryDto,
+  ) {
+    return this.terminal.fsRead(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      query.path,
+    );
+  }
+
+  @Put(':workspaceId/fs/file')
+  @ApiOperation({
+    summary:
+      'Guarda un archivo de texto en el disco del proyecto. Con expectedSha256, 409 (TERMINAL_FS_CONFLICT) si cambió en el pod. Queda en el audit',
+  })
+  @ZodResponse({ status: 200, type: TerminalFsWrittenDto })
+  fsWrite(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Body() body: FsWriteDto,
+  ) {
+    return this.terminal.fsWrite(this.workspaceIdOrFail(rawWorkspaceId), body);
+  }
+
+  @Post(':workspaceId/fs/dir')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Crea una carpeta en el proyecto. Queda en el audit',
+  })
+  @ZodResponse({ status: 200, type: OkResultDto })
+  async fsMkdir(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Body() body: FsMkdirDto,
+  ): Promise<{ ok: true }> {
+    await this.terminal.fsMkdir(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      body.path,
+    );
+    return { ok: true };
+  }
+
+  @Delete(':workspaceId/fs/entry')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Borra un archivo o una carpeta vacía del proyecto (no recursivo). Queda en el audit',
+  })
+  @ZodResponse({ status: 200, type: OkResultDto })
+  async fsDelete(
+    @Param('workspaceId') rawWorkspaceId: string,
+    @Query() query: FsDeleteQueryDto,
+  ): Promise<{ ok: true }> {
+    await this.terminal.fsDelete(
+      this.workspaceIdOrFail(rawWorkspaceId),
+      query.path,
+    );
+    return { ok: true };
   }
 
   // ── Servidores en segundo plano y vista previa en vivo ─────────────────

@@ -25,6 +25,31 @@ export interface TerminalExportResult {
   }[];
 }
 
+export interface TerminalFsEntry {
+  readonly name: string;
+  readonly type: 'file' | 'dir' | 'link' | 'other';
+  readonly size: number;
+  readonly mtimeMs: number;
+}
+
+export interface TerminalFsList {
+  readonly entries: readonly TerminalFsEntry[];
+  readonly truncated: boolean;
+}
+
+export interface TerminalFsFile {
+  readonly content: string;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly sha256: string;
+}
+
+export interface TerminalFsWritten {
+  readonly sha256: string;
+  readonly size: number;
+  readonly mtimeMs: number;
+}
+
 export interface TerminalServiceInfo {
   readonly port: number;
   readonly command: string;
@@ -208,6 +233,51 @@ export class TerminalExecutorClient {
       `/${encodeURIComponent(workspaceId)}/exec`,
       input,
       signal,
+    );
+  }
+
+  // ── Explorador de archivos del pod ─────────────────────────────────────
+
+  fsList(workspaceId: string, path: string): Promise<TerminalFsList> {
+    return this.json<TerminalFsList>(
+      'GET',
+      `/${encodeURIComponent(workspaceId)}/fs/list?path=${encodeURIComponent(path)}`,
+    );
+  }
+
+  fsRead(workspaceId: string, path: string): Promise<TerminalFsFile> {
+    return this.json<TerminalFsFile>(
+      'GET',
+      `/${encodeURIComponent(workspaceId)}/fs/file?path=${encodeURIComponent(path)}`,
+    );
+  }
+
+  fsWrite(
+    workspaceId: string,
+    input: {
+      readonly path: string;
+      readonly content: string;
+      readonly expectedSha256?: string | undefined;
+      readonly force: boolean;
+    },
+  ): Promise<TerminalFsWritten> {
+    return this.json<TerminalFsWritten>(
+      'PUT',
+      `/${encodeURIComponent(workspaceId)}/fs/file`,
+      input,
+    );
+  }
+
+  async fsMkdir(workspaceId: string, path: string): Promise<void> {
+    await this.send('POST', `/${encodeURIComponent(workspaceId)}/fs/dir`, {
+      path,
+    });
+  }
+
+  async fsDelete(workspaceId: string, path: string): Promise<void> {
+    await this.send(
+      'DELETE',
+      `/${encodeURIComponent(workspaceId)}/fs/entry?path=${encodeURIComponent(path)}`,
     );
   }
 
