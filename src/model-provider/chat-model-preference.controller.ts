@@ -67,7 +67,11 @@ export class ChatModelPreferenceController {
       'Catálogo de modelos elegibles y la preferencia vigente para el chat',
   })
   @ZodResponse({ status: 200, type: ChatModelStatusDto })
-  getStatus(): z.infer<typeof ChatModelStatusSchema> {
+  async getStatus(): Promise<z.infer<typeof ChatModelStatusSchema>> {
+    // Refresca el caché acá (no en el arranque del módulo, ver el
+    // comentario del service): la app llama este GET en cada
+    // `refreshAll()`, así que el caché del router nunca queda viejo por mucho.
+    await this.service.refresh();
     return this.describe();
   }
 

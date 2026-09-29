@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DB_CONNECTION, type Db } from '../db/db.module';
 import { chatModelPreference } from '../db/schema';
@@ -24,13 +24,25 @@ const STATE_ROW_ID = 1;
  * `POST /api/model-provider/chat-preference`, autenticado (mismo patrón
  * que `POST /api/autonomy`).
  *
- * Lectura sync (`getPreference()`) desde un caché en memoria, actualizado
- * en `onModuleInit` y en cada escritura — igual que `FeatureFlagsService`:
+ * Lectura sync (`getPreference()`) desde un caché en memoria:
  * `ModelRouterService` la consulta en el camino caliente de cada turno de
- * chat, no puede depender de I/O de DB ahí.
+ * chat, no puede depender de I/O de DB ahí. El caché se llena con
+ * `refresh()` (lo llama el controller en cada `GET`, y por lo tanto
+ * también cada vez que la app hace su `refreshAll()`) y con cada
+ * escritura — NUNCA en el arranque del módulo: a diferencia de
+ * `AutonomyService` (que relee la fila en cada llamada, sin caché),
+ * este caché necesita mantenerse al día, pero cargarlo en
+ * `OnModuleInit` bloquearía — y podía romper — el arranque de toda la
+ * app si la DB no está lista todavía (encontrado en CI: `app.e2e-spec.ts`
+ * no provee Postgres real, y esto era la única pieza de todo Jin_Core
+ * que consultaba la DB durante el bootstrap). Ventana aceptada: recién
+ * reiniciado el pod, antes del primer `GET`, un turno de chat usa el
+ * `primary` de `models.yaml` en vez de la preferencia guardada — se
+ * corrige solo en cuanto algo pida el estado (la propia app, al abrir
+ * Ajustes o en su refresh periódico).
  */
 @Injectable()
-export class ChatModelPreferenceService implements OnModuleInit {
+export class ChatModelPreferenceService {
   private readonly logger = new Logger(ChatModelPreferenceService.name);
   private cached: ChatModelPreference | null = null;
 
@@ -39,7 +51,8 @@ export class ChatModelPreferenceService implements OnModuleInit {
     @Inject(CHAT_OPTIONS) private readonly catalog: readonly ChatModelOption[],
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  /** Vuelve a leer la fila y actualiza el caché — barato (una fila por id). */
+  async refresh(): Promise<void> {
     this.cached = await this.readFromDb();
   }
 

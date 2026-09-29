@@ -63,15 +63,15 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
     expect(service().listCatalog()).toEqual(CATALOG);
   });
 
-  it('sin preferencia guardada, onModuleInit() deja getPreference() en null', async () => {
+  it('sin preferencia guardada, refresh() deja getPreference() en null', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     expect(svc.getPreference()).toBeNull();
   });
 
-  it('setPreference() guarda, onModuleInit() de una instancia nueva la lee de la DB', async () => {
+  it('setPreference() guarda, refresh() de una instancia nueva la lee de la DB', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     const result = await svc.setPreference(
       { vendor: 'anthropic', modelId: 'claude-sonnet-5', effort: 'high' },
       'owner:api',
@@ -88,7 +88,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
 
     // Una instancia NUEVA (simula un restart) la lee de la fila persistida.
     const reloaded = service();
-    await reloaded.onModuleInit();
+    await reloaded.refresh();
     expect(reloaded.getPreference()).toMatchObject({
       vendor: 'anthropic',
       modelId: 'claude-sonnet-5',
@@ -98,7 +98,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
 
   it('un modelo que soporta esfuerzo pero el owner no pidió ninguno: effort queda null', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     const result = await svc.setPreference(
       { vendor: 'openai', modelId: 'gpt-5.1', effort: null },
       'owner:api',
@@ -108,7 +108,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
 
   it('un modelo que NO soporta esfuerzo: el esfuerzo pedido se descarta (queda null), no se guarda "sin efecto"', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     const result = await svc.setPreference(
       { vendor: 'anthropic', modelId: 'claude-haiku-4-5', effort: 'high' },
       'owner:api',
@@ -118,7 +118,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
 
   it('un vendor/modelo fuera del catálogo curado se rechaza: no se guarda nada', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     await expect(
       svc.setPreference(
         { vendor: 'anthropic', modelId: 'claude-fable-5-1', effort: null },
@@ -130,7 +130,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
 
   it('clearPreference() vuelve al default (null) y lo persiste', async () => {
     const svc = service();
-    await svc.onModuleInit();
+    await svc.refresh();
     await svc.setPreference(
       { vendor: 'openai', modelId: 'gpt-5.1', effort: 'medium' },
       'owner:api',
@@ -141,7 +141,7 @@ describe('ChatModelPreferenceService (integración, Postgres real, 2026-09-28)',
     expect(svc.getPreference()).toBeNull();
 
     const reloaded = service();
-    await reloaded.onModuleInit();
+    await reloaded.refresh();
     expect(reloaded.getPreference()).toBeNull();
   });
 });
