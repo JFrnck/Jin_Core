@@ -18,6 +18,19 @@ export const STOP_TERMINAL_SESSION_TOOL = 'stopTerminalSession';
  */
 export const DELETE_TERMINAL_WORKSPACE_TOOL = 'deleteTerminalWorkspace';
 
+/**
+ * Terminal interactiva (PTY, 2026-09-29). Abrir y cerrar la sesión quedan en el
+ * audit; cada línea que el owner teclea sigue yendo con `runTerminalCommand`.
+ * Virtuales igual que las demás: el modelo no las ve.
+ */
+export const OPEN_TERMINAL_PTY_TOOL = 'openTerminalPty';
+export const CLOSE_TERMINAL_PTY_TOOL = 'closeTerminalPty';
+
+/** Salida reciente que Core guarda por sesión para reenganchar tras una desconexión. */
+export const PTY_RING_BYTES = 256 * 1024;
+/** Cuánto sigue viva una sesión sin ninguna app conectada antes de cerrarse. */
+export const PTY_DETACH_GRACE_MS = 10 * 60 * 1000;
+
 export const TERMINAL_ACTOR = 'owner:terminal';
 
 /** Cuántos caracteres del comando quedan en el audit (el hash cubre el resto). */
