@@ -26,6 +26,7 @@ function workspace(
     requestId: null,
     exposure: null,
     lastActivityAt: '2026-09-28T19:00:00.000Z',
+    claudeCode: false,
     ...over,
   };
 }

@@ -3300,6 +3300,9 @@
           "lastActivityAt": {
             "type": "string",
             "nullable": true
+          },
+          "claudeCode": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -3309,7 +3312,8 @@
           "expiresAt",
           "requestId",
           "exposure",
-          "lastActivityAt"
+          "lastActivityAt",
+          "claudeCode"
         ],
         "additionalProperties": false
       },
@@ -3327,6 +3331,9 @@
             "type": "integer",
             "minimum": 300,
             "maximum": 14400
+          },
+          "claudeCode": {
+            "type": "boolean"
           }
         },
         "required": [

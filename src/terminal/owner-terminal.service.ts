@@ -20,6 +20,7 @@ import {
   TERMINAL_ACTOR,
   WRITE_TERMINAL_FILE_TOOL,
 } from './terminal.constants';
+import { auditPreview } from './redact-secrets';
 import { TerminalUpstreamError } from './terminal.errors';
 import {
   TerminalExecutorClient,
@@ -117,9 +118,12 @@ export class OwnerTerminalService implements OnModuleInit {
       toolName: START_TERMINAL_SESSION_TOOL,
       level: 'confirm',
       inputsHash: computeInputsHash(payload),
-      planSummary: existing
-        ? `Reanudar la terminal de este proyecto por ${ttlLabel(input.ttlSeconds)}: el mismo disco, tal como quedó.`
-        : `Abrir una terminal aislada para este proyecto por ${ttlLabel(input.ttlSeconds)} (${fileCount} archivo${fileCount === 1 ? '' : 's'} del editor): un pod sin más red que el proxy de npm del clúster. Los comandos los escribes tú.`,
+      planSummary: input.claudeCode
+        ? // Sin ambigüedad: es la única excepción a "el pod no tiene más red que el proxy de npm".
+          `${existing ? 'Reanudar' : 'Abrir'} la terminal de este proyecto por ${ttlLabel(input.ttlSeconds)} CON ACCESO A CLAUDE CODE: el pod podrá salir a los servidores de Anthropic (solo a ellos, por un proxy del clúster) y guardar tu token de suscripción de Claude. Un código malicioso dentro del pod (p. ej. un paquete de npm) podría leer ese token. Los comandos los escribes tú.`
+        : existing
+          ? `Reanudar la terminal de este proyecto por ${ttlLabel(input.ttlSeconds)}: el mismo disco, tal como quedó.`
+          : `Abrir una terminal aislada para este proyecto por ${ttlLabel(input.ttlSeconds)} (${fileCount} archivo${fileCount === 1 ? '' : 's'} del editor): un pod sin más red que el proxy de npm del clúster. Los comandos los escribes tú.`,
       payload,
       actor: TERMINAL_ACTOR,
     });
@@ -282,9 +286,7 @@ export class OwnerTerminalService implements OnModuleInit {
     input: ExecTerminalInput,
     signal: AbortSignal,
   ): Promise<Response> {
-    const preview = input.command
-      .replace(/\s+/g, ' ')
-      .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
+    const preview = auditPreview(input.command, AUDIT_COMMAND_PREVIEW_LENGTH);
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
       { workspaceId, command: input.command },
@@ -306,9 +308,7 @@ export class OwnerTerminalService implements OnModuleInit {
     workspaceId: string,
     input: { command: string; port: number },
   ): Promise<TerminalServiceStart> {
-    const preview = input.command
-      .replace(/\s+/g, ' ')
-      .slice(0, AUDIT_COMMAND_PREVIEW_LENGTH);
+    const preview = auditPreview(input.command, AUDIT_COMMAND_PREVIEW_LENGTH);
     await this.audit(
       RUN_TERMINAL_COMMAND_TOOL,
       { workspaceId, command: input.command, port: input.port },
