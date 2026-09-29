@@ -14,6 +14,8 @@ describe('anthropicModelAcceptsSampling', () => {
     'claude-opus-4-7',
     'claude-sonnet-5',
     'claude-sonnet-5-20260601',
+    'claude-opus-5-5',
+    'claude-sonnet-5-5',
   ])('%s NO acepta parámetros de muestreo', (id) => {
     expect(anthropicModelAcceptsSampling(id)).toBe(false);
   });
@@ -64,6 +66,42 @@ describe('anthropicThinkingParams (2026-09-28, preferencia de modelo del owner)'
         });
       },
     );
+  });
+
+  describe('generación con pensamiento SIEMPRE prendido (Opus 5.5, Sonnet 5.5)', () => {
+    it('low: NO manda "disabled" (la API lo rechaza con 400) — manda adaptive con effort low', () => {
+      expect(anthropicThinkingParams('claude-opus-5-5', 'low', 8000)).toEqual({
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'low' },
+      });
+      expect(anthropicThinkingParams('claude-sonnet-5-5', 'low', 8000)).toEqual(
+        {
+          thinking: { type: 'adaptive' },
+          output_config: { effort: 'low' },
+        },
+      );
+    });
+
+    it.each(['medium', 'high'] as const)(
+      '%s: igual que el resto de la generación, adaptive con ese esfuerzo',
+      (effort) => {
+        expect(
+          anthropicThinkingParams('claude-opus-5-5', effort, 8000),
+        ).toEqual({
+          thinking: { type: 'adaptive' },
+          output_config: { effort },
+        });
+      },
+    );
+
+    it('con sufijo de fecha, sigue matcheando por prefijo', () => {
+      expect(
+        anthropicThinkingParams('claude-sonnet-5-5-20261001', 'low', 8000),
+      ).toEqual({
+        thinking: { type: 'adaptive' },
+        output_config: { effort: 'low' },
+      });
+    });
   });
 
   describe('generación anterior sin adaptive thinking (Haiku 4.5)', () => {

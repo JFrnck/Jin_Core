@@ -115,18 +115,32 @@ model_prices:
   antigravity-preview-05-2026:
     input_per_million: 0
     output_per_million: 0
-  # OpenAI (2026-09-28, preferencia de modelo del owner): precio ESTIMADO,
-  # no verificado contra la lista oficial de OpenAI todavía — ningún
-  # profile de runtime los usa como primary/fallback (solo `chat_options`
-  # abajo, elegibles a mano por el owner), así que un precio de lista
-  # desactualizado no puede aparecer como fallback automático silencioso.
-  # Corregir con la próxima verificación mensual (MODEL_ROUTING.md §6.2).
-  gpt-5.1:
-    input_per_million: 1.25
+  # Claude Sonnet 5.5 / Opus 5.5 (2026-09-29, sucesores anunciados de Sonnet 5
+  # y Opus 4.8 — mismo precio que Sonnet 5, y Opus 5.5 más barato Y más capaz
+  # que Opus 4.8). Ningún profile de runtime los usa como primary/fallback
+  # todavía (ver comentario en `profiles` arriba): solo elegibles a mano por
+  # el owner en `chat_options`. Precio verificado contra la doc pública de
+  # Anthropic al agregarlos.
+  claude-sonnet-5-5:
+    input_per_million: 2
     output_per_million: 10
-  gpt-5.1-mini:
-    input_per_million: 0.25
-    output_per_million: 2
+  claude-opus-5-5:
+    input_per_million: 4
+    output_per_million: 20
+  # OpenAI GPT-6 (2026-09-29): reemplaza la familia GPT-5.1 en `chat_options`
+  # (Sol/Luna suceden a GPT-5.1/GPT-5.1-mini; Astra es el flagship nuevo, sin
+  # equivalente anterior en este roster). Precio verificado contra la doc
+  # pública de OpenAI al agregarlos — no estimado como la entrada que
+  # reemplaza.
+  gpt-6-astra:
+    input_per_million: 10
+    output_per_million: 50
+  gpt-6-sol:
+    input_per_million: 2
+    output_per_million: 10
+  gpt-6-luna:
+    input_per_million: 0.10
+    output_per_million: 0.50
 
 # Catálogo elegible por el owner para "chat_conversational" (2026-09-28,
 # preferencia de modelo — app iOS: Más → Ajustes). Curado a propósito: NO
@@ -134,14 +148,20 @@ model_prices:
 # con el owner y decidir tools en el mismo turno. `supports_effort`: si el
 # modelo no tiene ningún knob de esfuerzo (Gemini todavía no, en este SDK),
 # la app no muestra el selector de esfuerzo para esa opción.
+# 2026-09-29: Opus 5.5/Sonnet 5.5 reemplazan a Opus 4.8/Sonnet 5 acá (mismo
+# precio o mejor, y más capaces — sin motivo para que el owner siga eligiendo
+# la versión vieja desde este selector). GPT-6 Astra/Sol/Luna reemplazan a
+# GPT-5.1/GPT-5.1-mini igual. Esto NO toca `profiles` arriba (el default
+# automático de `chat_conversational` y las demás tareas sigue en la versión
+# anterior) — es deliberado, ver STATUS.md de esta sesión.
 chat_options:
   - vendor: anthropic
-    model: claude-opus-4-8
-    label: "Claude Opus 4.8 — el más capaz"
+    model: claude-opus-5-5
+    label: "Claude Opus 5.5 — el más capaz"
     supports_effort: true
   - vendor: anthropic
-    model: claude-sonnet-5
-    label: "Claude Sonnet 5 — balanceado (default)"
+    model: claude-sonnet-5-5
+    label: "Claude Sonnet 5.5 — balanceado"
     supports_effort: true
   - vendor: anthropic
     model: claude-haiku-4-5
@@ -156,10 +176,14 @@ chat_options:
     label: "Gemini 3.5 Flash — agentic, rápido"
     supports_effort: false
   - vendor: openai
-    model: gpt-5.1
-    label: "GPT-5.1 — el más capaz de OpenAI"
+    model: gpt-6-astra
+    label: "GPT-6 Astra — el más capaz de OpenAI"
     supports_effort: true
   - vendor: openai
-    model: gpt-5.1-mini
-    label: "GPT-5.1 Mini — rápido y barato"
+    model: gpt-6-sol
+    label: "GPT-6 Sol — balanceado, para código"
+    supports_effort: true
+  - vendor: openai
+    model: gpt-6-luna
+    label: "GPT-6 Luna — rápido y barato"
     supports_effort: true

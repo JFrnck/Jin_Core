@@ -139,7 +139,7 @@ describe('parseModelPrices', () => {
 });
 
 describe('loadModelPrices', () => {
-  it('carga y valida el config/models.yaml real, incluyendo los 11 modelos documentados (2026-09-28: +2 de OpenAI)', () => {
+  it('carga y valida el config/models.yaml real, incluyendo los 14 modelos documentados (2026-09-29: Sonnet 5.5/Opus 5.5 + GPT-6 Astra/Sol/Luna)', () => {
     const realPath = join(process.cwd(), 'config', 'models.yaml');
     const prices = loadModelPrices(realPath);
 
@@ -151,11 +151,15 @@ describe('loadModelPrices', () => {
       inputPerMillion: 1.25,
       outputPerMillion: 10,
     });
-    expect(prices['gpt-5.1']).toEqual({
-      inputPerMillion: 1.25,
+    expect(prices['claude-opus-5-5']).toEqual({
+      inputPerMillion: 4,
+      outputPerMillion: 20,
+    });
+    expect(prices['gpt-6-sol']).toEqual({
+      inputPerMillion: 2,
       outputPerMillion: 10,
     });
-    expect(Object.keys(prices)).toHaveLength(11);
+    expect(Object.keys(prices)).toHaveLength(14);
   });
 });
 
@@ -167,12 +171,12 @@ describe('loadChatOptions', () => {
     expect(options.length).toBeGreaterThanOrEqual(7);
     expect(options).toContainEqual({
       vendor: 'anthropic',
-      modelId: 'claude-sonnet-5',
-      label: 'Claude Sonnet 5 — balanceado (default)',
+      modelId: 'claude-sonnet-5-5',
+      label: 'Claude Sonnet 5.5 — balanceado',
       supportsEffort: true,
     });
     expect(options).toContainEqual(
-      expect.objectContaining({ vendor: 'openai', modelId: 'gpt-5.1' }),
+      expect.objectContaining({ vendor: 'openai', modelId: 'gpt-6-sol' }),
     );
     // Todo modelo elegible para el chat tiene precio (el budget guard lo necesita).
     const prices = loadModelPrices(realPath);
