@@ -211,6 +211,65 @@ export class TerminalExecutorClient {
     );
   }
 
+  // ── Terminal interactiva (PTY) ─────────────────────────────────────────
+  // El Executor solo transporta bytes; el audit y los topes son de Core.
+
+  async openPty(
+    workspaceId: string,
+    size: { readonly cols: number; readonly rows: number },
+  ): Promise<{ ptyId: string }> {
+    return this.json<{ ptyId: string }>(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/pty`,
+      size,
+    );
+  }
+
+  /** Stream NDJSON de la salida (`{t:'out', d:<base64>}`, luego `exit` o `error`). */
+  async ptyOutput(
+    workspaceId: string,
+    ptyId: string,
+    signal: AbortSignal,
+  ): Promise<Response> {
+    return this.send(
+      'GET',
+      `/${encodeURIComponent(workspaceId)}/pty/${encodeURIComponent(ptyId)}/output`,
+      undefined,
+      signal,
+    );
+  }
+
+  async ptyInput(
+    workspaceId: string,
+    ptyId: string,
+    data: Buffer,
+  ): Promise<void> {
+    await this.send(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/pty/${encodeURIComponent(ptyId)}/input`,
+      { data: data.toString('base64') },
+    );
+  }
+
+  async ptyResize(
+    workspaceId: string,
+    ptyId: string,
+    size: { readonly cols: number; readonly rows: number },
+  ): Promise<void> {
+    await this.send(
+      'POST',
+      `/${encodeURIComponent(workspaceId)}/pty/${encodeURIComponent(ptyId)}/resize`,
+      size,
+    );
+  }
+
+  async closePty(workspaceId: string, ptyId: string): Promise<void> {
+    await this.send(
+      'DELETE',
+      `/${encodeURIComponent(workspaceId)}/pty/${encodeURIComponent(ptyId)}`,
+    );
+  }
+
   private async json<T>(
     method: string,
     path: string,
