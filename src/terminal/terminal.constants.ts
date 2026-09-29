@@ -31,6 +31,16 @@ export const PTY_RING_BYTES = 256 * 1024;
 /** Cuánto sigue viva una sesión sin ninguna app conectada antes de cerrarse. */
 export const PTY_DETACH_GRACE_MS = 10 * 60 * 1000;
 
+/**
+ * Explorador de archivos del pod (2026-09-29): escribir, crear carpeta y borrar
+ * quedan en el audit ANTES (fail-closed), con el hash de la ruta y NUNCA el
+ * contenido. Leer y listar no se auditan (es el propio proyecto del owner).
+ * Virtuales: el modelo no las ve.
+ */
+export const WRITE_TERMINAL_FILE_TOOL = 'writeTerminalFile';
+export const MAKE_TERMINAL_DIR_TOOL = 'makeTerminalDir';
+export const DELETE_TERMINAL_ENTRY_TOOL = 'deleteTerminalEntry';
+
 export const TERMINAL_ACTOR = 'owner:terminal';
 
 /** Cuántos caracteres del comando quedan en el audit (el hash cubre el resto). */

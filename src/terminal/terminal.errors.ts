@@ -9,12 +9,22 @@ const PASSTHROUGH_STATUSES = new Set([400, 404, 409, 422, 429]);
  * primero") conservan su código y su mensaje; lo demás sale como 502.
  */
 export class TerminalUpstreamError extends JinError {
-  constructor(upstreamStatus: number, message: string) {
+  /**
+   * `upstreamCode`: el código del Executor. Solo los del explorador de archivos
+   * (`TERMINAL_FS_*`, ej. `TERMINAL_FS_CONFLICT`) se dejan pasar tal cual: la
+   * app los necesita para distinguir un conflicto de un error. El resto sigue
+   * siendo el genérico.
+   */
+  constructor(upstreamStatus: number, message: string, upstreamCode?: string) {
     super(message, {
-      code: 'TERMINAL_UPSTREAM_ERROR',
+      code: upstreamCode?.startsWith('TERMINAL_FS_')
+        ? upstreamCode
+        : 'TERMINAL_UPSTREAM_ERROR',
       httpStatus: PASSTHROUGH_STATUSES.has(upstreamStatus)
         ? upstreamStatus
-        : 502,
+        : upstreamStatus === 413 && upstreamCode?.startsWith('TERMINAL_FS_')
+          ? 413
+          : 502,
     });
   }
 
@@ -24,15 +34,18 @@ export class TerminalUpstreamError extends JinError {
   ): Promise<TerminalUpstreamError> {
     const raw = await response.text().catch(() => '');
     let message = raw.slice(0, 300);
+    let code: string | undefined;
     try {
-      const parsed = JSON.parse(raw) as { message?: unknown };
+      const parsed = JSON.parse(raw) as { message?: unknown; code?: unknown };
       if (typeof parsed.message === 'string') message = parsed.message;
+      if (typeof parsed.code === 'string') code = parsed.code;
     } catch {
       // cuerpo no JSON: se usa el texto
     }
     return new TerminalUpstreamError(
       response.status,
       message || `El Executor respondió ${response.status}.`,
+      code,
     );
   }
 }

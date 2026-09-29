@@ -895,6 +895,220 @@
         ]
       }
     },
+    "/api/terminal/workspaces/{workspaceId}/fs/list": {
+      "get": {
+        "operationId": "TerminalController_fsList",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": ".",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "."
+                  ]
+                },
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalFsListDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lista una carpeta del disco del proyecto",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/workspaces/{workspaceId}/fs/file": {
+      "get": {
+        "operationId": "TerminalController_fsRead",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalFsFileDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lee un archivo de texto del proyecto (UTF-8, hasta 512 KB)",
+        "tags": [
+          "terminal"
+        ]
+      },
+      "put": {
+        "operationId": "TerminalController_fsWrite",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FsWriteDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TerminalFsWrittenDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Guarda un archivo de texto en el disco del proyecto. Con expectedSha256, 409 (TERMINAL_FS_CONFLICT) si cambió en el pod. Queda en el audit",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/workspaces/{workspaceId}/fs/dir": {
+      "post": {
+        "operationId": "TerminalController_fsMkdir",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FsMkdirDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Crea una carpeta en el proyecto. Queda en el audit",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
+    "/api/terminal/workspaces/{workspaceId}/fs/entry": {
+      "delete": {
+        "operationId": "TerminalController_fsDelete",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Borra un archivo o una carpeta vacía del proyecto (no recursivo). Queda en el audit",
+        "tags": [
+          "terminal"
+        ]
+      }
+    },
     "/api/terminal/workspaces/{workspaceId}/services": {
       "post": {
         "operationId": "TerminalController_startService",
@@ -3217,6 +3431,136 @@
         },
         "required": [
           "written"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalFsListDto_Output": {
+        "type": "object",
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "file",
+                    "dir",
+                    "link",
+                    "other"
+                  ]
+                },
+                "size": {
+                  "type": "number"
+                },
+                "mtimeMs": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "size",
+                "mtimeMs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entries",
+          "truncated"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalFsFileDto_Output": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "mtimeMs": {
+            "type": "number"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "size",
+          "mtimeMs",
+          "sha256"
+        ],
+        "additionalProperties": false
+      },
+      "FsWriteDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          },
+          "content": {
+            "type": "string"
+          },
+          "expectedSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "force": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "TerminalFsWrittenDto_Output": {
+        "type": "object",
+        "properties": {
+          "sha256": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number"
+          },
+          "mtimeMs": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "sha256",
+          "size",
+          "mtimeMs"
+        ],
+        "additionalProperties": false
+      },
+      "FsMkdirDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 400
+          }
+        },
+        "required": [
+          "path"
         ],
         "additionalProperties": false
       },

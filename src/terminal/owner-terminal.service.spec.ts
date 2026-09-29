@@ -104,6 +104,9 @@ describe('OwnerTerminalService', () => {
         'deleteTerminalWorkspace',
         'openTerminalPty',
         'closeTerminalPty',
+        'writeTerminalFile',
+        'makeTerminalDir',
+        'deleteTerminalEntry',
       ]) {
         expect(getToolDefinition(name)).toBeUndefined();
         expect(listRegisteredTools().map((tool) => tool.name)).not.toContain(
