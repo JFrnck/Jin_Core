@@ -15,6 +15,8 @@ export interface TerminalWorkspaceInfo {
   readonly requestId: string | null;
   readonly exposure: { readonly slug: string; readonly url: string } | null;
   readonly lastActivityAt: string | null;
+  /** El pod actual se abrió con Claude Code (ADR 0017). */
+  readonly claudeCode: boolean;
 }
 
 export interface TerminalExportResult {
@@ -96,6 +98,7 @@ export class TerminalExecutorClient {
       files: Readonly<Record<string, string>>;
       ttlSeconds: number;
       requestId?: string | undefined;
+      claudeCode?: boolean | undefined;
     },
   ): Promise<TerminalWorkspaceInfo> {
     return this.json(

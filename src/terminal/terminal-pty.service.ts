@@ -3,6 +3,7 @@ import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { computeInputsHash } from '../agent/agent.logic';
 import { AuditService } from '../audit/audit.service';
 import { PtyInputGate } from './pty-input-gate';
+import { auditPreview } from './redact-secrets';
 import { TerminalExecutorClient } from './terminal-executor.client';
 import {
   AUDIT_COMMAND_PREVIEW_LENGTH,
@@ -249,7 +250,7 @@ export class TerminalPtyService implements OnModuleDestroy {
             command: step.line,
             interactive: true,
           },
-          `terminal (interactiva): ${step.line.slice(0, AUDIT_COMMAND_PREVIEW_LENGTH)}`,
+          `terminal (interactiva): ${auditPreview(step.line, AUDIT_COMMAND_PREVIEW_LENGTH)}`,
         );
       }
       await this.executor.ptyInput(

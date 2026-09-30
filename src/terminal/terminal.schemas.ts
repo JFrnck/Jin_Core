@@ -56,6 +56,12 @@ export const StartTerminalSchema = z
       .int()
       .min(300)
       .max(4 * 60 * 60),
+    /**
+     * Claude Code dentro del pod (ADR 0017): abre la salida a los servidores de
+     * Anthropic y deja guardar el token de suscripción. Ausente = no. Nunca lo
+     * decide el modelo (la aprobación es del owner, nivel fijo `confirm`).
+     */
+    claudeCode: z.boolean().optional(),
   })
   .strict();
 export type StartTerminalInput = z.infer<typeof StartTerminalSchema>;
@@ -124,6 +130,8 @@ export const TerminalWorkspaceSchema = z.object({
   exposure: z.object({ slug: z.string(), url: z.string() }).nullable(),
   /** Último comando/servicio/petición al pod actual; null si no hay pod. */
   lastActivityAt: z.string().nullable(),
+  /** El pod actual se abrió con Claude Code (ADR 0017). */
+  claudeCode: z.boolean(),
 });
 export class TerminalWorkspaceDto extends createZodDto(
   TerminalWorkspaceSchema,
