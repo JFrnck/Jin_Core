@@ -9,7 +9,9 @@ import {
   AUDIT_COMMAND_PREVIEW_LENGTH,
   CLOSE_TERMINAL_PTY_TOOL,
   OPEN_TERMINAL_PTY_TOOL,
-  PTY_DETACH_GRACE_MS,
+  PTY_KEEPALIVE_DEFAULT_MS,
+  PTY_KEEPALIVE_MAX_MS,
+  PTY_KEEPALIVE_MIN_MS,
   PTY_RING_BYTES,
   RUN_TERMINAL_COMMAND_TOOL,
   TERMINAL_ACTOR,
@@ -38,6 +40,16 @@ const MAX_INPUT_BYTES_PER_SECOND = 512 * 1024;
 const REPLAY_CHUNK_BYTES = 48 * 1024;
 const ENDED_LINGER_MS = 30_000;
 const PUMP_MAX_RETRIES = 5;
+function clampKeepAlive(requested: number | undefined): number {
+  if (requested === undefined || !Number.isFinite(requested)) {
+    return PTY_KEEPALIVE_DEFAULT_MS;
+  }
+  return Math.min(
+    PTY_KEEPALIVE_MAX_MS,
+    Math.max(PTY_KEEPALIVE_MIN_MS, Math.round(requested)),
+  );
+}
+
 /** Ctrl+C: cancela la línea a medias en el shell cuando el audit falla. */
 const CTRL_C = Buffer.from([0x03]);
 
@@ -50,6 +62,8 @@ interface PtySession {
   ring: Buffer[];
   ringBytes: number;
   listener: PtyListener | null;
+  /** Cuánto esperar sin app antes de cerrar (lo elige el owner). */
+  keepAliveMs: number;
   detachTimer: NodeJS.Timeout | null;
   lingerTimer: NodeJS.Timeout | null;
   inputChain: Promise<void>;
@@ -90,10 +104,13 @@ export class TerminalPtyService implements OnModuleDestroy {
     workspaceId: string,
     size: PtySize,
     listener: PtyListener,
+    keepAliveMs?: number,
   ): Promise<{ ptyId: string; resumed: boolean }> {
+    const keepAlive = clampKeepAlive(keepAliveMs);
     const existingId = this.byWorkspace.get(workspaceId);
     const existing = existingId ? this.sessions.get(existingId) : undefined;
     if (existing && !existing.ended) {
+      if (keepAliveMs !== undefined) existing.keepAliveMs = keepAlive;
       this.attach(existing, listener);
       await this.resize(existing.ptyId, size).catch(() => undefined);
       return { ptyId: existing.ptyId, resumed: true };
@@ -125,6 +142,7 @@ export class TerminalPtyService implements OnModuleDestroy {
         ring: [],
         ringBytes: 0,
         listener: null,
+        keepAliveMs: keepAlive,
         detachTimer: null,
         lingerTimer: null,
         inputChain: Promise.resolve(),
@@ -153,12 +171,22 @@ export class TerminalPtyService implements OnModuleDestroy {
     if (!session || session.listener !== listener) return;
     session.listener = null;
     if (session.ended) return;
+    this.armDetachTimer(session);
+  }
+
+  /**
+   * (Re)inicia la cuenta atrás de una sesión sin app. Se llama al soltar la
+   * app y cada vez que la sesión escribe algo mientras está sola: la espera
+   * es de SILENCIO, así un Claude Code que sigue trabajando no se corta.
+   */
+  private armDetachTimer(session: PtySession): void {
+    if (session.detachTimer) clearTimeout(session.detachTimer);
     session.detachTimer = setTimeout(() => {
       this.logger.log(
-        `Terminal ${ptyId}: sin app conectada tras ${PTY_DETACH_GRACE_MS / 60_000} min, se cierra.`,
+        `Terminal ${session.ptyId}: sin app conectada ni salida en ${Math.round(session.keepAliveMs / 60_000)} min, se cierra.`,
       );
-      void this.close(ptyId, 'sin app conectada');
-    }, PTY_DETACH_GRACE_MS);
+      void this.close(session.ptyId, 'sin app conectada');
+    }, session.keepAliveMs);
     session.detachTimer.unref();
   }
 
@@ -180,6 +208,14 @@ export class TerminalPtyService implements OnModuleDestroy {
     session.inputChain = session.inputChain
       .then(() => this.process(session, data))
       .catch((error: unknown) => this.onInputFailure(session, error));
+  }
+
+  /** El owner cambió el tiempo de espera con la sesión abierta: vale desde ya para la próxima vez que se quede sola. */
+  setKeepAlive(ptyId: string, keepAliveMs: number): void {
+    const session = this.sessions.get(ptyId);
+    if (!session || session.ended) return;
+    session.keepAliveMs = clampKeepAlive(keepAliveMs);
+    if (session.detachTimer) this.armDetachTimer(session);
   }
 
   async resize(ptyId: string, size: PtySize): Promise<void> {
@@ -379,7 +415,8 @@ export class TerminalPtyService implements OnModuleDestroy {
       const bytes = Buffer.from(event.d, 'base64');
       session.bytesOut += bytes.length;
       this.remember(session, bytes);
-      session.listener?.({ type: 'out', data: event.d });
+      if (session.listener) session.listener({ type: 'out', data: event.d });
+      else if (session.detachTimer) this.armDetachTimer(session);
       return false;
     }
     if (event.t === 'exit') {

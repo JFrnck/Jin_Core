@@ -35,19 +35,30 @@ function setup(overrides: Partial<Record<string, unknown>> = {}) {
   const resize = vi.fn(() => Promise.resolve());
   const close = vi.fn(() => Promise.resolve());
   const detach = vi.fn();
+  const setKeepAlive = vi.fn();
   const service = {
     openOrAttach,
     input,
     resize,
     close,
     detach,
+    setKeepAlive,
     ...overrides,
   } as unknown as TerminalPtyService;
   const verifyAsync = vi.fn(() => Promise.resolve({}));
   const gateway = new TerminalGateway(service, {
     verifyAsync,
   } as unknown as JwtService);
-  return { gateway, openOrAttach, input, resize, close, detach, verifyAsync };
+  return {
+    gateway,
+    openOrAttach,
+    input,
+    resize,
+    close,
+    detach,
+    setKeepAlive,
+    verifyAsync,
+  };
 }
 
 const openPayload = { workspaceId: WORKSPACE, cols: 80, rows: 24 };
@@ -106,11 +117,34 @@ describe('TerminalGateway (/terminal)', () => {
         WORKSPACE,
         { cols: 80, rows: 24 },
         expect.any(Function),
+        undefined,
       );
       expect(client.emit).toHaveBeenCalledWith('pty:opened', {
         ptyId: PTY_ID,
         resumed: false,
       });
+    });
+
+    it('pasa el tiempo de espera elegido (minutos → ms) y rechaza valores fuera de 5–240', async () => {
+      const { gateway, openOrAttach } = setup();
+      const ok = fakeClient();
+      await gateway.open({ ...openPayload, keepAliveMinutes: 45 }, ok as never);
+      expect(openOrAttach).toHaveBeenCalledWith(
+        WORKSPACE,
+        { cols: 80, rows: 24 },
+        expect.any(Function),
+        45 * 60_000,
+      );
+
+      for (const bad of [0, 4, 241, 1.5, '60']) {
+        const client = fakeClient();
+        await gateway.open(
+          { ...openPayload, keepAliveMinutes: bad },
+          client as never,
+        );
+        expect(events(client)).toEqual(['pty:error']);
+      }
+      expect(openOrAttach).toHaveBeenCalledTimes(1);
     });
 
     it('la salida guardada que llega durante la apertura sale DESPUÉS de pty:opened', async () => {
@@ -255,6 +289,21 @@ describe('TerminalGateway (/terminal)', () => {
 
       expect(resize).toHaveBeenCalledTimes(1);
       expect(resize).toHaveBeenCalledWith(PTY_ID, { cols: 100, rows: 30 });
+    });
+
+    it('pty:keepalive valida 5–240 min y cambia el tiempo de la sesión abierta', async () => {
+      const { gateway, setKeepAlive } = setup();
+      const client = fakeClient();
+      gateway.keepAlive({ keepAliveMinutes: 30 }, client as never); // sin sesión: se ignora
+      await gateway.open(openPayload, client as never);
+
+      gateway.keepAlive({ keepAliveMinutes: 120 }, client as never);
+      gateway.keepAlive({ keepAliveMinutes: 2 }, client as never);
+      gateway.keepAlive({ keepAliveMinutes: 999 }, client as never);
+      gateway.keepAlive({}, client as never);
+
+      expect(setKeepAlive).toHaveBeenCalledTimes(1);
+      expect(setKeepAlive).toHaveBeenCalledWith(PTY_ID, 120 * 60_000);
     });
 
     it('pty:close cierra la sesión y permite abrir otra en la misma conexión', async () => {

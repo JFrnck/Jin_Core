@@ -10,6 +10,10 @@ import {
 } from '@nestjs/websockets';
 import type { Socket } from 'socket.io';
 import { z } from 'zod';
+import {
+  PTY_KEEPALIVE_MAX_MS,
+  PTY_KEEPALIVE_MIN_MS,
+} from './terminal.constants';
 import { extractWsToken } from '../auth/ws-token';
 import { JinError } from '../common/errors/jin-error';
 import {
@@ -22,7 +26,17 @@ const SizeSchema = z.object({
   cols: z.number().int().min(20).max(300),
   rows: z.number().int().min(5).max(100),
 });
-const OpenSchema = SizeSchema.extend({ workspaceId: z.string().uuid() });
+/** Cuánto mantener la sesión sin la app, en minutos (5–240). */
+const KeepAliveMinutes = z
+  .number()
+  .int()
+  .min(PTY_KEEPALIVE_MIN_MS / 60_000)
+  .max(PTY_KEEPALIVE_MAX_MS / 60_000);
+const OpenSchema = SizeSchema.extend({
+  workspaceId: z.string().uuid(),
+  keepAliveMinutes: KeepAliveMinutes.optional(),
+});
+const KeepAliveSchema = z.object({ keepAliveMinutes: KeepAliveMinutes });
 /** 64 KB de teclado en base64; lo que pase de eso la app lo parte. */
 const InputSchema = z.object({
   data: z
@@ -45,11 +59,11 @@ function dataOf(client: Socket): PtyClientData {
  * Terminal interactiva (PTY) hacia la app, por socket.io en el namespace
  * `/terminal` (2026-09-29). Misma auth que `/chat`: JWT del owner en el
  * handshake. Una terminal por conexión; si la conexión se cae, la sesión sigue
- * viva `PTY_DETACH_GRACE_MS` y la app se reengancha con `pty:open` (devuelve
+ * viva el tiempo que el owner eligió (`keepAliveMinutes`, 5–240 min, 60 por defecto) y la app se reengancha con `pty:open` (devuelve
  * lo que salió mientras no estaba).
  *
- * cliente → servidor: `pty:open {workspaceId, cols, rows}`, `pty:input {data}`,
- * `pty:resize {cols, rows}`, `pty:close`.
+ * cliente → servidor: `pty:open {workspaceId, cols, rows, keepAliveMinutes?}`, `pty:input {data}`,
+ * `pty:resize {cols, rows}`, `pty:keepalive {keepAliveMinutes}`, `pty:close`.
  * servidor → cliente: `pty:opened {ptyId, resumed}`, `pty:output {data}`,
  * `pty:exit {code}`, `pty:notice {message}`, `pty:error {message}`.
  * `data` va siempre en base64 (bytes crudos del terminal).
@@ -94,8 +108,8 @@ export class TerminalGateway
       return;
     }
     // La app sale de la pantalla sin cerrar la sesión y vuelve por la MISMA
-    // conexión: se suelta la suscripción anterior (empieza su gracia de 10 min)
-    // y `openOrAttach` se reengancha a la sesión viva, cancelando esa gracia.
+    // conexión: se suelta la suscripción anterior (empieza la espera sin app)
+    // y `openOrAttach` se reengancha a la sesión viva, cancelando esa espera.
     const previous = dataOf(client);
     if (previous.ptyId && previous.listener) {
       this.pty.detach(previous.ptyId, previous.listener);
@@ -117,6 +131,9 @@ export class TerminalGateway
         parsed.data.workspaceId,
         { cols: parsed.data.cols, rows: parsed.data.rows },
         listener,
+        parsed.data.keepAliveMinutes === undefined
+          ? undefined
+          : parsed.data.keepAliveMinutes * 60_000,
       );
       dataOf(client).ptyId = ptyId;
       dataOf(client).listener = listener;
@@ -156,6 +173,17 @@ export class TerminalGateway
     } catch (error) {
       this.logger.warn(`resize: ${this.messageOf(error)}`);
     }
+  }
+
+  @SubscribeMessage('pty:keepalive')
+  keepAlive(
+    @MessageBody() payload: unknown,
+    @ConnectedSocket() client: Socket,
+  ): void {
+    const parsed = KeepAliveSchema.safeParse(payload);
+    const { ptyId } = dataOf(client);
+    if (!parsed.success || !ptyId) return;
+    this.pty.setKeepAlive(ptyId, parsed.data.keepAliveMinutes * 60_000);
   }
 
   @SubscribeMessage('pty:close')
