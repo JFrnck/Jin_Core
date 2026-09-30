@@ -26,16 +26,17 @@ const SizeSchema = z.object({
   cols: z.number().int().min(20).max(300),
   rows: z.number().int().min(5).max(100),
 });
+/** Cuánto mantener la sesión sin la app, en minutos (5–240). */
+const KeepAliveMinutes = z
+  .number()
+  .int()
+  .min(PTY_KEEPALIVE_MIN_MS / 60_000)
+  .max(PTY_KEEPALIVE_MAX_MS / 60_000);
 const OpenSchema = SizeSchema.extend({
   workspaceId: z.string().uuid(),
-  /** Cuánto mantener la sesión sin la app (min); el servicio lo acota a 5–240. */
-  keepAliveMinutes: z
-    .number()
-    .int()
-    .min(PTY_KEEPALIVE_MIN_MS / 60_000)
-    .max(PTY_KEEPALIVE_MAX_MS / 60_000)
-    .optional(),
+  keepAliveMinutes: KeepAliveMinutes.optional(),
 });
+const KeepAliveSchema = z.object({ keepAliveMinutes: KeepAliveMinutes });
 /** 64 KB de teclado en base64; lo que pase de eso la app lo parte. */
 const InputSchema = z.object({
   data: z
@@ -62,7 +63,7 @@ function dataOf(client: Socket): PtyClientData {
  * lo que salió mientras no estaba).
  *
  * cliente → servidor: `pty:open {workspaceId, cols, rows, keepAliveMinutes?}`, `pty:input {data}`,
- * `pty:resize {cols, rows}`, `pty:close`.
+ * `pty:resize {cols, rows}`, `pty:keepalive {keepAliveMinutes}`, `pty:close`.
  * servidor → cliente: `pty:opened {ptyId, resumed}`, `pty:output {data}`,
  * `pty:exit {code}`, `pty:notice {message}`, `pty:error {message}`.
  * `data` va siempre en base64 (bytes crudos del terminal).
@@ -172,6 +173,17 @@ export class TerminalGateway
     } catch (error) {
       this.logger.warn(`resize: ${this.messageOf(error)}`);
     }
+  }
+
+  @SubscribeMessage('pty:keepalive')
+  keepAlive(
+    @MessageBody() payload: unknown,
+    @ConnectedSocket() client: Socket,
+  ): void {
+    const parsed = KeepAliveSchema.safeParse(payload);
+    const { ptyId } = dataOf(client);
+    if (!parsed.success || !ptyId) return;
+    this.pty.setKeepAlive(ptyId, parsed.data.keepAliveMinutes * 60_000);
   }
 
   @SubscribeMessage('pty:close')

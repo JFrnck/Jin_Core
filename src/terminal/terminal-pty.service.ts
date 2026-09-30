@@ -210,6 +210,14 @@ export class TerminalPtyService implements OnModuleDestroy {
       .catch((error: unknown) => this.onInputFailure(session, error));
   }
 
+  /** El owner cambió el tiempo de espera con la sesión abierta: vale desde ya para la próxima vez que se quede sola. */
+  setKeepAlive(ptyId: string, keepAliveMs: number): void {
+    const session = this.sessions.get(ptyId);
+    if (!session || session.ended) return;
+    session.keepAliveMs = clampKeepAlive(keepAliveMs);
+    if (session.detachTimer) this.armDetachTimer(session);
+  }
+
   async resize(ptyId: string, size: PtySize): Promise<void> {
     const session = this.require(ptyId);
     if (session.ended) return;

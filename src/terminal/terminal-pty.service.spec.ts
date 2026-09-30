@@ -424,6 +424,25 @@ describe('TerminalPtyService (Core, terminal interactiva)', () => {
     expect(closePty).toHaveBeenCalledTimes(1);
   });
 
+  it('setKeepAlive cambia la espera de una sesión abierta y reinicia la cuenta si ya está sola', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { service, closePty, listener } = setup();
+    await service.openOrAttach(WORKSPACE, SIZE, listener, 10 * 60_000);
+
+    // Con la app conectada: vale para cuando se quede sola.
+    service.setKeepAlive(PTY_ID, 2 * 60 * 60_000);
+    service.detach(PTY_ID, listener);
+    await vi.advanceTimersByTimeAsync(119 * 60_000);
+    expect(closePty).not.toHaveBeenCalled();
+
+    // Ya sola: cambiarlo reinicia la cuenta con el valor nuevo.
+    service.setKeepAlive(PTY_ID, 30 * 60_000);
+    await vi.advanceTimersByTimeAsync(29 * 60_000);
+    expect(closePty).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(closePty).toHaveBeenCalledTimes(1);
+  });
+
   it('un suscriptor viejo no puede soltar al nuevo (detach solo vale para el actual)', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     const { service, closePty, listener } = setup();
