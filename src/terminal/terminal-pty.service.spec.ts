@@ -331,22 +331,95 @@ describe('TerminalPtyService (Core, terminal interactiva)', () => {
     expect(closeCall?.[0].planSummary).toContain('cerrada por el owner');
   });
 
-  it('sin app conectada la sesión sigue 10 min y luego se cierra sola; reconectar la salva', async () => {
+  it('sin app conectada la sesión sigue 1 h por defecto y luego se cierra sola; reconectar la salva', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     const { service, closePty, listener } = setup();
     await service.openOrAttach(WORKSPACE, SIZE, listener);
 
     service.detach(PTY_ID, listener);
-    await vi.advanceTimersByTimeAsync(9 * 60_000);
+    await vi.advanceTimersByTimeAsync(59 * 60_000);
     expect(closePty).not.toHaveBeenCalled();
 
-    // La app vuelve a los 9 min: se engancha y el reloj se cancela.
+    // La app vuelve a los 59 min: se engancha y el reloj se cancela.
     await service.openOrAttach(WORKSPACE, SIZE, listener);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(closePty).not.toHaveBeenCalled();
 
     // Se va otra vez y esta vez no vuelve.
     service.detach(PTY_ID, listener);
+    await vi.advanceTimersByTimeAsync(60 * 60_000 + 1000);
+    expect(closePty).toHaveBeenCalledTimes(1);
+  });
+
+  it('respeta el tiempo que elige el owner y lo acota a 5 min–4 h', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const short = setup();
+    await short.service.openOrAttach(
+      WORKSPACE,
+      SIZE,
+      short.listener,
+      30 * 60_000,
+    );
+    short.service.detach(PTY_ID, short.listener);
+    await vi.advanceTimersByTimeAsync(29 * 60_000);
+    expect(short.closePty).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(short.closePty).toHaveBeenCalledTimes(1);
+
+    // Absurdo hacia abajo: el mínimo es 5 min.
+    const tiny = setup();
+    await tiny.service.openOrAttach(WORKSPACE, SIZE, tiny.listener, 1000);
+    tiny.service.detach(PTY_ID, tiny.listener);
+    await vi.advanceTimersByTimeAsync(4 * 60_000);
+    expect(tiny.closePty).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(tiny.closePty).toHaveBeenCalledTimes(1);
+
+    // Absurdo hacia arriba: el máximo es 4 h.
+    const huge = setup();
+    await huge.service.openOrAttach(
+      WORKSPACE,
+      SIZE,
+      huge.listener,
+      99 * 60 * 60_000,
+    );
+    huge.service.detach(PTY_ID, huge.listener);
+    await vi.advanceTimersByTimeAsync(4 * 60 * 60_000 + 1000);
+    expect(huge.closePty).toHaveBeenCalledTimes(1);
+  });
+
+  it('al reengancharse con otro tiempo, el nuevo vale para la próxima espera', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { service, closePty, listener } = setup();
+    await service.openOrAttach(WORKSPACE, SIZE, listener, 10 * 60_000);
+    service.detach(PTY_ID, listener);
+    await service.openOrAttach(WORKSPACE, SIZE, listener, 2 * 60 * 60_000);
+    service.detach(PTY_ID, listener);
+
+    await vi.advanceTimersByTimeAsync(119 * 60_000);
+    expect(closePty).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect(closePty).toHaveBeenCalledTimes(1);
+  });
+
+  it('la espera es de silencio: mientras la sesión sigue escribiendo sola no se corta', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { service, stream, closePty, listener } = setup();
+    await service.openOrAttach(WORKSPACE, SIZE, listener, 10 * 60_000);
+    service.detach(PTY_ID, listener);
+
+    // Claude Code trabajando 40 min con el teléfono bloqueado: una línea cada 5 min.
+    for (let minute = 5; minute <= 40; minute += 5) {
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      stream.push({
+        t: 'out',
+        d: Buffer.from('trabajando\n').toString('base64'),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(closePty).not.toHaveBeenCalled();
+
+    // Se calla: 10 min de silencio y se cierra.
     await vi.advanceTimersByTimeAsync(10 * 60_000 + 1000);
     expect(closePty).toHaveBeenCalledTimes(1);
   });
@@ -359,7 +432,7 @@ describe('TerminalPtyService (Core, terminal interactiva)', () => {
     await service.openOrAttach(WORKSPACE, SIZE, newer);
 
     service.detach(PTY_ID, listener);
-    await vi.advanceTimersByTimeAsync(11 * 60_000);
+    await vi.advanceTimersByTimeAsync(61 * 60_000);
     expect(closePty).not.toHaveBeenCalled();
   });
 });

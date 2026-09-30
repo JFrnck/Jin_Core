@@ -106,11 +106,34 @@ describe('TerminalGateway (/terminal)', () => {
         WORKSPACE,
         { cols: 80, rows: 24 },
         expect.any(Function),
+        undefined,
       );
       expect(client.emit).toHaveBeenCalledWith('pty:opened', {
         ptyId: PTY_ID,
         resumed: false,
       });
+    });
+
+    it('pasa el tiempo de espera elegido (minutos → ms) y rechaza valores fuera de 5–240', async () => {
+      const { gateway, openOrAttach } = setup();
+      const ok = fakeClient();
+      await gateway.open({ ...openPayload, keepAliveMinutes: 45 }, ok as never);
+      expect(openOrAttach).toHaveBeenCalledWith(
+        WORKSPACE,
+        { cols: 80, rows: 24 },
+        expect.any(Function),
+        45 * 60_000,
+      );
+
+      for (const bad of [0, 4, 241, 1.5, '60']) {
+        const client = fakeClient();
+        await gateway.open(
+          { ...openPayload, keepAliveMinutes: bad },
+          client as never,
+        );
+        expect(events(client)).toEqual(['pty:error']);
+      }
+      expect(openOrAttach).toHaveBeenCalledTimes(1);
     });
 
     it('la salida guardada que llega durante la apertura sale DESPUÉS de pty:opened', async () => {

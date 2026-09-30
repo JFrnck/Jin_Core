@@ -28,8 +28,15 @@ export const CLOSE_TERMINAL_PTY_TOOL = 'closeTerminalPty';
 
 /** Salida reciente que Core guarda por sesión para reenganchar tras una desconexión. */
 export const PTY_RING_BYTES = 256 * 1024;
-/** Cuánto sigue viva una sesión sin ninguna app conectada antes de cerrarse. */
-export const PTY_DETACH_GRACE_MS = 10 * 60 * 1000;
+/**
+ * Cuánto sigue viva una sesión SIN ninguna app conectada. El owner lo elige en
+ * la app (Claude Code puede trabajar 30-40 min con el teléfono bloqueado); el
+ * tiempo se cuenta desde la última vez que la app estuvo o que la sesión
+ * escribió algo: una sesión que sigue trabajando no se corta.
+ */
+export const PTY_KEEPALIVE_DEFAULT_MS = 60 * 60 * 1000;
+export const PTY_KEEPALIVE_MIN_MS = 5 * 60 * 1000;
+export const PTY_KEEPALIVE_MAX_MS = 4 * 60 * 60 * 1000;
 
 /**
  * Explorador de archivos del pod (2026-09-29): escribir, crear carpeta y borrar
