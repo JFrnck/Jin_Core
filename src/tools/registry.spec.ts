@@ -6,9 +6,9 @@ import {
 } from './registry';
 
 describe('registry', () => {
-  it('lista las 20 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar + Fase 5.2 runCode + Fase 5.4 orquestación + Fase 5.5 pods de servicio + Fase 7.3 MCP + Fase 9.3 corpus) con su nivel correcto', () => {
+  it('lista las 22 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar + Fase 5.2 runCode + Fase 5.4 orquestación + Fase 5.5 pods de servicio + Fase 7.3 MCP + Fase 9.3 corpus) con su nivel correcto', () => {
     const tools = listRegisteredTools();
-    expect(tools).toHaveLength(20);
+    expect(tools).toHaveLength(22);
     expect(tools.find((t) => t.name === 'readEmails')?.hitlLevel).toBe('auto');
     expect(tools.find((t) => t.name === 'createCalendarEvent')?.hitlLevel).toBe(
       'notify',
@@ -50,6 +50,12 @@ describe('registry', () => {
     expect(
       tools.find((t) => t.name === 'extendPreviewService')?.hitlLevel,
     ).toBe('confirm');
+    expect(tools.find((t) => t.name === 'saveDemoToGithub')?.hitlLevel).toBe(
+      'confirm',
+    );
+    expect(tools.find((t) => t.name === 'listGithubDemos')?.hitlLevel).toBe(
+      'auto',
+    );
     expect(tools.find((t) => t.name === 'stopPreviewService')?.hitlLevel).toBe(
       'notify',
     );
@@ -67,7 +73,7 @@ describe('registry', () => {
     );
   });
 
-  it('las 20 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
+  it('las 22 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
     const tools = listRegisteredTools();
     for (const tool of tools) {
       expect(tool.inputSchema).toBeTypeOf('object');
@@ -85,7 +91,7 @@ describe('registry', () => {
     ).toEqual(['deleteCalendarEventFuture', 'mergeAgentBranch', 'sendEmail']);
     expect(
       tools.filter((t) => t.humanDecision === true).map((t) => t.name),
-    ).toEqual(['resolveAgentConflict']);
+    ).toEqual(['resolveAgentConflict', 'saveDemoToGithub']);
     // Una marca guardedInSemiAuto solo tiene sentido sobre una tool confirm.
     for (const t of tools.filter((x) => x.guardedInSemiAuto === true)) {
       expect(t.hitlLevel).toBe('confirm');
@@ -114,5 +120,19 @@ describe('registry', () => {
         inputSchema: { type: 'object', properties: {} },
       }),
     ).toThrow(TypeError);
+  });
+
+  it('ADR 0019: subir una demo a GitHub es SIEMPRE una aprobación del owner — ningún modo de autonomía la relaja', () => {
+    const save = getToolDefinition('saveDemoToGithub');
+    expect(save?.hitlLevel).toBe('confirm');
+    expect(save?.humanDecision).toBe(true);
+    // No hay tool que escriba en GitHub con nivel auto/notify, ni de force/main.
+    const github = listRegisteredTools().filter((t) => /github/i.test(t.name));
+    for (const t of github.filter((x) => x.name !== 'listGithubDemos')) {
+      expect(t.hitlLevel).toBe('confirm');
+    }
+    expect(listRegisteredTools().some((t) => /force/i.test(t.name))).toBe(
+      false,
+    );
   });
 });

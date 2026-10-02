@@ -194,6 +194,63 @@ describe('ExecutorClientService', () => {
     );
   });
 
+  it('saveGithubDemo: POST /github/demos con {serviceId, slug}; devuelve el resultado', async () => {
+    const result = {
+      repo: 'owner/jin-demos',
+      branch: 'demo/reservas',
+      slug: 'reservas',
+      commit: 'abc123',
+      files: 3,
+      unchanged: false,
+      skipped: [],
+      url: 'https://github.com/owner/jin-demos/tree/demo/reservas',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(result),
+    } as Response);
+
+    const saved = await service.saveGithubDemo({
+      serviceId: 'svc-1',
+      slug: 'reservas',
+    });
+
+    expect(saved).toEqual(result);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/github/demos',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceId: 'svc-1', slug: 'reservas' }),
+      },
+    );
+  });
+
+  it('saveGithubDemo: un error del Executor (GitHub apagado, repo no permitido) sale como ExecutorApiError', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve('GitHub no está configurado'),
+    } as Response);
+
+    await expect(
+      service.saveGithubDemo({ serviceId: 'svc-1', slug: 'x' }),
+    ).rejects.toThrow(ExecutorApiError);
+  });
+
+  it('listGithubDemos: GET /github/demos, devuelve las ramas', async () => {
+    const branches = [{ slug: 'a', branch: 'demo/a', commit: 'c1' }];
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(branches),
+    } as Response);
+
+    expect(await service.listGithubDemos()).toEqual(branches);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/github/demos',
+    );
+  });
+
   it('listPreviewServices: GET /services, devuelve el array tal cual', async () => {
     const mockList = [
       {
