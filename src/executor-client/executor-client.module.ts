@@ -57,6 +57,20 @@ export class ExecutorClientModule implements OnModuleInit {
         });
       },
     );
+    // `confirm`: alargar la vida de código expuesto a internet pide aprobación.
+    this.toolExecutorRegistry.register(
+      'extendPreviewService',
+      async (payload) => {
+        const { serviceId, extraSeconds } = payload as {
+          serviceId: string;
+          extraSeconds: number;
+        };
+        return this.executorClientService.extendPreviewService(
+          serviceId,
+          extraSeconds,
+        );
+      },
+    );
     this.toolExecutorRegistry.register(
       'stopPreviewService',
       async (payload) => {

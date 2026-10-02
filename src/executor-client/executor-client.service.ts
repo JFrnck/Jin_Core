@@ -23,6 +23,8 @@ export interface StartPreviewServiceInput {
   readonly port: number;
   readonly ttlSeconds: number;
   readonly slugHint?: string;
+  /** El pod puede enviar correo por el proxy `mail-egress` (Executor pone el label). */
+  readonly mailEgress?: boolean;
   /** Aprobación que lo originó (enlace con el audit). */
   readonly requestId?: string;
 }
@@ -122,6 +124,28 @@ export class ExecutorClientService {
       files: Readonly<Record<string, string>>;
       skipped: readonly { path: string; reason: string }[];
     };
+  }
+
+  /** Alarga la vida de un servicio activo (Executor `POST /services/:id/extend`); devuelve el nuevo vencimiento. */
+  async extendPreviewService(
+    serviceId: string,
+    extraSeconds: number,
+  ): Promise<PreviewServiceInfo> {
+    const response = await fetch(
+      `${this.baseUrl}/services/${encodeURIComponent(serviceId)}/extend`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraSeconds }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new ExecutorApiError(response.status, errorText);
+    }
+
+    return (await response.json()) as PreviewServiceInfo;
   }
 
   async stopPreviewService(serviceId: string): Promise<void> {

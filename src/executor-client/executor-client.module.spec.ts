@@ -71,6 +71,56 @@ describe('ExecutorClientModule', () => {
     );
   });
 
+  it('extendPreviewService: la tool llama al Executor con el id y los segundos y devuelve el nuevo vencimiento', async () => {
+    const registry = new ToolExecutorRegistry();
+    const info = { id: 'svc-1', expiresAt: '2026-10-05T00:00:00.000Z' };
+    const extendPreviewService = vi.fn().mockResolvedValue(info);
+    new ExecutorClientModule(registry, {
+      extendPreviewService,
+    } as unknown as ExecutorClientService).onModuleInit();
+
+    const result = await registry.execute('extendPreviewService', {
+      serviceId: 'svc-1',
+      extraSeconds: 172_800,
+    });
+
+    expect(result).toEqual(info);
+    expect(extendPreviewService).toHaveBeenCalledWith('svc-1', 172_800);
+  });
+
+  it('startPreviewService con mailEgress: la bandera llega al Executor; sin ella (o en false), no viaja', async () => {
+    const registry = new ToolExecutorRegistry();
+    const startPreviewService =
+      vi.fn<(input: StartPreviewServiceInput) => Promise<PreviewServiceInfo>>();
+    new ExecutorClientModule(registry, {
+      startPreviewService,
+    } as unknown as ExecutorClientService).onModuleInit();
+    const base = {
+      files: { 'index.js': 'x' },
+      command: ['node', 'index.js'],
+      port: 3000,
+      ttlSeconds: 3600,
+    };
+
+    await registry.execute('startPreviewService', {
+      ...base,
+      mailEgress: true,
+    });
+    await registry.execute('startPreviewService', {
+      ...base,
+      mailEgress: false,
+    });
+    await registry.execute('startPreviewService', base);
+
+    expect(startPreviewService.mock.calls[0]?.[0].mailEgress).toBe(true);
+    expect(startPreviewService.mock.calls[1]?.[0]).not.toHaveProperty(
+      'mailEgress',
+    );
+    expect(startPreviewService.mock.calls[2]?.[0]).not.toHaveProperty(
+      'mailEgress',
+    );
+  });
+
   it('registra startPreviewService (Fase 5.5, ADR 0006) — pasa el payload completo tal cual', async () => {
     const registry = new ToolExecutorRegistry();
     const mockInfo = {

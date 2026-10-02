@@ -27,6 +27,8 @@ export interface PreviewServiceToolInput {
   readonly port?: number | undefined;
   readonly ttlSeconds: number;
   readonly slugHint?: string | undefined;
+  /** El pod podrá enviar correo (proxy `mail-egress`); el owner lo ve en la aprobación. */
+  readonly mailEgress?: boolean | undefined;
 }
 
 export class PreviewTemplateInputError extends Error {
@@ -47,6 +49,7 @@ export function expandPreviewTemplate(
   const base = {
     ttlSeconds: input.ttlSeconds,
     ...(input.slugHint !== undefined ? { slugHint: input.slugHint } : {}),
+    ...(input.mailEgress === true ? { mailEgress: true } : {}),
   };
 
   if (input.template === undefined) {
