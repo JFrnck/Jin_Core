@@ -158,4 +158,75 @@ describe('expandPreviewTemplate', () => {
       expect(request.npm).toBeUndefined();
     });
   });
+
+  describe('db (base de datos de demo)', () => {
+    const pkg = JSON.stringify({ scripts: { start: 'node server.js' } });
+
+    it('con template "node" acepta los cuatro motores y los pasa al Executor', () => {
+      for (const db of ['sqlite', 'redis', 'postgres', 'mongodb']) {
+        const request = expandPreviewTemplate({
+          template: 'node',
+          files: { 'package.json': pkg },
+          ttlSeconds: 60,
+          db,
+        });
+        expect(request.db).toBe(db);
+        expect(request.npm).toBe(true);
+      }
+    });
+
+    it('sin db, el pedido no lleva el campo', () => {
+      const request = expandPreviewTemplate({
+        template: 'node',
+        files: { 'package.json': pkg },
+        ttlSeconds: 60,
+      });
+      expect(request).not.toHaveProperty('db');
+    });
+
+    it('un motor desconocido da un error accionable que lista los válidos', () => {
+      expect(() =>
+        expandPreviewTemplate({
+          template: 'node',
+          files: { 'package.json': pkg },
+          ttlSeconds: 60,
+          db: 'mysql',
+        }),
+      ).toThrow(/db desconocida.*sqlite.*redis.*postgres.*mongodb/);
+    });
+
+    it('template "static" no puede tener db (no hay backend)', () => {
+      expect(() =>
+        expandPreviewTemplate({
+          template: 'static',
+          files: { 'index.html': 'x' },
+          ttlSeconds: 60,
+          db: 'sqlite',
+        }),
+      ).toThrow(/no tiene backend/);
+    });
+
+    it('redis/postgres/mongodb sin template "node" se rechazan (no habría cliente npm); sqlite con command propio sí', () => {
+      for (const db of ['redis', 'postgres', 'mongodb']) {
+        expect(() =>
+          expandPreviewTemplate({
+            files: { 'server.js': 'x' },
+            command: ['node', 'server.js'],
+            port: 3000,
+            ttlSeconds: 60,
+            db,
+          }),
+        ).toThrow(/template: "node"/);
+      }
+      const sqlite = expandPreviewTemplate({
+        files: { 'server.js': 'x' },
+        command: ['node', 'server.js'],
+        port: 3000,
+        ttlSeconds: 60,
+        db: 'sqlite',
+      });
+      expect(sqlite.db).toBe('sqlite');
+      expect(sqlite.npm).toBeUndefined();
+    });
+  });
 });

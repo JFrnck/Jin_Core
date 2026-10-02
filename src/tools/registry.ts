@@ -419,6 +419,12 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
           description:
             'Tiempo de vida antes de que el reaper lo destruya automáticamente (cap duro: 7 días = 604800). Para una demo a clientes elegí el tiempo que haga falta; se puede alargar con extendPreviewService.',
         },
+        db: {
+          type: 'string',
+          enum: ['sqlite', 'redis', 'postgres', 'mongodb'],
+          description:
+            'Base de datos de DEMO (datos de prueba para mostrar un frontend, NO producción). "sqlite": un archivo (process.env.SQLITE_PATH, funciona con node:sqlite sin instalar nada). "redis" / "postgres" / "mongodb": un contenedor auxiliar dentro del mismo pod, solo en 127.0.0.1, con credenciales aleatorias; la app las recibe en process.env.REDIS_URL / DATABASE_URL / MONGODB_URI (usa template "node" y declara el cliente npm en package.json: ioredis, pg, mongodb). Los datos viven lo que viva el pod. La base puede tardar unos segundos en aceptar conexiones: la app debe reintentar al arrancar.',
+        },
         mailEgress: {
           type: 'boolean',
           description:

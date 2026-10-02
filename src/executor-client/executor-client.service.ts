@@ -17,6 +17,8 @@ export interface ExecutionResult {
 // Fase 5.5 (ADR 0006) — contrato HTTP con POST/DELETE/GET /services del
 // Executor. Mismo criterio que RunCodeInput: sin tipos compartidos entre
 // repos, esto es el contrato HTTP, no un import.
+export type DemoDbEngine = 'sqlite' | 'redis' | 'postgres' | 'mongodb';
+
 export interface StartPreviewServiceInput {
   readonly files: Readonly<Record<string, string>>;
   readonly command: readonly string[];
@@ -27,6 +29,8 @@ export interface StartPreviewServiceInput {
   readonly mailEgress?: boolean;
   /** El backend instala dependencias por el proxy de npm (template "node"). */
   readonly npm?: boolean;
+  /** Base de datos de DEMO: sqlite (archivo) o redis/postgres/mongodb (contenedor auxiliar en el pod). */
+  readonly db?: DemoDbEngine;
   /** Aprobación que lo originó (enlace con el audit). */
   readonly requestId?: string;
 }
