@@ -82,5 +82,18 @@ export class ExecutorClientModule implements OnModuleInit {
     this.toolExecutorRegistry.register('listPreviewServices', async () => {
       return this.executorClientService.listPreviewServices();
     });
+
+    // Demos en GitHub (ADR 0019): guardar es `confirm` (y `humanDecision`: ningún modo de
+    // autonomía lo automatiza); listar es de solo lectura.
+    this.toolExecutorRegistry.register('saveDemoToGithub', async (payload) => {
+      const { serviceId, slug } = payload as {
+        serviceId: string;
+        slug: string;
+      };
+      return this.executorClientService.saveGithubDemo({ serviceId, slug });
+    });
+    this.toolExecutorRegistry.register('listGithubDemos', async () => {
+      return this.executorClientService.listGithubDemos();
+    });
   }
 }

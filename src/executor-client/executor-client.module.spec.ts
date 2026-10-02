@@ -121,6 +121,31 @@ describe('ExecutorClientModule', () => {
     );
   });
 
+  it('saveDemoToGithub y listGithubDemos: las tools llaman al Executor con lo que el modelo pidió (y solo eso)', async () => {
+    const registry = new ToolExecutorRegistry();
+    const saveGithubDemo = vi.fn().mockResolvedValue({ branch: 'demo/x' });
+    const listGithubDemos = vi.fn().mockResolvedValue([]);
+    new ExecutorClientModule(registry, {
+      saveGithubDemo,
+      listGithubDemos,
+    } as unknown as ExecutorClientService).onModuleInit();
+
+    // Un `repo` o `force` que el modelo meta en el payload NO viaja: el repo lo fija el Executor.
+    await registry.execute('saveDemoToGithub', {
+      serviceId: 'svc-1',
+      slug: 'x',
+      repo: 'otro/repo',
+      force: true,
+    });
+    await registry.execute('listGithubDemos', {});
+
+    expect(saveGithubDemo).toHaveBeenCalledWith({
+      serviceId: 'svc-1',
+      slug: 'x',
+    });
+    expect(listGithubDemos).toHaveBeenCalledTimes(1);
+  });
+
   it('registra startPreviewService (Fase 5.5, ADR 0006) — pasa el payload completo tal cual', async () => {
     const registry = new ToolExecutorRegistry();
     const mockInfo = {

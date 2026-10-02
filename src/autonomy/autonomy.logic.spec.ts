@@ -215,3 +215,18 @@ describe('parseModeCommand (/mode de Telegram)', () => {
     expect(parseModeCommand(arg)).toEqual({ kind: 'invalid' });
   });
 });
+
+describe('saveDemoToGithub: nunca se relaja (ADR 0019)', () => {
+  it('con los tres modos de autonomía sigue en confirm, con 1 aprobación y sin relajarse', () => {
+    const tool = listRegisteredTools().find(
+      (t) => t.name === 'saveDemoToGithub',
+    );
+    for (const mode of AUTONOMY_MODES) {
+      const d = decisionAt('confirm');
+      const result = relaxDecision(d, mode, tool);
+      expect(result.decision.level).toBe('confirm');
+      expect(result.decision.approvalsRequired).toBe(1);
+      expect(result.relaxedBy).toBeUndefined();
+    }
+  });
+});

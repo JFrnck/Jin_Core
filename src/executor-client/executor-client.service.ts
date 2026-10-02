@@ -35,6 +35,24 @@ export interface StartPreviewServiceInput {
   readonly requestId?: string;
 }
 
+export interface SaveGithubDemoResult {
+  readonly repo: string;
+  readonly branch: string;
+  readonly slug: string;
+  readonly commit: string;
+  readonly files: number;
+  /** `true` si la rama ya tenía exactamente esos archivos (no hubo commit nuevo). */
+  readonly unchanged: boolean;
+  readonly skipped: readonly { path: string; reason: string }[];
+  readonly url: string;
+}
+
+export interface GithubDemoBranch {
+  readonly slug: string;
+  readonly branch: string;
+  readonly commit: string;
+}
+
 export interface PreviewServiceInfo {
   readonly id: string;
   readonly slug: string;
@@ -154,6 +172,40 @@ export class ExecutorClientService {
     }
 
     return (await response.json()) as PreviewServiceInfo;
+  }
+
+  /**
+   * Guarda una demo en GitHub (Executor `POST /github/demos`): rama huérfana `demo/<slug>`
+   * del repo compartido. El token de la GitHub App vive solo en el Executor.
+   */
+  async saveGithubDemo(input: {
+    serviceId: string;
+    slug: string;
+  }): Promise<SaveGithubDemoResult> {
+    const response = await fetch(`${this.baseUrl}/github/demos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new ExecutorApiError(response.status, errorText);
+    }
+
+    return (await response.json()) as SaveGithubDemoResult;
+  }
+
+  /** Las demos guardadas en GitHub (ramas `demo/*`). Solo lectura. */
+  async listGithubDemos(): Promise<readonly GithubDemoBranch[]> {
+    const response = await fetch(`${this.baseUrl}/github/demos`);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      throw new ExecutorApiError(response.status, errorText);
+    }
+
+    return (await response.json()) as readonly GithubDemoBranch[];
   }
 
   async stopPreviewService(serviceId: string): Promise<void> {
