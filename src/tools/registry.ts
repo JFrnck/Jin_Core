@@ -388,7 +388,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'confirm',
     description:
       'Levanta un pod de servicio de larga vida expuesto bajo https://<slug>.jinserver.com, con TTL obligatorio. Requiere 1 aprobación: expone código de agentes a internet, aunque sea en el dominio sandbox. ' +
-      'Dura hasta 7 días (ttlSeconds máximo 604800); para alargarla después usá extendPreviewService. El pod NO tiene internet (no hay npm install): para una web o mini-app usá template: "static" con un index.html; cargá React, Tailwind u otras librerías desde un CDN en el HTML (ej. <script src="https://cdn.tailwindcss.com">, import de https://esm.sh/react) y escribí JSX con <script type="text/babel"> o JS plano. Mantené el proyecto chico (pocos archivos). Solo sin template se usan command y port, y solo si el comando no necesita instalar dependencias.',
+      'Dura hasta 7 días (ttlSeconds máximo 604800); para alargarla después usá extendPreviewService. Salvo template: "node" (que solo llega al proxy de npm de Jin), el pod NO tiene internet: para una web o mini-app usá template: "static" con un index.html; cargá React, Tailwind u otras librerías desde un CDN en el HTML (ej. <script src="https://cdn.tailwindcss.com">, import de https://esm.sh/react) y escribí JSX con <script type="text/babel"> o JS plano. Mantené el proyecto chico (pocos archivos). Solo sin template se usan command y port, y solo si el comando no necesita instalar dependencias.',
     timeoutBehavior: 'discard',
     inputSchema: {
       type: 'object',
@@ -400,9 +400,9 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
         },
         template: {
           type: 'string',
-          enum: ['static'],
+          enum: ['static', 'node'],
           description:
-            'Recomendado. "static": Jin sirve los archivos con su propio servidor (necesita index.html); no se pasan command ni port.',
+            'Recomendado. "static": Jin sirve los archivos con su propio servidor (necesita index.html); no se pasan command ni port. "node": un backend de Node (frontend y API en el mismo servidor) con package.json (dependencies y scripts.start); el pod instala las dependencias (npm ci/install, SIN scripts de instalación) desde un proxy de npm de Jin y arranca con npm start; el servidor debe escuchar en process.env.PORT (8080). No se pasan command ni port.',
         },
         command: {
           type: 'array',
