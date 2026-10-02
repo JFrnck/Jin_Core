@@ -29,6 +29,8 @@ const PreviewServiceSchema = z.object({
   expiresAt: z.string(),
   /** Aprobación que lo originó (enlace con el audit); ausente en pods anteriores. */
   requestId: z.string().optional(),
+  /** Motor de base de datos de la demo (sqlite | redis | postgres | mongodb), si pidió uno. */
+  db: z.string().optional(),
 });
 class PreviewServiceDto extends createZodDto(PreviewServiceSchema) {}
 
@@ -181,6 +183,7 @@ export class PreviewServicesController {
       status: 'running' | 'expired';
       expiresAt: string;
       requestId?: string;
+      db?: string;
     }[]
   > {
     return [...(await this.executorClientService.listPreviewServices())];
