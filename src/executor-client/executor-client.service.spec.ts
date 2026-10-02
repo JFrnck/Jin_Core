@@ -156,6 +156,44 @@ describe('ExecutorClientService', () => {
     );
   });
 
+  it('extendPreviewService: POST /services/:id/extend con {extraSeconds}, devuelve el nuevo vencimiento', async () => {
+    const info = {
+      id: 'svc-1',
+      slug: 'demo-a1b2c3',
+      url: 'https://demo-a1b2c3.jinserver.com',
+      status: 'running',
+      expiresAt: '2026-10-05T09:18:47.332Z',
+    };
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(info),
+    } as Response);
+
+    const result = await service.extendPreviewService('svc-1', 86_400);
+
+    expect(result).toEqual(info);
+    expect(fetch).toHaveBeenCalledWith(
+      'https://executor.test.internal/services/svc-1/extend',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extraSeconds: 86_400 }),
+      },
+    );
+  });
+
+  it('extendPreviewService: lanza ExecutorApiError si el Executor responde 409 (tope de vida)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      text: () => Promise.resolve('tope'),
+    } as Response);
+
+    await expect(service.extendPreviewService('svc-1', 60)).rejects.toThrow(
+      ExecutorApiError,
+    );
+  });
+
   it('listPreviewServices: GET /services, devuelve el array tal cual', async () => {
     const mockList = [
       {

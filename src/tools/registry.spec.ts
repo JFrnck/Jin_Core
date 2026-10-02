@@ -6,9 +6,9 @@ import {
 } from './registry';
 
 describe('registry', () => {
-  it('lista las 19 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar + Fase 5.2 runCode + Fase 5.4 orquestación + Fase 5.5 pods de servicio + Fase 7.3 MCP + Fase 9.3 corpus) con su nivel correcto', () => {
+  it('lista las 20 tools registradas (Fase 2.2 + Fase 3.1 Canvas + Fase 4.2 Calendar + Fase 5.2 runCode + Fase 5.4 orquestación + Fase 5.5 pods de servicio + Fase 7.3 MCP + Fase 9.3 corpus) con su nivel correcto', () => {
     const tools = listRegisteredTools();
-    expect(tools).toHaveLength(19);
+    expect(tools).toHaveLength(20);
     expect(tools.find((t) => t.name === 'readEmails')?.hitlLevel).toBe('auto');
     expect(tools.find((t) => t.name === 'createCalendarEvent')?.hitlLevel).toBe(
       'notify',
@@ -47,6 +47,9 @@ describe('registry', () => {
     expect(tools.find((t) => t.name === 'startPreviewService')?.hitlLevel).toBe(
       'confirm',
     );
+    expect(
+      tools.find((t) => t.name === 'extendPreviewService')?.hitlLevel,
+    ).toBe('confirm');
     expect(tools.find((t) => t.name === 'stopPreviewService')?.hitlLevel).toBe(
       'notify',
     );
@@ -64,7 +67,7 @@ describe('registry', () => {
     );
   });
 
-  it('las 19 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
+  it('las 20 tools traen un inputSchema tipo objeto (Fase 5.1: requerido para tool-use)', () => {
     const tools = listRegisteredTools();
     for (const tool of tools) {
       expect(tool.inputSchema).toBeTypeOf('object');

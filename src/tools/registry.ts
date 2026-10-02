@@ -388,7 +388,7 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
     hitlLevel: 'confirm',
     description:
       'Levanta un pod de servicio de larga vida expuesto bajo https://<slug>.jinserver.com, con TTL obligatorio. Requiere 1 aprobación: expone código de agentes a internet, aunque sea en el dominio sandbox. ' +
-      'El pod NO tiene internet (no hay npm install): para una web o mini-app usá template: "static" con un index.html; cargá React, Tailwind u otras librerías desde un CDN en el HTML (ej. <script src="https://cdn.tailwindcss.com">, import de https://esm.sh/react) y escribí JSX con <script type="text/babel"> o JS plano. Mantené el proyecto chico (pocos archivos). Solo sin template se usan command y port, y solo si el comando no necesita instalar dependencias.',
+      'Dura hasta 7 días (ttlSeconds máximo 604800); para alargarla después usá extendPreviewService. El pod NO tiene internet (no hay npm install): para una web o mini-app usá template: "static" con un index.html; cargá React, Tailwind u otras librerías desde un CDN en el HTML (ej. <script src="https://cdn.tailwindcss.com">, import de https://esm.sh/react) y escribí JSX con <script type="text/babel"> o JS plano. Mantené el proyecto chico (pocos archivos). Solo sin template se usan command y port, y solo si el comando no necesita instalar dependencias.',
     timeoutBehavior: 'discard',
     inputSchema: {
       type: 'object',
@@ -417,7 +417,12 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
         ttlSeconds: {
           type: 'number',
           description:
-            'Tiempo de vida antes de que el reaper lo destruya automáticamente (cap duro: 24h).',
+            'Tiempo de vida antes de que el reaper lo destruya automáticamente (cap duro: 7 días = 604800). Para una demo a clientes elegí el tiempo que haga falta; se puede alargar con extendPreviewService.',
+        },
+        mailEgress: {
+          type: 'boolean',
+          description:
+            'Solo si la app debe ENVIAR CORREO (API de Brevo): el pod podrá salir únicamente a api.brevo.com:443 por un proxy de Jin. Sin esto, el pod no tiene ninguna salida. El owner lo ve en la aprobación.',
         },
         slugHint: {
           type: 'string',
@@ -426,6 +431,24 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
         },
       },
       required: ['files', 'ttlSeconds'],
+    },
+  }),
+  Object.freeze({
+    name: 'extendPreviewService',
+    hitlLevel: 'confirm',
+    description:
+      'Alarga la vida de un pod de servicio activo (demo) sumando extraSeconds a su vencimiento actual, hasta 7 días desde que se creó. No funciona con uno ya vencido. Requiere 1 aprobación.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        serviceId: { type: 'string' },
+        extraSeconds: {
+          type: 'number',
+          description:
+            'Segundos a sumar al vencimiento actual (máximo 604800 = 7 días).',
+        },
+      },
+      required: ['serviceId', 'extraSeconds'],
     },
   }),
   Object.freeze({
