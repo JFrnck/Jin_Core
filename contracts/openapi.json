@@ -3165,6 +3165,9 @@
               },
               "requestId": {
                 "type": "string"
+              },
+              "db": {
+                "type": "string"
               }
             },
             "required": [
@@ -3241,6 +3244,9 @@
             "type": "string"
           },
           "requestId": {
+            "type": "string"
+          },
+          "db": {
             "type": "string"
           }
         },

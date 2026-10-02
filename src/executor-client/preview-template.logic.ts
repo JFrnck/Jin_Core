@@ -1,4 +1,7 @@
-import type { StartPreviewServiceInput } from './executor-client.service';
+import type {
+  DemoDbEngine,
+  StartPreviewServiceInput,
+} from './executor-client.service';
 
 /**
  * Plantilla `static` de `startPreviewService`: sirve los archivos tal cual con
@@ -26,6 +29,18 @@ export const STATIC_SERVER_PATH = '.jin/static-server.mjs';
  * ese proxy; los scripts de instalación de las dependencias NO corren.
  */
 export const NODE_TEMPLATE = 'node';
+export const DEMO_DB_ENGINES: readonly DemoDbEngine[] = [
+  'sqlite',
+  'redis',
+  'postgres',
+  'mongodb',
+];
+/** Estos motores necesitan una librería cliente de npm: solo hay camino con template "node". */
+const DB_NEEDS_NODE_TEMPLATE: readonly DemoDbEngine[] = [
+  'redis',
+  'postgres',
+  'mongodb',
+];
 export const NODE_TEMPLATE_PORT = 8080;
 /** Comando FIJO (sin texto del modelo): instala con lockfile si hay y arranca. */
 export const NODE_TEMPLATE_COMMAND: readonly string[] = [
@@ -44,6 +59,18 @@ export interface PreviewServiceToolInput {
   readonly slugHint?: string | undefined;
   /** El pod podrá enviar correo (proxy `mail-egress`); el owner lo ve en la aprobación. */
   readonly mailEgress?: boolean | undefined;
+  /** Base de datos de demo (datos de prueba, no producción). */
+  readonly db?: string | undefined;
+}
+
+function parseDb(db: string | undefined): DemoDbEngine | undefined {
+  if (db === undefined) return undefined;
+  if (!(DEMO_DB_ENGINES as readonly string[]).includes(db)) {
+    throw new PreviewTemplateInputError(
+      `db desconocida: "${db}". Valores válidos: ${DEMO_DB_ENGINES.map((e) => `"${e}"`).join(', ')}.`,
+    );
+  }
+  return db as DemoDbEngine;
 }
 
 /** `package.json` bien formado y con cómo arrancar (`scripts.start` o `main`), o un error accionable. */
@@ -93,10 +120,26 @@ export class PreviewTemplateInputError extends Error {
 export function expandPreviewTemplate(
   input: PreviewServiceToolInput,
 ): StartPreviewServiceInput {
+  const db = parseDb(input.db);
+  if (db !== undefined && input.template === STATIC_TEMPLATE) {
+    throw new PreviewTemplateInputError(
+      'db no se puede usar con template "static": no tiene backend. Usá template: "node" (frontend y API en un servidor Node).',
+    );
+  }
+  if (
+    db !== undefined &&
+    DB_NEEDS_NODE_TEMPLATE.includes(db) &&
+    input.template !== NODE_TEMPLATE
+  ) {
+    throw new PreviewTemplateInputError(
+      `${db} necesita una librería cliente de npm: usá template: "node" con un package.json que la declare. (sqlite sí funciona sin npm, con node:sqlite).`,
+    );
+  }
   const base = {
     ttlSeconds: input.ttlSeconds,
     ...(input.slugHint !== undefined ? { slugHint: input.slugHint } : {}),
     ...(input.mailEgress === true ? { mailEgress: true } : {}),
+    ...(db !== undefined ? { db } : {}),
   };
 
   if (input.template === undefined) {
