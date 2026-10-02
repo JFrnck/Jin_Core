@@ -19,6 +19,21 @@ export const STATIC_TEMPLATE = 'static';
 export const STATIC_TEMPLATE_PORT = 8080;
 export const STATIC_SERVER_PATH = '.jin/static-server.mjs';
 
+/**
+ * Plantilla `node` (2026-10-02): un backend de Node (frontend + API en el mismo
+ * servidor, un solo puerto) que instala sus dependencias por el proxy de npm de
+ * Jin y arranca con `npm start`. El pod escucha en `PORT` (8080) y SOLO sale a
+ * ese proxy; los scripts de instalación de las dependencias NO corren.
+ */
+export const NODE_TEMPLATE = 'node';
+export const NODE_TEMPLATE_PORT = 8080;
+/** Comando FIJO (sin texto del modelo): instala con lockfile si hay y arranca. */
+export const NODE_TEMPLATE_COMMAND: readonly string[] = [
+  'sh',
+  '-c',
+  'if [ -f package-lock.json ]; then npm ci; else npm install; fi && exec npm start',
+];
+
 /** Input tal como lo manda el modelo (command/port opcionales con plantilla). */
 export interface PreviewServiceToolInput {
   readonly files: Readonly<Record<string, string>>;
@@ -29,6 +44,38 @@ export interface PreviewServiceToolInput {
   readonly slugHint?: string | undefined;
   /** El pod podrá enviar correo (proxy `mail-egress`); el owner lo ve en la aprobación. */
   readonly mailEgress?: boolean | undefined;
+}
+
+/** `package.json` bien formado y con cómo arrancar (`scripts.start` o `main`), o un error accionable. */
+function validateNodePackageJson(
+  files: Readonly<Record<string, string>>,
+): void {
+  const raw = files['package.json'];
+  if (raw === undefined) {
+    throw new PreviewTemplateInputError(
+      'template "node" necesita un package.json en la raíz (con dependencies y scripts.start).',
+    );
+  }
+  let pkg: unknown;
+  try {
+    pkg = JSON.parse(raw);
+  } catch {
+    throw new PreviewTemplateInputError('package.json no es JSON válido.');
+  }
+  const record =
+    pkg !== null && typeof pkg === 'object'
+      ? (pkg as Record<string, unknown>)
+      : null;
+  const scripts = record?.scripts;
+  const start =
+    scripts !== null && typeof scripts === 'object'
+      ? (scripts as Record<string, unknown>).start
+      : undefined;
+  if (typeof start !== 'string' && typeof record?.main !== 'string') {
+    throw new PreviewTemplateInputError(
+      'package.json necesita scripts.start (o main) para saber cómo arrancar. El servidor debe escuchar en process.env.PORT.',
+    );
+  }
 }
 
 export class PreviewTemplateInputError extends Error {
@@ -66,9 +113,20 @@ export function expandPreviewTemplate(
     };
   }
 
+  if (input.template === NODE_TEMPLATE) {
+    validateNodePackageJson(input.files);
+    return {
+      ...base,
+      files: input.files,
+      command: NODE_TEMPLATE_COMMAND,
+      port: NODE_TEMPLATE_PORT,
+      npm: true,
+    };
+  }
+
   if (input.template !== STATIC_TEMPLATE) {
     throw new PreviewTemplateInputError(
-      `template desconocido: "${input.template}". Valores válidos: "static".`,
+      `template desconocido: "${input.template}". Valores válidos: "static", "node".`,
     );
   }
   if (!('index.html' in input.files)) {

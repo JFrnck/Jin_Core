@@ -25,6 +25,8 @@ export interface StartPreviewServiceInput {
   readonly slugHint?: string;
   /** El pod puede enviar correo por el proxy `mail-egress` (Executor pone el label). */
   readonly mailEgress?: boolean;
+  /** El backend instala dependencias por el proxy de npm (template "node"). */
+  readonly npm?: boolean;
   /** Aprobación que lo originó (enlace con el audit). */
   readonly requestId?: string;
 }
