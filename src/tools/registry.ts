@@ -457,6 +457,40 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       required: ['serviceId', 'extraSeconds'],
     },
   }),
+  // Demos en GitHub (2026-10-02, ADR 0019). Subir a un servicio EXTERNO es una decisión del
+  // owner, no una acción que un modo de autonomía pueda automatizar: `confirm` +
+  // `humanDecision` (nunca se relaja a `notify`, ni en semi-auto ni en auto). Así tu GitHub
+  // no se llena de demos de prueba. Sin tool de `--force` ni de escribir en `main`.
+  Object.freeze({
+    name: 'saveDemoToGithub',
+    hitlLevel: 'confirm',
+    humanDecision: true,
+    description:
+      'Guarda una demo (pod de servicio activo) en GitHub, en una rama huérfana demo/<slug> del repo compartido de demos del owner (nunca en main, nunca con --force). Requiere la aprobación del owner EN CADA USO: no la ofrezcas por defecto, solo si el owner pide guardar/subir la demo. Si ya existe la rama, agrega un commit encima.',
+    timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        serviceId: {
+          type: 'string',
+          description: 'Id del pod de servicio (listPreviewServices).',
+        },
+        slug: {
+          type: 'string',
+          description:
+            'Nombre de la rama: minúsculas, números y guiones (ej. "sistema-reservas"). Quedará como demo/<slug>.',
+        },
+      },
+      required: ['serviceId', 'slug'],
+    },
+  }),
+  Object.freeze({
+    name: 'listGithubDemos',
+    hitlLevel: 'auto',
+    description:
+      'Lista las demos guardadas en GitHub (ramas demo/* del repo de demos del owner). Solo lectura.',
+    inputSchema: { type: 'object', properties: {} },
+  }),
   Object.freeze({
     name: 'stopPreviewService',
     hitlLevel: 'notify',
