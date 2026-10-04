@@ -61,6 +61,31 @@ export interface PreviewServiceToolInput {
   readonly mailEgress?: boolean | undefined;
   /** Base de datos de demo (datos de prueba, no producción). */
   readonly db?: string | undefined;
+  /** Nombres de secretos de demo (el owner crea el Secret; el valor nunca pasa por aquí). */
+  readonly secrets?: readonly string[] | undefined;
+}
+
+const SECRET_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,38}$/;
+const MAX_SECRETS = 5;
+
+/** Solo NOMBRES: el valor vive en un Secret de K8s que el owner crea; ni el modelo ni Jin lo ven. */
+function parseSecrets(
+  secrets: readonly string[] | undefined,
+): readonly string[] | undefined {
+  if (secrets === undefined || secrets.length === 0) return undefined;
+  if (secrets.length > MAX_SECRETS) {
+    throw new PreviewTemplateInputError(
+      `secrets admite como máximo ${MAX_SECRETS} nombres.`,
+    );
+  }
+  for (const name of secrets) {
+    if (typeof name !== 'string' || !SECRET_NAME_PATTERN.test(name)) {
+      throw new PreviewTemplateInputError(
+        `Nombre de secreto inválido: "${String(name)}" (minúsculas, números y guiones; es el nombre, NO el valor).`,
+      );
+    }
+  }
+  return [...new Set(secrets)];
 }
 
 function parseDb(db: string | undefined): DemoDbEngine | undefined {
@@ -121,6 +146,7 @@ export function expandPreviewTemplate(
   input: PreviewServiceToolInput,
 ): StartPreviewServiceInput {
   const db = parseDb(input.db);
+  const secrets = parseSecrets(input.secrets);
   if (db !== undefined && input.template === STATIC_TEMPLATE) {
     throw new PreviewTemplateInputError(
       'db no se puede usar con template "static": no tiene backend. Usá template: "node" (frontend y API en un servidor Node).',
@@ -140,6 +166,7 @@ export function expandPreviewTemplate(
     ...(input.slugHint !== undefined ? { slugHint: input.slugHint } : {}),
     ...(input.mailEgress === true ? { mailEgress: true } : {}),
     ...(db !== undefined ? { db } : {}),
+    ...(secrets !== undefined ? { secrets } : {}),
   };
 
   if (input.template === undefined) {
