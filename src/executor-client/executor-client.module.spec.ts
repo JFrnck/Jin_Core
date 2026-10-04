@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
+import { EnvVaultService } from './env-vault.service';
 import { ExecutorClientModule } from './executor-client.module';
 import type {
   ExecutorClientService,
@@ -166,6 +167,86 @@ describe('ExecutorClientModule', () => {
 
     expect(startPreviewService.mock.calls[0]?.[0].secrets).toEqual(['brevo']);
     expect(startPreviewService.mock.calls[0]?.[0].mailEgress).toBe(true);
+  });
+
+  describe('variables de entorno (ADR 0020)', () => {
+    // Valores de ejemplo construidos en ejecución (nada con forma de credencial en el repo).
+    const VALUE = `m${'7788990011'.repeat(3)}`;
+    const files = {
+      'package.json': JSON.stringify({ scripts: { start: 'node s.js' } }),
+    };
+
+    function setup() {
+      const registry = new ToolExecutorRegistry();
+      const vault = new EnvVaultService();
+      const startPreviewService =
+        vi.fn<
+          (input: StartPreviewServiceInput) => Promise<PreviewServiceInfo>
+        >();
+      new ExecutorClientModule(
+        registry,
+        { startPreviewService } as unknown as ExecutorClientService,
+        vault,
+      ).onModuleInit();
+      return { registry, vault, startPreviewService };
+    }
+
+    it('los valores salen de la bóveda por la aprobación y llegan al Executor; la bóveda queda vacía', async () => {
+      const { registry, vault, startPreviewService } = setup();
+      vault.put('req-1', { MI_CLAVE: VALUE });
+
+      await registry.execute(
+        'startPreviewService',
+        { files, template: 'node', ttlSeconds: 60, envNames: ['MI_CLAVE'] },
+        { requestId: 'req-1' },
+      );
+
+      expect(startPreviewService.mock.calls[0]?.[0].env).toEqual({
+        MI_CLAVE: VALUE,
+      });
+      expect(startPreviewService.mock.calls[0]?.[0].requestId).toBe('req-1');
+      expect(vault.has('req-1')).toBe(false);
+    });
+
+    it('un `env` con valores dentro del payload (lo puede escribir el modelo) se IGNORA siempre', async () => {
+      const { registry, startPreviewService } = setup();
+
+      await registry.execute('startPreviewService', {
+        files,
+        template: 'node',
+        ttlSeconds: 60,
+        env: { ROBADA: VALUE },
+      });
+
+      expect(startPreviewService.mock.calls[0]?.[0]).not.toHaveProperty('env');
+    });
+
+    it('nombres sin valores en la bóveda (reinicio de Core, vencida, o el modelo inventó envNames): error claro y NO se crea la demo', async () => {
+      const { registry, startPreviewService } = setup();
+
+      await expect(
+        registry.execute(
+          'startPreviewService',
+          { files, template: 'node', ttlSeconds: 60, envNames: ['MI_CLAVE'] },
+          { requestId: 'req-sin-valores' },
+        ),
+      ).rejects.toThrow(/no están disponibles/);
+      expect(startPreviewService).not.toHaveBeenCalled();
+    });
+
+    it('si los valores de la bóveda no coinciden con los nombres aprobados, se rechaza', async () => {
+      const { registry, vault, startPreviewService } = setup();
+      vault.put('req-1', { OTRA: VALUE });
+
+      await expect(
+        registry.execute(
+          'startPreviewService',
+          { files, template: 'node', ttlSeconds: 60, envNames: ['MI_CLAVE'] },
+          { requestId: 'req-1' },
+        ),
+      ).rejects.toThrow(/no coinciden/);
+      expect(startPreviewService).not.toHaveBeenCalled();
+    });
   });
 
   it('registra startPreviewService (Fase 5.5, ADR 0006) — pasa el payload completo tal cual', async () => {

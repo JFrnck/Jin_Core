@@ -7,8 +7,11 @@ import {
   HITL_ACTION_NOTIFIED_EVENT,
   type HitlActionNotifiedEvent,
 } from '../hitl/notify.events';
+import type { HitlDecision } from '../hitl/types';
 import { ToolExecutorRegistry } from '../hitl/tool-executor.registry';
 import { HitlPolicyService } from '../hitl-policy/hitl-policy.service';
+import { validateDemoEnv } from './demo-env.logic';
+import { EnvVaultService } from './env-vault.service';
 import type { PreviewServiceInfo } from './executor-client.service';
 import {
   expandPreviewTemplate,
@@ -46,9 +49,32 @@ export class OwnerPreviewPublishService {
     private readonly toolExecutorRegistry: ToolExecutorRegistry,
     private readonly auditService: AuditService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly envVault: EnvVaultService,
   ) {}
 
-  async publish(input: PreviewServiceToolInput): Promise<OwnerPublishResult> {
+  /**
+   * `input.env` lleva los VALORES de las variables de entorno (ADR 0020): se separan aquí.
+   * Los valores van a la bóveda en memoria; todo lo que se persiste, se audita o se muestra
+   * (payload, hash, planSummary) lleva solo los NOMBRES.
+   */
+  async publish(
+    publishInput: PreviewServiceToolInput & {
+      readonly env?: Readonly<Record<string, string>> | undefined;
+    },
+  ): Promise<OwnerPublishResult> {
+    const { env, ...rest } = publishInput;
+    const problems = validateDemoEnv(env ?? {});
+    if (problems.length > 0) {
+      throw new BadRequestException(
+        `Variables de entorno inválidas: ${problems.map((p) => `${p.name} (${p.reason})`).join('; ')}`,
+      );
+    }
+    const envNames = Object.keys(env ?? {});
+    const input: PreviewServiceToolInput = {
+      ...rest,
+      ...(envNames.length > 0 ? { envNames } : {}),
+    };
+
     // Valida la forma ANTES de crear nada: un proyecto inválido no debe
     // dejar una aprobación pendiente que el owner tenga que rechazar.
     try {
@@ -62,6 +88,21 @@ export class OwnerPreviewPublishService {
 
     const decision = await this.hitlPolicyService.decide(TOOL_NAME, input);
     const inputsHash = computeInputsHash(input);
+    if (envNames.length > 0 && env) this.envVault.put(decision.requestId, env);
+    try {
+      return await this.decideAndRun(input, decision, inputsHash, envNames);
+    } catch (error) {
+      this.envVault.discard(decision.requestId);
+      throw error;
+    }
+  }
+
+  private async decideAndRun(
+    input: PreviewServiceToolInput,
+    decision: HitlDecision,
+    inputsHash: string,
+    envNames: readonly string[],
+  ): Promise<OwnerPublishResult> {
     const fileCount = Object.keys(input.files).length;
 
     if (decision.level === 'confirm' || decision.level === 'dual-confirm') {
@@ -70,7 +111,7 @@ export class OwnerPreviewPublishService {
         toolName: TOOL_NAME,
         level: decision.level,
         inputsHash,
-        planSummary: `Publicar una app desde el editor del iPhone (${fileCount} archivo${fileCount === 1 ? '' : 's'}, ${describeTemplate(input)}): se expone en https://<slug>.jinserver.com.`,
+        planSummary: `Publicar una app desde el editor del iPhone (${fileCount} archivo${fileCount === 1 ? '' : 's'}, ${describeTemplate(input)}${describeEnv(envNames)}): se expone en https://<slug>.jinserver.com.`,
         payload: input,
         actor: OWNER_ACTOR,
       });
@@ -107,8 +148,17 @@ export class OwnerPreviewPublishService {
   }
 }
 
+/** Nombres y cantidad, NUNCA valores. */
+function describeEnv(names: readonly string[]): string {
+  return names.length === 0
+    ? ''
+    : `, con ${names.length} variable${names.length === 1 ? '' : 's'} de entorno (${names.join(', ')}; valores ocultos)`;
+}
+
 function describeTemplate(input: PreviewServiceToolInput): string {
   return input.template === 'static'
     ? 'plantilla static'
-    : `comando ${input.command?.join(' ') ?? '?'}`;
+    : input.template === 'node'
+      ? 'plantilla node'
+      : `comando ${input.command?.join(' ') ?? '?'}`;
 }

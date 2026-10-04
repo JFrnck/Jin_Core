@@ -33,6 +33,8 @@ export interface StartPreviewServiceInput {
   readonly db?: DemoDbEngine;
   /** Secretos de demo (Secret `demo-secret-<n>` creado por el owner), como variables de entorno del pod. */
   readonly secrets?: readonly string[];
+  /** Variables de entorno de ESTA demo (con valores): el Executor las pone en un Secret ligado al pod. */
+  readonly env?: Readonly<Record<string, string>>;
   /** Aprobación que lo originó (enlace con el audit). */
   readonly requestId?: string;
 }

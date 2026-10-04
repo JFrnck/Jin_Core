@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { computeInputsHash } from '../agent/agent.logic';
 import { AuditService } from '../audit/audit.service';
 import { OkResultDto } from '../common/dto/ok-result.dto';
+import { validateDemoEnv } from './demo-env.logic';
 import { ExecutorClientService } from './executor-client.service';
 import { OwnerPreviewPublishService } from './owner-preview-publish.service';
 
@@ -42,7 +43,7 @@ class PreviewServiceDto extends createZodDto(PreviewServiceSchema) {}
 export const PUBLISH_MAX_FILES = 50;
 export const PUBLISH_MAX_TOTAL_BYTES = 256 * 1024;
 
-const PublishPreviewSchema = z
+export const PublishPreviewSchema = z
   .object({
     files: z
       .record(
@@ -70,8 +71,33 @@ const PublishPreviewSchema = z
           ) <= PUBLISH_MAX_TOTAL_BYTES,
         { message: `el proyecto supera ${PUBLISH_MAX_TOTAL_BYTES / 1024} KB` },
       ),
-    /** "static": Jin sirve `index.html` con su propio servidor (sin npm). */
-    template: z.enum(['static']).optional(),
+    /** "static": Jin sirve `index.html` con su propio servidor (sin npm); "node": backend con package.json. */
+    template: z.enum(['static', 'node']).optional(),
+    /** Base de datos de demo (datos de prueba): sqlite | redis | postgres | mongodb. */
+    db: z.enum(['sqlite', 'redis', 'postgres', 'mongodb']).optional(),
+    /** La app puede enviar correo (proxy mail-egress). */
+    mailEgress: z.boolean().optional(),
+    /** NOMBRES de secretos compartidos (demo-secret-<n>) que el owner creó en el clúster. */
+    secrets: z
+      .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,38}$/))
+      .max(5)
+      .optional(),
+    /**
+     * Variables de entorno de ESTA demo, con valores (ADR 0020). Solo viajan por este endpoint
+     * autenticado: nunca por el chat. No se persisten ni se auditan; la aprobación lleva solo
+     * los nombres.
+     */
+    env: z
+      .record(z.string(), z.string())
+      .superRefine((env, ctx) => {
+        for (const problem of validateDemoEnv(env)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `${problem.name}: ${problem.reason}`,
+          });
+        }
+      })
+      .optional(),
     command: z.array(z.string().min(1)).min(1).optional(),
     port: z.number().int().positive().max(65535).optional(),
     ttlSeconds: z

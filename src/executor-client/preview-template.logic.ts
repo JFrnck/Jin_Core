@@ -63,6 +63,8 @@ export interface PreviewServiceToolInput {
   readonly db?: string | undefined;
   /** Nombres de secretos de demo (el owner crea el Secret; el valor nunca pasa por aquí). */
   readonly secrets?: readonly string[] | undefined;
+  /** SOLO nombres de las variables de entorno de la demo; los valores viven en `EnvVaultService`. */
+  readonly envNames?: readonly string[] | undefined;
 }
 
 const SECRET_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,38}$/;
