@@ -11,19 +11,25 @@ import {
   expandPreviewTemplate,
   type PreviewServiceToolInput,
 } from './preview-template.logic';
+import { EnvVaultService } from './env-vault.service';
 import { OwnerPreviewPublishService } from './owner-preview-publish.service';
 import { PreviewServicesController } from './preview-services.controller';
 
 @Module({
   imports: [HitlModule, HitlPolicyModule, AuditModule],
   controllers: [PreviewServicesController],
-  providers: [ExecutorClientService, OwnerPreviewPublishService],
-  exports: [ExecutorClientService],
+  providers: [
+    ExecutorClientService,
+    OwnerPreviewPublishService,
+    EnvVaultService,
+  ],
+  exports: [ExecutorClientService, EnvVaultService],
 })
 export class ExecutorClientModule implements OnModuleInit {
   constructor(
     private readonly toolExecutorRegistry: ToolExecutorRegistry,
     private readonly executorClientService: ExecutorClientService,
+    private readonly envVault?: EnvVaultService,
   ) {}
 
   onModuleInit(): void {
@@ -49,15 +55,24 @@ export class ExecutorClientModule implements OnModuleInit {
         // `template: "static"` agrega el servidor fijo de Jin (ver
         // preview-template.logic.ts); sin template, command/port del modelo.
         const input = expandPreviewTemplate(payload as PreviewServiceToolInput);
+        // Variables de entorno (ADR 0020): el payload (que persiste y que puede escribir el
+        // modelo) lleva SOLO nombres; los valores salen de la bóveda en memoria, por la
+        // aprobación, y se piden UNA vez. Un `env` dentro del payload se ignora siempre.
+        const envNames =
+          (payload as { envNames?: readonly string[] }).envNames ?? [];
+        const env =
+          envNames.length > 0
+            ? this.takeEnv(envNames, context?.requestId)
+            : undefined;
         // El id de la aprobación viene del contexto (lo pone quien ejecuta),
         // NUNCA del payload: el payload lo puede escribir el modelo.
         return this.executorClientService.startPreviewService({
           ...input,
+          ...(env ? { env } : {}),
           ...(context?.requestId ? { requestId: context.requestId } : {}),
         });
       },
     );
-    // `confirm`: alargar la vida de código expuesto a internet pide aprobación.
     this.toolExecutorRegistry.register(
       'extendPreviewService',
       async (payload) => {
@@ -95,5 +110,25 @@ export class ExecutorClientModule implements OnModuleInit {
     this.toolExecutorRegistry.register('listGithubDemos', async () => {
       return this.executorClientService.listGithubDemos();
     });
+  }
+
+  /** Valores de la bóveda para esta aprobación; falla claro si se perdieron o no coinciden con los nombres. */
+  private takeEnv(
+    names: readonly string[],
+    requestId: string | undefined,
+  ): Record<string, string> {
+    const env = requestId ? this.envVault?.take(requestId) : undefined;
+    if (!env) {
+      throw new Error(
+        'Las variables de entorno de esta demo no están disponibles (Core se reinició o la aprobación venció). Vuelve a publicar con las variables.',
+      );
+    }
+    const given = Object.keys(env).sort().join(',');
+    if (given !== [...names].sort().join(',')) {
+      throw new Error(
+        'Las variables recibidas no coinciden con las aprobadas: no se crea la demo.',
+      );
+    }
+    return env;
   }
 }

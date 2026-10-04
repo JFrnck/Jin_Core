@@ -3094,8 +3094,35 @@
           "template": {
             "type": "string",
             "enum": [
-              "static"
+              "static",
+              "node"
             ]
+          },
+          "db": {
+            "type": "string",
+            "enum": [
+              "sqlite",
+              "redis",
+              "postgres",
+              "mongodb"
+            ]
+          },
+          "mailEgress": {
+            "type": "boolean"
+          },
+          "secrets": {
+            "maxItems": 5,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,38}$"
+            }
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "command": {
             "minItems": 1,
