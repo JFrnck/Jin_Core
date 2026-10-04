@@ -229,4 +229,55 @@ describe('expandPreviewTemplate', () => {
       expect(sqlite.npm).toBeUndefined();
     });
   });
+
+  describe('secrets (nombres de secretos de demo)', () => {
+    const base = {
+      template: 'node',
+      files: {
+        'package.json': JSON.stringify({ scripts: { start: 'node s.js' } }),
+      },
+      ttlSeconds: 60,
+    };
+
+    it('pasa los nombres (sin duplicados) al Executor; sin secrets, el campo no viaja', () => {
+      expect(
+        expandPreviewTemplate({ ...base, secrets: ['brevo', 'brevo', 'otro'] })
+          .secrets,
+      ).toEqual(['brevo', 'otro']);
+      expect(expandPreviewTemplate(base)).not.toHaveProperty('secrets');
+      expect(
+        expandPreviewTemplate({ ...base, secrets: [] }),
+      ).not.toHaveProperty('secrets');
+    });
+
+    it('rechaza nombres inválidos con un mensaje que aclara que es el nombre, no el valor', () => {
+      for (const bad of [
+        'Brevo',
+        '../x',
+        'a b',
+        '',
+        'xkeysib-' + 'a'.repeat(60),
+        'x'.repeat(40),
+      ]) {
+        expect(() =>
+          expandPreviewTemplate({ ...base, secrets: [bad] }),
+        ).toThrow(/Nombre de secreto inválido/);
+      }
+      expect(() =>
+        expandPreviewTemplate({
+          ...base,
+          secrets: ['a', 'b', 'c', 'd', 'e', 'f'],
+        }),
+      ).toThrow(/máximo 5/);
+    });
+
+    it('un valor de clave pegado donde va el nombre se rechaza SIN repetirlo entero en el error de forma útil al atacante', () => {
+      // Aun así el mensaje lo cita (es contenido del propio modelo); la defensa real es que el
+      // patrón de nombre no admite lo que tiene forma de clave (mayúsculas, símbolos, longitud).
+      const key = ['xkeysib', 'A1b2C3'.repeat(8)].join('-');
+      expect(() =>
+        expandPreviewTemplate({ ...base, secrets: [key] }),
+      ).toThrow();
+    });
+  });
 });

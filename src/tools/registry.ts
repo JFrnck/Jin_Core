@@ -425,6 +425,12 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
           description:
             'Base de datos de DEMO (datos de prueba para mostrar un frontend, NO producción). "sqlite": un archivo (process.env.SQLITE_PATH, funciona con node:sqlite sin instalar nada). "redis" / "postgres" / "mongodb": un contenedor auxiliar dentro del mismo pod, solo en 127.0.0.1, con credenciales aleatorias; la app las recibe en process.env.REDIS_URL / DATABASE_URL / MONGODB_URI (usa template "node" y declara el cliente npm en package.json: ioredis, pg, mongodb). Los datos viven lo que viva el pod. La base puede tardar unos segundos en aceptar conexiones: la app debe reintentar al arrancar.',
         },
+        secrets: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'NOMBRES de secretos de demo que la app necesita como variables de entorno (hoy solo "brevo": BREVO_API_KEY, BREVO_SENDER_EMAIL, BREVO_SENDER_NAME, BREVO_PROXY, para enviar correo; úsalo junto con mailEgress). El owner ya los creó en el clúster: tú solo pones el nombre, JAMÁS pidas ni escribas el valor de una clave. Si el secreto no está habilitado o no existe, la demo no arranca.',
+        },
         mailEgress: {
           type: 'boolean',
           description:

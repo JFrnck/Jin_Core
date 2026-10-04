@@ -31,6 +31,8 @@ export interface StartPreviewServiceInput {
   readonly npm?: boolean;
   /** Base de datos de DEMO: sqlite (archivo) o redis/postgres/mongodb (contenedor auxiliar en el pod). */
   readonly db?: DemoDbEngine;
+  /** Secretos de demo (Secret `demo-secret-<n>` creado por el owner), como variables de entorno del pod. */
+  readonly secrets?: readonly string[];
   /** Aprobación que lo originó (enlace con el audit). */
   readonly requestId?: string;
 }

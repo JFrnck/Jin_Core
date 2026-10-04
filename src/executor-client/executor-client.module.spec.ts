@@ -146,6 +146,28 @@ describe('ExecutorClientModule', () => {
     expect(listGithubDemos).toHaveBeenCalledTimes(1);
   });
 
+  it('startPreviewService con secrets: solo los NOMBRES llegan al Executor', async () => {
+    const registry = new ToolExecutorRegistry();
+    const startPreviewService =
+      vi.fn<(input: StartPreviewServiceInput) => Promise<PreviewServiceInfo>>();
+    new ExecutorClientModule(registry, {
+      startPreviewService,
+    } as unknown as ExecutorClientService).onModuleInit();
+
+    await registry.execute('startPreviewService', {
+      files: {
+        'package.json': JSON.stringify({ scripts: { start: 'node s.js' } }),
+      },
+      template: 'node',
+      ttlSeconds: 3600,
+      mailEgress: true,
+      secrets: ['brevo'],
+    });
+
+    expect(startPreviewService.mock.calls[0]?.[0].secrets).toEqual(['brevo']);
+    expect(startPreviewService.mock.calls[0]?.[0].mailEgress).toBe(true);
+  });
+
   it('registra startPreviewService (Fase 5.5, ADR 0006) — pasa el payload completo tal cual', async () => {
     const registry = new ToolExecutorRegistry();
     const mockInfo = {
