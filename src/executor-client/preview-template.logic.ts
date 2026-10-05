@@ -42,11 +42,14 @@ const DB_NEEDS_NODE_TEMPLATE: readonly DemoDbEngine[] = [
   'mongodb',
 ];
 export const NODE_TEMPLATE_PORT = 8080;
-/** Comando FIJO (sin texto del modelo): instala con lockfile si hay y arranca. */
+/**
+ * Comando FIJO (sin texto del modelo): instala con lockfile si hay, corre `npm run build` si el
+ * proyecto lo define (Next, Vite, Nest… lo necesitan antes de `npm start`) y arranca.
+ */
 export const NODE_TEMPLATE_COMMAND: readonly string[] = [
   'sh',
   '-c',
-  'if [ -f package-lock.json ]; then npm ci; else npm install; fi && exec npm start',
+  'if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run build --if-present && exec npm start',
 ];
 
 /** Input tal como lo manda el modelo (command/port opcionales con plantilla). */
