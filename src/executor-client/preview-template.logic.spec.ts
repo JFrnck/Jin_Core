@@ -109,6 +109,8 @@ describe('expandPreviewTemplate', () => {
       expect(request.files).toEqual(files); // sin inyectar nada del lado de Jin
       expect(request.command.join(' ')).toContain('npm ci');
       expect(request.command.join(' ')).toContain('exec npm start');
+      // Next, Vite y Nest necesitan su build antes de arrancar; sin script `build` no hace nada.
+      expect(request.command.join(' ')).toContain('npm run build --if-present');
     });
 
     it('ignora command/port que mande el modelo: el comando lo fija Jin (el texto del modelo no llega al shell)', () => {
