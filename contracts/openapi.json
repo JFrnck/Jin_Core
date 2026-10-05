@@ -2164,6 +2164,118 @@
           "push"
         ]
       }
+    },
+    "/api/project-snapshots": {
+      "post": {
+        "operationId": "ProjectSnapshotsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSnapshotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotSummaryDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Respaldar un proyecto del editor",
+        "tags": [
+          "project-snapshots"
+        ]
+      },
+      "get": {
+        "operationId": "ProjectSnapshotsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotListDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lista de respaldos (sin el contenido de los archivos)",
+        "tags": [
+          "project-snapshots"
+        ]
+      }
+    },
+    "/api/project-snapshots/{id}": {
+      "get": {
+        "operationId": "ProjectSnapshotsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotDetailDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Un respaldo con sus archivos, para restaurarlo en el editor",
+        "tags": [
+          "project-snapshots"
+        ]
+      },
+      "delete": {
+        "operationId": "ProjectSnapshotsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Borrar un respaldo",
+        "tags": [
+          "project-snapshots"
+        ]
+      }
     }
   },
   "info": {
@@ -4314,6 +4426,210 @@
           "enabled",
           "sent",
           "failed"
+        ],
+        "additionalProperties": false
+      },
+      "CreateSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "template": {
+                "type": "string",
+                "enum": [
+                  "static",
+                  "node"
+                ]
+              },
+              "database": {
+                "type": "string",
+                "enum": [
+                  "sqlite",
+                  "redis",
+                  "postgres",
+                  "mongodb",
+                  null
+                ],
+                "nullable": true
+              },
+              "mailEgress": {
+                "type": "boolean"
+              },
+              "ttlSeconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 86400
+              },
+              "envNames": {
+                "maxItems": 30,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+                }
+              }
+            },
+            "required": [
+              "template",
+              "mailEgress",
+              "ttlSeconds",
+              "envNames"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "name",
+          "files"
+        ],
+        "additionalProperties": false
+      },
+      "SnapshotSummaryDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "fileCount": {
+            "type": "number"
+          },
+          "totalBytes": {
+            "type": "number"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "note",
+          "createdAt",
+          "fileCount",
+          "totalBytes",
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "SnapshotListDto_Output": {
+        "type": "object",
+        "properties": {
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "fileCount": {
+                  "type": "number"
+                },
+                "totalBytes": {
+                  "type": "number"
+                },
+                "config": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "note",
+                "createdAt",
+                "fileCount",
+                "totalBytes",
+                "config"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "snapshots"
+        ],
+        "additionalProperties": false
+      },
+      "SnapshotDetailDto_Output": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "fileCount": {
+            "type": "number"
+          },
+          "totalBytes": {
+            "type": "number"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "note",
+          "createdAt",
+          "fileCount",
+          "totalBytes",
+          "config",
+          "files"
         ],
         "additionalProperties": false
       }

@@ -113,6 +113,13 @@
       "when": 1790650000000,
       "tag": "0015_chat_model_preference",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790740000000,
+      "tag": "0016_project_snapshots",
+      "breakpoints": true
     }
   ]
 }
