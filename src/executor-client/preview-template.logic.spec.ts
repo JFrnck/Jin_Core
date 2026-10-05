@@ -1,6 +1,11 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   expandPreviewTemplate,
+  findSecretFiles,
   NODE_TEMPLATE_COMMAND,
   NODE_TEMPLATE_PORT,
   PreviewTemplateInputError,
@@ -278,6 +283,113 @@ describe('expandPreviewTemplate', () => {
       expect(() =>
         expandPreviewTemplate({ ...base, secrets: [key] }),
       ).toThrow();
+    });
+  });
+
+  describe('archivos que parecen secretos', () => {
+    const files = {
+      'index.html': '<h1>x</h1>',
+      'package.json': '{"scripts":{"start":"node a.js"}}',
+    };
+
+    it.each([
+      '.env',
+      '.env.local',
+      'server/.env.production',
+      'key.pem',
+      'certs/server.key',
+      'id_rsa',
+      'id_ed25519.pub',
+      '.npmrc',
+      'data/brevo.json',
+    ])('rechaza %s en cualquier template, sin repetir su contenido', (path) => {
+      const content = ['contenido', 'secreto', String(Math.random())].join('-');
+      for (const template of ['static', 'node', undefined]) {
+        let caught: unknown;
+        try {
+          expandPreviewTemplate({
+            ...(template
+              ? { template }
+              : { command: ['node', 'a.js'], port: 8080 }),
+            files: { ...files, [path]: content },
+            ttlSeconds: 3600,
+          });
+        } catch (err) {
+          caught = err;
+        }
+        expect(caught).toBeInstanceOf(PreviewTemplateInputError);
+        const message = (caught as Error).message;
+        expect(message).toContain(path);
+        expect(message).not.toContain(content);
+      }
+    });
+
+    it('permite plantillas de ejemplo y archivos normales', () => {
+      expect(
+        findSecretFiles({
+          '.env.example': 'A=',
+          '.env.sample': 'A=',
+          'src/env.js': '',
+          'index.html': '',
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  describe('servidor estático: no sirve archivos ocultos (runtime)', () => {
+    it('/.env, /.jin/x y /sub/.git/config dan 404; /index.html y /a.txt dan 200', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'jin-static-'));
+      const port = 20000 + Math.floor(Math.random() * 20000);
+      const marker = ['no', 'servir', String(Math.random())].join('-');
+      try {
+        await mkdir(join(dir, '.jin'));
+        await mkdir(join(dir, 'sub/.git'), { recursive: true });
+        await writeFile(join(dir, 'index.html'), '<h1>hola</h1>');
+        await writeFile(join(dir, 'a.txt'), 'texto');
+        await writeFile(join(dir, '.env'), marker);
+        await writeFile(join(dir, '.jin/x'), marker);
+        await writeFile(join(dir, 'sub/.git/config'), marker);
+        await writeFile(
+          join(dir, 'server.mjs'),
+          STATIC_SERVER_SOURCE.replace(
+            `const PORT = ${STATIC_TEMPLATE_PORT};`,
+            `const PORT = ${port};`,
+          ),
+        );
+        const child = spawn('node', ['server.mjs'], {
+          cwd: dir,
+          stdio: 'ignore',
+        });
+        try {
+          const get = async (path: string) => {
+            for (let i = 0; i < 50; i++) {
+              try {
+                const res = await fetch(`http://127.0.0.1:${port}${path}`);
+                return { status: res.status, text: await res.text() };
+              } catch {
+                await new Promise((r) => setTimeout(r, 100));
+              }
+            }
+            throw new Error('el servidor no arrancó');
+          };
+          for (const hidden of [
+            '/.env',
+            '/.jin/x',
+            '/sub/.git/config',
+            '/%2eenv',
+          ]) {
+            const res = await get(hidden);
+            expect(`${hidden} -> ${res.status}`).toBe(`${hidden} -> 404`);
+            expect(res.text).not.toContain(marker);
+          }
+          expect((await get('/index.html')).status).toBe(200);
+          expect((await get('/a.txt')).text).toBe('texto');
+        } finally {
+          child.kill();
+        }
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
     });
   });
 });

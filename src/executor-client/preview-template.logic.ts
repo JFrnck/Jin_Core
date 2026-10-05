@@ -132,6 +132,36 @@ function validateNodePackageJson(
   }
 }
 
+/**
+ * Archivos que parecen secretos (`.env`, claves, `brevo.json`…): publicarlos los dejaría
+ * descargables (la plantilla `static` sirve todo el workspace) y, además, nada los lee como variables
+ * de entorno. Ocurrió con una clave de Brevo en `/.env`. Se rechazan en el servidor aunque el
+ * cliente (la app) ya los filtre. `.env.example` / `.sample` / `.template` se permiten (son plantillas).
+ */
+const SECRET_FILE_PATTERN =
+  /^(\.env(\..+)?|.+\.(pem|key|p12|pfx)|id_(rsa|ed25519|ecdsa)(\..*)?|\.npmrc|\.netrc|brevo\.json)$/i;
+const SECRET_FILE_TEMPLATE_SUFFIX = /\.(example|sample|template)$/i;
+
+export function findSecretFiles(
+  files: Readonly<Record<string, string>>,
+): string[] {
+  return Object.keys(files).filter((path) => {
+    const base = path.split('/').pop() ?? path;
+    return (
+      SECRET_FILE_PATTERN.test(base) && !SECRET_FILE_TEMPLATE_SUFFIX.test(base)
+    );
+  });
+}
+
+function rejectSecretFiles(files: Readonly<Record<string, string>>): void {
+  const found = findSecretFiles(files);
+  if (found.length > 0) {
+    throw new PreviewTemplateInputError(
+      `Estos archivos parecen secretos y no se publican: ${found.join(', ')}. Las claves van como variables de entorno (se piden por aparte), nunca como archivos del proyecto.`,
+    );
+  }
+}
+
 export class PreviewTemplateInputError extends Error {
   constructor(message: string) {
     super(message);
@@ -147,6 +177,7 @@ export class PreviewTemplateInputError extends Error {
 export function expandPreviewTemplate(
   input: PreviewServiceToolInput,
 ): StartPreviewServiceInput {
+  rejectSecretFiles(input.files);
   const db = parseDb(input.db);
   const secrets = parseSecrets(input.secrets);
   if (db !== undefined && input.template === STATIC_TEMPLATE) {
@@ -221,7 +252,7 @@ export function expandPreviewTemplate(
 
 /**
  * Servidor estático sin dependencias. Solo GET/HEAD, sin listado de
- * directorios, sin salir de /workspace y sin servir `.jin/`. Rutas sin
+ * directorios, sin salir de /workspace y sin servir archivos ni carpetas ocultas (`.env`, `.jin/`…). Rutas sin
  * extensión caen a index.html (SPA con router del lado del cliente).
  */
 export const STATIC_SERVER_SOURCE = `import { createServer } from 'node:http';
@@ -257,7 +288,9 @@ function safePath(urlPath) {
   }
   const full = resolve(join(ROOT, normalize(decoded)));
   if (full !== ROOT && !full.startsWith(ROOT + sep)) return null;
-  if (full.startsWith(join(ROOT, '.jin'))) return null;
+  // Ningún archivo ni carpeta oculta (.env, .git, .jin…) se sirve; solo .well-known.
+  const relative = full.slice(ROOT.length).split(sep).filter(Boolean);
+  if (relative.some((part) => part.startsWith('.') && part !== '.well-known')) return null;
   return full;
 }
 
