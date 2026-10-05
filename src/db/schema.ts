@@ -524,3 +524,26 @@ export const pushActivityTokens = pgTable('push_activity_tokens', {
 });
 
 export type PushActivityTokenRow = typeof pushActivityTokens.$inferSelect;
+
+/**
+ * Respaldos de proyectos del editor (ADR 0021): el owner "termina" un proyecto y queda aquí para
+ * verlo y restaurarlo. Guarda CÓDIGO + configuración + NOMBRES de variables, jamás sus valores (viven
+ * en el Llavero del iPhone). Los archivos que parecen secretos se rechazan antes de llegar aquí.
+ */
+export const projectSnapshots = pgTable('project_snapshots', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  fileCount: integer('file_count').notNull(),
+  totalBytes: integer('total_bytes').notNull(),
+  files: jsonb('files').$type<Record<string, string>>().notNull(),
+  config: jsonb('config')
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+});
+
+export type ProjectSnapshotRow = typeof projectSnapshots.$inferSelect;
