@@ -490,6 +490,26 @@ const TOOL_REGISTRY: readonly ToolDefinition[] = Object.freeze([
       required: ['serviceId', 'slug'],
     },
   }),
+  // Subir los cambios de un repo clonado a una rama nueva de GitHub (ADR 0022). Es un destino
+  // externo: `confirm` + `humanDecision` (ningún modo de autonomía lo automatiza). Lo inicia el
+  // owner desde la app (`POST /api/github/workspaces/:id/push`).
+  Object.freeze({
+    name: 'pushGithubBranch',
+    hitlLevel: 'confirm',
+    humanDecision: true,
+    description:
+      'Sube los cambios de un proyecto con repo de GitHub a una rama NUEVA (nunca main, sin --force). Normalmente la inicia el owner desde la app; requiere su aprobación EN CADA USO.',
+    timeoutBehavior: 'discard',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspaceId: { type: 'string' },
+        branch: { type: 'string' },
+        message: { type: 'string' },
+      },
+      required: ['workspaceId', 'branch', 'message'],
+    },
+  }),
   Object.freeze({
     name: 'listGithubDemos',
     hitlLevel: 'auto',
