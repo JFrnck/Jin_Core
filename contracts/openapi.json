@@ -642,6 +642,272 @@
         ]
       }
     },
+    "/api/github/repos": {
+      "get": {
+        "operationId": "GithubOwnerController_repos",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoListDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Repos donde está instalada la GitHub App",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/clone": {
+      "post": {
+        "operationId": "GithubOwnerController_clone",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloneResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Clona un repo en una carpeta vacía del proyecto",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/status": {
+      "get": {
+        "operationId": "GithubOwnerController_status",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoStatusDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rama, commit y archivos cambiados",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/branches": {
+      "get": {
+        "operationId": "GithubOwnerController_branches",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dir",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchesDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ramas locales y remotas",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/checkout": {
+      "post": {
+        "operationId": "GithubOwnerController_checkout",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Cambia (o crea) una rama",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/pull": {
+      "post": {
+        "operationId": "GithubOwnerController_pull",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PullBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PullResultDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Actualiza la rama actual (solo avance rápido)",
+        "tags": [
+          "github"
+        ]
+      }
+    },
+    "/api/github/workspaces/{workspaceId}/push": {
+      "post": {
+        "operationId": "GithubOwnerController_push",
+        "parameters": [
+          {
+            "name": "workspaceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushBodyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushOutcomeDto_Output"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pide subir los cambios a una rama nueva (nunca main): queda una aprobación pendiente",
+        "tags": [
+          "github"
+        ]
+      }
+    },
     "/api/terminal/workspaces": {
       "get": {
         "operationId": "TerminalController_list",
@@ -3395,6 +3661,302 @@
           "url",
           "status",
           "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "RepoListDto_Output": {
+        "type": "object",
+        "properties": {
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fullName": {
+                  "type": "string"
+                },
+                "private": {
+                  "type": "boolean"
+                },
+                "defaultBranch": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "fullName",
+                "private",
+                "defaultBranch",
+                "description"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "repos"
+        ],
+        "additionalProperties": false
+      },
+      "CloneBodyDto": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]+\\/[A-Za-z0-9._-]+$"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "dir": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "additionalProperties": false
+      },
+      "CloneResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string"
+          },
+          "dir": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "dir",
+          "branch",
+          "head"
+        ],
+        "additionalProperties": false
+      },
+      "RepoStatusDto_Output": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          },
+          "clean": {
+            "type": "boolean"
+          },
+          "changed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "changedTruncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "branch",
+          "head",
+          "clean",
+          "changed",
+          "changedTruncated"
+        ],
+        "additionalProperties": false
+      },
+      "BranchesDto_Output": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "string"
+          },
+          "local": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remote": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "current",
+          "local",
+          "remote"
+        ],
+        "additionalProperties": false
+      },
+      "CheckoutBodyDto": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "branch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "create": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "branch"
+        ],
+        "additionalProperties": false
+      },
+      "CheckoutResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "branch",
+          "head"
+        ],
+        "additionalProperties": false
+      },
+      "PullBodyDto": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "PullResultDto_Output": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          },
+          "updated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "branch",
+          "head",
+          "updated"
+        ],
+        "additionalProperties": false
+      },
+      "PushBodyDto": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "branch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "branch",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "PushOutcomeDto_Output": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending-approval",
+              "pushed"
+            ]
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "result": {
+            "type": "object",
+            "properties": {
+              "repo": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "commit": {
+                "type": "string"
+              },
+              "files": {
+                "type": "number"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "repo",
+              "branch",
+              "commit",
+              "files",
+              "url"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "status",
+          "requestId"
         ],
         "additionalProperties": false
       },
