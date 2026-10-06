@@ -31,6 +31,7 @@ import { ModelProviderModule } from './model-provider/model-provider.module';
 import { OrchestratorModule } from './agent/orchestrator.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { ProjectSnapshotsModule } from './project-snapshots/project-snapshots.module';
 import { PushModule } from './push/push.module';
 import { RelayModule } from './relay/relay.module';
 import { TelegramModule } from './telegram/telegram.module';
@@ -65,6 +66,7 @@ import { TelegramModule } from './telegram/telegram.module';
     RealtimeModule,
     RelayModule,
     PushModule,
+    ProjectSnapshotsModule,
   ],
   controllers: [AppController],
   providers: [
